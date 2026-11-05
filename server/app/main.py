@@ -93,6 +93,14 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.include_router(build_router(access))
 
+# Billing (Stripe) router — optional module, loaded only when present.
+try:
+    from .billing import router as _billing_router
+
+    app.include_router(_billing_router)
+except ImportError:
+    pass
+
 
 def require_access(request: Request) -> None:
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
