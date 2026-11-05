@@ -1,0 +1,25 @@
+{
+  "skills": {
+    "must": [
+      "verification-before-completion",
+      "systematic-debugging",
+      "changelog-discipline",
+      "jit-project-context",
+      "mcp-server-testing",
+      "python-stdlib-http-service",
+      "software-dev-workflow",
+      "asgi-streaming-middleware"
+    ],
+    "optional": [
+      "frontend-ui-standards",
+      "realtime-generative-audio",
+      "mcp-builder",
+      "jupyter-live-kernel",
+      "process-mapper",
+      "design-taste-frontend"
+    ],
+    "knowhow": [],
+    "generated_at": "2026-11-05T13:40:03+00:00"
+  },
+  "tier": "standard"
+}

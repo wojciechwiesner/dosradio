@@ -44,3 +44,20 @@ def test_station_archive_cap_rotation(tmp_path: Path):
     assert len(segments) == 3
     # Newest segments are preserved
     assert all(p.exists() for p in segments)
+
+
+def test_pick_next_continues_recording_in_order(tmp_path: Path):
+    arch = StationArchive(tmp_path, "seq")
+    for i in range(30):
+        arch.add_segment(b"opus-" + str(i).encode(), is_live=False)
+    names = [p.name for p in arch.list_segments()]
+    # A listener who just heard segment 5 always gets segment 6 next (continuous music, no random jumps).
+    for _ in range(20):
+        path, _ = arch.pick_next(0.3, after=names[5])
+        assert path.name == names[6]
+    # End of the archive: jumps somewhere valid instead of failing.
+    path, _ = arch.pick_next(0.3, after=names[-1])
+    assert path.name in names
+    # Unknown `after` behaves like a fresh start.
+    path, _ = arch.pick_next(0.3, after="seg-1.opus")
+    assert path.name in names

@@ -10,6 +10,7 @@ import logging
 import re
 import time
 from contextlib import asynccontextmanager
+from typing import Optional
 from pathlib import Path
 
 import websockets
@@ -189,16 +190,18 @@ async def host_audio(kind: str, station_id: str) -> FileResponse:
 
 
 @app.api_route("/radio-api/station/{station_id}/next-chunk", methods=["GET", "HEAD"])
-async def next_station_chunk(request: Request, station_id: str, live_prob: float = Query(0.3, ge=0.0, le=1.0)) -> FileResponse:
-    """Serve the next 30-second Opus chunk for this station using a 70% archive / 30% live mix.
-
-    Scale: 10,000+ concurrent users can request chunks simultaneously with near-zero Google API load.
-    """
+async def next_station_chunk(
+    request: Request,
+    station_id: str,
+    live_prob: float = Query(0.3, ge=0.0, le=1.0),
+    after: Optional[str] = Query(None, pattern=r"^seg-\d+\.opus$"),
+) -> FileResponse:
+    """Next 30-second Opus segment for a listener: continues the recording after `after`, else 70/30 jump."""
     require_access(request)
     if station_id not in STATION_SPECS:
         raise HTTPException(404, f"Nieznana stacja: {station_id}")
     arch = archives.get(station_id)
-    path, is_live = arch.pick_next(live_probability=live_prob)
+    path, is_live = arch.pick_next(live_probability=live_prob, after=after)
     if not path or not path.exists():
         raise HTTPException(503, "Stacja nagrywa pierwsze segmenty, spróbuj za chwilę.")
     return FileResponse(
@@ -208,6 +211,8 @@ async def next_station_chunk(request: Request, station_id: str, live_prob: float
             "cache-control": "no-cache",
             "x-dosradio-source": "live" if is_live else "archive",
             "x-dosradio-hours": str(arch.total_hours()),
+            "x-dosradio-segment": path.name,
+            "access-control-expose-headers": "x-dosradio-source, x-dosradio-hours, x-dosradio-segment",
         },
     )
 

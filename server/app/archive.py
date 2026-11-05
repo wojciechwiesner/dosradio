@@ -73,21 +73,25 @@ class StationArchive:
                 pass
         return removed
 
-    def pick_next(self, live_probability: float = 0.3) -> tuple[Path | None, bool]:
-        """Choose between a fresh live segment (30%) and a recorded archive segment (70%).
+    def pick_next(self, live_probability: float = 0.3, after: str | None = None) -> tuple[Path | None, bool]:
+        """Next segment for one listener.
 
-        Returns (path, is_live). Falls back to whichever source has audio.
+        With `after` (the segment the listener just heard) the recording continues in order, so
+        consecutive 30 s pieces form one continuous piece of music. On a fresh start, or at the end
+        of the archive, it jumps: 30% to the newest live segment, 70% to a random archive point.
         """
-        live_files = sorted(self.live_dir.glob("live-*.opus"))
         archive_files = self.list_segments()
-        if not live_files and not archive_files:
+        if not archive_files:
             return None, False
-        wants_live = random.random() < live_probability
-        if wants_live and live_files:
-            return random.choice(live_files), True
-        if archive_files:
-            return random.choice(archive_files), False
-        return (live_files[-1], True) if live_files else (None, False)
+        names = [path.name for path in archive_files]
+        if after and after in names:
+            index = names.index(after) + 1
+            if index < len(archive_files):
+                return archive_files[index], index >= len(archive_files) - 10
+        if random.random() < live_probability:
+            start = max(0, len(archive_files) - 10)  # newest ~5 minutes = the live pool
+            return archive_files[start], True
+        return random.choice(archive_files), False
 
 
 class ArchiveRegistry:

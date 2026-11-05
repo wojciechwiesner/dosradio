@@ -14,7 +14,7 @@ import { getSharedAudioContext } from '../audio/iosAudioUnlock';
 import type { MusicGenerationConfig, Prompt } from '../types';
 import { radioApi, TrialEndedError } from './radioApi';
 import { interleaveStories, pickNextStory, type NewsCategory, type QueuedStory } from './newsQueue';
-import { hostStationId, NEGATIVE_PROMPT, type Station } from './stations';
+import { hostStationId, isPresetStation, NEGATIVE_PROMPT, type Station } from './stations';
 import { msUntilNextBreak, nextBreakAt, type BreakInterval } from './radioClock';
 import { ChunkStreamer } from './chunkStreamer';
 
@@ -108,35 +108,22 @@ export class PublicRadioEngine {
   async start(): Promise<void> {
     await this.ctx.resume();
     this.events.onState('loading');
-
-    // Play station host greeting in ~100ms if in "with-host" mode
-    if (this.hostMode === 'with-host') {
-      void this.playWelcomeIntro();
-    }
-
-    // Try server 70/30 stream first (scale to thousands of users)
-    const streamAvailable = await this.probeStreamAvailable();
-    if (streamAvailable) {
-      this.chunkStreamer = new ChunkStreamer(this.ctx, this.musicBus, this.station.id, {
-        onChunk: () => { /* playing */ },
-        onError: (err) => {
-          if (err === 'trial-ended') this.endTrial();
-          else void this.triggerDeadAirRecovery();
-        },
-        onEnded: () => { /* loop continues */ },
-      });
-      await this.chunkStreamer.start();
-    } else {
-      // Direct WebSocket stream
-      if (!this.helper) this.helper = this.createHelper();
-      await this.applyStation();
-      await this.helper.play();
-    }
-
-    this.playing = true;
-    this.events.onState('playing');
-    this.events.onStatus(`Gra ${this.station.name}`);
+    this.playing = true; // set first: greeting, watchdog and breaks all check it
     this.startLevelMeter();
+
+    if (this.hostMode === 'with-host') {
+      void this.playWelcomeIntro(); // host speaks within ~100 ms while music loads underneath
+    }
+
+    const started = await this.startMusic();
+    if (!this.playing) return; // user pressed pause while loading
+    if (!started) {
+      this.events.onStatus('Muzyka się ładuje, za chwilę wejdzie...');
+      void this.triggerDeadAirRecovery();
+    } else {
+      this.events.onStatus(`Gra ${this.station.name}`);
+    }
+    this.events.onState('playing');
 
     if (this.hostMode === 'with-host') {
       void this.refreshNews();
@@ -147,13 +134,24 @@ export class PublicRadioEngine {
     }
   }
 
-  private async probeStreamAvailable(): Promise<boolean> {
-    try {
-      const resp = await fetch(`/radio-api/station/${this.station.id}/next-chunk?live_prob=0.3`, {
-        method: 'HEAD',
-        credentials: 'same-origin',
+  /** Archive stream first (scales to any number of listeners), live Lyria only as a fallback. */
+  private async startMusic(): Promise<boolean> {
+    if (!this.chunkStreamer) {
+      this.chunkStreamer = new ChunkStreamer(this.ctx, this.musicBus, this.station.id, {
+        onChunk: () => { this.silentTicks = 0; },
+        onError: (err) => {
+          if (err === 'trial-ended') this.endTrial();
+          else void this.triggerDeadAirRecovery();
+        },
       });
-      return resp.ok;
+    }
+    if (isPresetStation(this.station) && (await this.chunkStreamer.start())) return true;
+    this.chunkStreamer = null;
+    try {
+      if (!this.helper) this.helper = this.createHelper();
+      await this.applyStation();
+      await this.helper.play();
+      return true;
     } catch {
       return false;
     }
@@ -181,12 +179,22 @@ export class PublicRadioEngine {
     this.station = station;
     if (!this.playing) return;
 
-    if (this.chunkStreamer) {
-      this.chunkStreamer.setStation(station.id);
-    } else if (this.helper) {
-      const tempoChanged = station.bpm !== prev.bpm;
+    if (isPresetStation(station)) {
+      // Preset stations play from the recorded archive.
+      this.helper?.stop();
+      if (!this.chunkStreamer) {
+        await this.startMusic();
+      } else if (!(await this.chunkStreamer.setStation(station.id))) {
+        void this.triggerDeadAirRecovery();
+      }
+    } else {
+      // A mood station has no archive: generate it live with Lyria.
+      this.chunkStreamer?.stop();
+      this.chunkStreamer = null;
+      if (!this.helper) this.helper = this.createHelper();
       await this.applyStation();
-      if (tempoChanged) await this.helper.resetContext();
+      if (station.bpm !== prev.bpm) await this.helper.resetContext();
+      await this.helper.play();
     }
     this.events.onStatus(`Gra ${station.name}`);
   }
@@ -272,31 +280,23 @@ export class PublicRadioEngine {
     this.recovering = true;
     const sid = hostStationId(this.station);
     try {
-      // 1. Play host's jingle
+      // 1. Short host ident over the silence, so the listener knows the radio is alive.
       const jingleBuf = await this.decode(`/radio-api/jingle/${sid}.wav`).catch(() => null);
-      if (jingleBuf && this.playing) {
+      if (jingleBuf && this.playing && !this.speaking) {
         this.speaking = true;
         await this.playVoice(jingleBuf);
         this.speaking = false;
       }
-      if (!this.playing) return;
-
-      // 2. Seamlessly recover
-      if (this.chunkStreamer) {
-        this.chunkStreamer.stop();
-        await this.chunkStreamer.start();
-      } else if (this.helper) {
-        try {
-          await this.helper.play();
-        } catch {
-          // If live reconnect fails, fall back to chunk stream
-          this.chunkStreamer = new ChunkStreamer(this.ctx, this.musicBus, this.station.id, {
-            onChunk: () => { /* ok */ },
-            onError: () => { /* handled */ },
-            onEnded: () => { /* ok */ },
-          });
-          await this.chunkStreamer.start();
+      // 2. Restart music; retry with backoff until it plays or the user stops the radio.
+      for (let attempt = 0; this.playing; attempt++) {
+        this.chunkStreamer?.stop();
+        this.helper?.stop();
+        if (await this.startMusic()) {
+          this.events.onStatus(`Gra ${this.station.name}`);
+          return;
         }
+        this.events.onStatus('Łączę ponownie z muzyką...');
+        await new Promise((resolve) => setTimeout(resolve, Math.min(15000, 2000 * (attempt + 1))));
       }
     } finally {
       this.silentTicks = 0;
