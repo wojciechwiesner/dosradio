@@ -154,7 +154,7 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     playButton.classList.toggle('loading', state === 'loading');
     playButton.innerHTML = state === 'playing' || state === 'loading' ? PAUSE_SVG : PLAY_SVG; // static SVG constants
     playButton.setAttribute('aria-label', state === 'playing' ? 'Pauza' : 'Graj');
-    newsButton.disabled = state !== 'playing';
+    newsButton.disabled = hostModeBtn.dataset.mode === 'music-only';
     if (state === 'loading') setStatus('Łączę z generatorem muzyki...');
   },
   onStatus: (text) => setStatus(text),
@@ -172,8 +172,19 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
       src.hidden = false;
     }
   },
-  onNextBreak: (at) => { $('nextBreak').textContent = at.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }); },
+  onNextBreak: (at) => {
+    const el = $('nextBreak');
+    if (el) el.textContent = at ? at.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '—';
+  },
   onTrialEnded: () => { void refreshAccess(); openAuth('register', true); },
+  onHostState: (speaking, role) => {
+    const label = $('onAirLabel');
+    if (speaking) {
+      label.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'DOS Radio' : 'Prowadzący na żywo';
+    } else {
+      label.textContent = 'Wiadomości';
+    }
+  },
   onLevel: renderLevel,
 });
 engine.interval = prefs.interval;
@@ -333,8 +344,14 @@ $('authBtn').addEventListener('click', async () => {
 playButton.addEventListener('click', () => void togglePlay());
 newsButton.addEventListener('click', async () => {
   newsButton.disabled = true;
-  try { await engine.newsNow(); } catch (error) { setStatus((error as Error).message, true); }
-  newsButton.disabled = !engine.isPlaying;
+  try {
+    setStatus('Odtwarzam wiadomości...');
+    await engine.newsNow();
+  } catch (error) {
+    setStatus((error as Error).message, true);
+  } finally {
+    newsButton.disabled = false;
+  }
 });
 const intervalSelect = $<HTMLSelectElement>('interval');
 intervalSelect.value = String(prefs.interval);

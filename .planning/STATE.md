@@ -29,8 +29,9 @@ DOS Radio v1.0.0 — publiczne radio AI (Lyria RealTime, 14 stacji z prowadzący
   - [x] Alerty na Telegram po rejestracji nowego słuchacza wraz z obciążeniem CPU/RAM i stanem archiwum
   - [x] Obsługa puli wielu kluczy Google (`KeyPool` / `GEMINI_API_KEYS`)
 - [x] **Phase 4: Verification & Production Deployment**
-  - [x] Testy jednostkowe: 7/7 `pytest` PASS, `tsc --noEmit` 0 błędów
-  - [x] Weryfikacja E2E w Chrome (`scripts/diagnose.mjs`) na żywej produkcji `https://dosradio.theones.io`
+  - [x] Testy jednostkowe: 8/8 `pytest` PASS, 8/8 `vitest` PASS, `tsc --noEmit` 0 błędów
+  - [x] Weryfikacja E2E w Chrome (`scripts/diagnose.mjs` + `scripts/test-e2e-fixes.mjs`) na żywej produkcji `https://dosradio.theones.io`
+  - [x] Naprawa crashu `toLocaleTimeString`, odblokowanie wiadomości on-demand, naprawa trasowania audio newsów i WebSocket Lyria
 
 ## Next Steps (Backlog / v1.1)
 - [ ] **DOS Radio Plus (Premium):** generator dyskusji i podcastów w duecie (format NotebookLM po polsku) przeplatanych 4–7 min muzyki

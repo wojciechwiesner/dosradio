@@ -7,8 +7,8 @@
       "jit-project-context",
       "mcp-server-testing",
       "python-stdlib-http-service",
-      "software-dev-workflow",
-      "asgi-streaming-middleware"
+      "asgi-streaming-middleware",
+      "software-dev-workflow"
     ],
     "optional": [
       "frontend-ui-standards",
@@ -19,7 +19,7 @@
       "design-taste-frontend"
     ],
     "knowhow": [],
-    "generated_at": "2026-11-05T13:40:03+00:00"
+    "generated_at": "2026-11-05T14:29:59+00:00"
   },
   "tier": "standard"
 }

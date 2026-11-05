@@ -54,6 +54,9 @@ class Settings:
     def gemini_api_key(self) -> str:
         return self.key_pool.next_key()
 
+    def next_key(self) -> str:
+        return self.key_pool.next_key()
+
 
 def load_settings() -> Settings:
     raw_keys = os.environ.get("GEMINI_API_KEYS", "").strip()

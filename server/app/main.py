@@ -130,15 +130,23 @@ def categories() -> list[dict]:
 
 
 class MoodRequest(BaseModel):
-    mood: str = Field(min_length=2, max_length=250)
+    mood: Optional[str] = None
+    description: Optional[str] = None
+
+    @property
+    def text(self) -> str:
+        return (self.mood or self.description or "").strip()
 
 
 @app.post("/radio-api/mood")
 async def generate_mood_station(body: MoodRequest, request: Request) -> dict:
     """Translate user's described mood (Polish text) into tailored music parameters and prompt."""
     require_access(request)
+    user_mood = body.text
+    if not user_mood:
+        raise HTTPException(400, "Podaj opis nastroju")
     prompt = (
-        f"Użytkownik radia opisał swój nastrój: \"{body.mood}\".\n"
+        f"Użytkownik radia opisał swój nastrój: \"{user_mood}\".\n"
         "Przekształć ten opis w parametry dla generatora muzyki instrumentalnej (Lyria RealTime):\n"
         "1. name: krótka, zwięzła nazwa stacji po polsku (max 3 słowa, np. 'Deszczowy Trans', 'Poranny Fokus')\n"
         "2. tagline: jedno krótkie zdanie po polsku opisujące klimat\n"
@@ -177,15 +185,25 @@ def list_hosts() -> dict:
     return {station_id: {"name": host.name} for station_id, host in HOSTS.items()}
 
 
-@app.api_route("/radio-api/{kind}/{station_id}.wav", methods=["GET", "HEAD"])
-async def host_audio(kind: str, station_id: str) -> FileResponse:
-    """Host greeting (on Play) or jingle (stream recovery) for a station."""
-    if kind not in ("welcome", "jingle") or station_id not in HOSTS:
-        raise HTTPException(404, "no such host audio")
+@app.api_route("/radio-api/welcome/{station_id}.wav", methods=["GET", "HEAD"])
+async def welcome_audio(station_id: str) -> FileResponse:
+    if station_id not in HOSTS:
+        raise HTTPException(404, "no such station")
     try:
-        path = await render_host_audio(station_id, kind)
+        path = await render_host_audio(station_id, "welcome")
     except Exception as error:
-        raise HTTPException(502, f"Nie udało się nagrać prowadzącego: {error}") from error
+        raise HTTPException(502, f"Nie udało się nagrać powitania: {error}") from error
+    return FileResponse(path, media_type="audio/wav", headers={"cache-control": "public, max-age=604800"})
+
+
+@app.api_route("/radio-api/jingle/{station_id}.wav", methods=["GET", "HEAD"])
+async def jingle_audio(station_id: str) -> FileResponse:
+    if station_id not in HOSTS:
+        raise HTTPException(404, "no such station")
+    try:
+        path = await render_host_audio(station_id, "jingle")
+    except Exception as error:
+        raise HTTPException(502, f"Nie udało się nagrać dżingla: {error}") from error
     return FileResponse(path, media_type="audio/wav", headers={"cache-control": "public, max-age=604800"})
 
 

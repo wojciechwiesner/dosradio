@@ -36,6 +36,7 @@ export interface PublicRadioEvents {
   onTrialEnded: () => void;
   onLevel: (level: number) => void;
   onHostModeChange?: (mode: HostMode) => void;
+  onHostState?: (speaking: boolean, role: 'host' | 'news' | 'jingle' | null) => void;
 }
 
 export class PublicRadioEngine {
@@ -216,8 +217,11 @@ export class PublicRadioEngine {
 
   async newsNow(): Promise<void> {
     if (this.hostMode === 'music-only') return;
+    if (this.ctx.state === 'suspended') {
+      await this.ctx.resume().catch(() => {});
+    }
     if (!this.queue.length) await this.refreshNews();
-    await this.airBreak(new Date());
+    await this.airBreak(new Date(), true);
   }
 
   private createHelper(): LiveMusicHelper {
@@ -266,11 +270,13 @@ export class PublicRadioEngine {
       const buf = await this.decode(`/radio-api/welcome/${sid}.wav`);
       if (!this.playing) return;
       this.speaking = true;
+      this.events.onHostState?.(true, 'host');
       await this.playVoice(buf);
     } catch {
       // Ignored if greeting is missing
     } finally {
       this.speaking = false;
+      this.events.onHostState?.(false, null);
       this.duck(1.0, 1.8);
     }
   }
@@ -284,8 +290,10 @@ export class PublicRadioEngine {
       const jingleBuf = await this.decode(`/radio-api/jingle/${sid}.wav`).catch(() => null);
       if (jingleBuf && this.playing && !this.speaking) {
         this.speaking = true;
+        this.events.onHostState?.(true, 'jingle');
         await this.playVoice(jingleBuf);
         this.speaking = false;
+        this.events.onHostState?.(false, null);
       }
       // 2. Restart music; retry with backoff until it plays or the user stops the radio.
       for (let attempt = 0; this.playing; attempt++) {
@@ -371,19 +379,18 @@ export class PublicRadioEngine {
     return this.ctx.decodeAudioData(await radioApi.audio(path));
   }
 
-  private async airBreak(slot: Date): Promise<void> {
-    if (this.speaking || !this.playing || this.hostMode === 'music-only') return;
+  private async airBreak(slot: Date, standalone = false): Promise<void> {
+    if (this.speaking || (!this.playing && !standalone) || this.hostMode === 'music-only') return;
     this.speaking = true;
     const hhmm = `${String(slot.getHours()).padStart(2, '0')}:${String(slot.getMinutes()).padStart(2, '0')}`;
     const sid = hostStationId(this.station);
     const story = pickNextStory(this.queue, this.aired);
 
     try {
-      const [intro, body] = await Promise.all([
-        this.decode(`/radio-api/intro.wav?time=${hhmm}&station=${sid}`),
-        story ? this.decode(`/radio-api/story/${story.id}.wav`) : Promise.resolve(null),
-      ]);
-      if (!this.playing) return;
+      this.events.onHostState?.(true, 'news');
+      const intro = await this.decode(`/radio-api/intro.wav?time=${hhmm}&station=${sid}`).catch(() => null);
+      const body = story ? await this.decode(`/radio-api/story/${story.id}.wav`).catch(() => null) : null;
+      if (!intro && !body) return;
 
       this.events.onOnAir(story);
       if (story) {
@@ -391,15 +398,18 @@ export class PublicRadioEngine {
         this.events.onQueue(this.queue, story.id);
       }
 
-      this.duck(DUCK_LEVEL, 1.2);
-      await new Promise((r) => setTimeout(r, 800));
-      await this.playVoice(intro);
+      if (this.playing) {
+        this.duck(DUCK_LEVEL, 1.2);
+        await new Promise((r) => setTimeout(r, 600));
+      }
+      if (intro) await this.playVoice(intro);
       if (body) await this.playVoice(body);
     } catch (error) {
       if (error instanceof TrialEndedError) return this.endTrial();
     } finally {
-      this.duck(1.0, 2.0);
+      if (this.playing) this.duck(1.0, 2.0);
       this.speaking = false;
+      this.events.onHostState?.(false, null);
       this.events.onOnAir(null);
     }
   }

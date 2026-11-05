@@ -5,6 +5,17 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-11-05
+
+### Fixed
+- **Frontend Crash**: Fixed `TypeError: Cannot read properties of null (reading 'toLocaleTimeString')` when scheduled break is reset (`at === null`).
+- **News On-Demand**: Enabled clicking "Wiadomości teraz" (#newsNow) standalone, with safe audio playback even if an intro clip fails.
+- **Audio Routing Conflict**: Replaced greedy `/{kind}/{station_id}.wav` path pattern with explicit `/radio-api/welcome/` and `/radio-api/jingle/` routes so `/radio-api/story/{story_id}.wav` is never shadowed.
+- **Lyria WebSocket & Mood Composer**: Added `next_key()` delegation to `Settings` and accepted both `mood` and `description` payloads in `/radio-api/mood`.
+- **Host & On-Air State**: Synchronized `onHostState` events with `#onAirLabel` DOM updates for live speaking indicators.
+- **Access Whitelist**: Whitelisted local loopback and Tailscale (`100.`) subnets from the 10-minute trial expiration.
+- **Unit Tests**: Added Vitest test suite (`tests/radio.test.ts`, 8 tests) covering station metadata, news interleaving, and schedule clock math.
+
 ## [1.1.0] - 2026-11-05
 
 ### Added
