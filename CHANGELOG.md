@@ -5,6 +5,32 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Duet podcasts (DOS Radio Plus)**: `POST /radio-api/plus/podcast {topic?}` generates a
+  NotebookLM-style two-host Polish conversation (Ania i Michał) via `gemini-3.8-flash`,
+  voices each turn with two distinct Gemini TTS voices and interleaves 2-3 minute music
+  breaks copied from the station archive. One episode per topic per day is cached under
+  `data/podcasts/` (max 30 kept); parts are served Plus-gated from
+  `/radio-api/plus/podcast/{id}/{part}`.
+- **Personalized news sources (Plus)**: `PUT/GET /radio-api/plus/news-preferences` stores
+  per-user keywords (max 20) and RSS feeds (max 10, http/https only) with Polish
+  validation messages; `GET /radio-api/plus/news-digest` builds a per-user digest
+  (5 s timeout per feed, per-feed isolation, keyword filtering, RSS 2.0 + Atom) that
+  falls back to the global edition. The hourly news loop refreshes every stored
+  preference row without ever blocking the global cycle; digest stories are voiced
+  on demand through the shared `/radio-api/story/{id}.wav` pipeline.
+- All `/radio-api/plus/*` routes require a registered listener with an active Plus
+  subscription (HTTP 402 otherwise).
+- Frontend: "Twoje źródła" panel (keywords + RSS feeds, live digest list with links and
+  a "Posłuchaj swoich wiadomości" player) and a "Wygeneruj podcast" button, visible for
+  Plus users only, playing episodes through the shared Web Audio graph. Polish UX copy,
+  zero emoji, SVG icons only.
+- Tests: 8 new cases covering Plus gating (anonymous + free users), preferences
+  validation and roundtrip, podcast generation/caching/serving (no network, scripted
+  Gemini), RSS parsing, keyword filtering and dead-feed fallback.
+
 ## [1.1.1] - 2026-11-05
 
 ### Fixed

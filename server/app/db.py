@@ -1,6 +1,7 @@
-"""SQLite storage: users, login sessions and anonymous trials."""
+"""SQLite storage: users, login sessions, anonymous trials and Plus news preferences."""
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from contextlib import contextmanager
@@ -127,6 +128,40 @@ class Database:
     def delete_session(self, token_hash: str) -> None:
         with self.connect() as conn:
             conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+
+    # --- news preferences (Plus) ---------------------------------------------
+    def set_news_preferences(self, user_id: int, keywords: list[str], rss_feeds: list[str]) -> float:
+        updated_at = time.time()
+        with self.connect() as conn:
+            conn.execute(
+                "INSERT INTO news_preferences (user_id, keywords, rss_feeds, updated_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET keywords=excluded.keywords, "
+                "rss_feeds=excluded.rss_feeds, updated_at=excluded.updated_at",
+                (user_id, json.dumps(keywords, ensure_ascii=False), json.dumps(rss_feeds), updated_at),
+            )
+        return updated_at
+
+    def get_news_preferences(self, user_id: int) -> dict | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT keywords, rss_feeds, updated_at FROM news_preferences WHERE user_id = ?", (user_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "keywords": json.loads(row["keywords"]),
+            "rss_feeds": json.loads(row["rss_feeds"]),
+            "updated_at": float(row["updated_at"]),
+        }
+
+    def all_news_preferences(self) -> list[tuple[int, dict]]:
+        """Every stored preference row (for the hourly personalized digest cycle)."""
+        with self.connect() as conn:
+            rows = conn.execute("SELECT user_id, keywords, rss_feeds FROM news_preferences").fetchall()
+        return [
+            (int(row["user_id"]), {"keywords": json.loads(row["keywords"]), "rss_feeds": json.loads(row["rss_feeds"])})
+            for row in rows
+        ]
 
     # --- trials ------------------------------------------------------------
     def trial_started_at(self, keys: list[str]) -> float | None:
