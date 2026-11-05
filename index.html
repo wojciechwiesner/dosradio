@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>DOS Radio · prywatna stacja ze sztuczną inteligencją</title>
+  <meta name="description" content="Radio, w którym muzykę w czasie rzeczywistym generuje sztuczna inteligencja, a prowadzący podaje godzinę i krótkie wiadomości." />
+  <meta name="theme-color" content="#0b0c10" />
+  <meta property="og:title" content="DOS Radio" />
+  <meta property="og:description" content="Muzyka generowana przez AI na żywo i spokojne wiadomości." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23ff6b4a'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%231a0d08'/%3E%3C/svg%3E" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="DOS Radio" />
+  <link rel="apple-touch-icon" href="/icon-192.png" />
+  <link rel="stylesheet" href="/src/ui/dosradio.css" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg></span>
+        DOS Radio <small>inteligentna stacja na żywo</small>
+      </div>
+      <div class="top-actions">
+        <span id="onAir" class="pill"><span class="dot"></span><span id="onAirText">Poza anteną</span></span>
+        <span id="trialPill" class="pill trial" hidden>Darmowe: <b id="trialLeft">10:00</b></span>
+        <span id="account" class="account"></span>
+        <button id="authBtn" class="btn ghost">Zaloguj się</button>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="card player">
+        <div>
+          <div class="eyebrow">Teraz gra</div>
+          <div class="now-station" id="nowStation">DOS Groove</div>
+          <div class="now-tagline" id="nowTagline">Minimal deep tech do pracy</div>
+          <div class="clock-row">
+            <span class="clock" id="clock">--:--</span>
+            <span>Następne wejście prowadzącego: <b id="nextBreak">-</b></span>
+          </div>
+        </div>
+        <div class="bars" id="bars" aria-hidden="true"></div>
+        <div>
+          <div class="controls">
+            <button class="play" id="play" aria-label="Graj">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            <button class="btn mode-toggle" id="hostModeBtn" title="Przełącz: Z prowadzącym / Tylko muzyka">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+              <span id="hostModeLabel">Z prowadzącym</span>
+            </button>
+            <button class="btn" id="newsNow" disabled title="Dostępne, gdy radio gra">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+              Wiadomości teraz
+            </button>
+            <label class="volume" title="Głośność">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+              <input type="range" id="volume" min="0" max="1" step="0.01" value="0.9" />
+            </label>
+          </div>
+          <div class="status" id="status">Kliknij Graj. Pierwsze 10 minut za darmo, bez konta.</div>
+        </div>
+      </div>
+
+      <aside class="card onair">
+        <div class="eyebrow" id="onAirLabel">Wiadomości</div>
+        <h3 id="storyTitle">Prowadzący wchodzi co 20 minut</h3>
+        <p id="storyText">Najpierw podaje godzinę, potem jedną krótką wiadomość z wybranych tematów. Muzyka cichnie pod głos i wraca.</p>
+        <a class="src" id="storySrc" href="#" target="_blank" rel="noopener" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>
+          Źródło
+        </a>
+        <div class="settings">
+          <label class="field">Jak często prowadzący
+            <select id="interval">
+              <option value="20">Co 20 minut</option>
+              <option value="30">Co 30 minut</option>
+              <option value="60">Co godzinę</option>
+            </select>
+          </label>
+        </div>
+      </aside>
+    </section>
+
+    <!-- Twój nastrój (AI Mood Composer) -->
+    <section class="section mood-section">
+      <div class="section-head">
+        <h2>Twój nastrój</h2>
+        <span>Opisz słowami, a radio skomponuje muzykę w locie</span>
+      </div>
+      <div class="mood-box">
+        <form id="moodForm" class="mood-form">
+          <input type="text" id="moodInput" placeholder="Np. deszczowy wieczór z herbatą i kodowaniem, albo szybki trans do treningu..." maxlength="200" required />
+          <button type="submit" id="moodSubmit" class="btn primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3z"/></svg>
+            Dopasuj muzykę
+          </button>
+        </form>
+        <div class="mood-chips">
+          <button type="button" class="chip mood-chip" data-mood="głęboki trans do pracy i kodowania">Głęboki fokus</button>
+          <button type="button" class="chip mood-chip" data-mood="deszczowy wieczór, ciepła herbata, winyl i spokój">Deszczowy wieczór</button>
+          <button type="button" class="chip mood-chip" data-mood="poranna kawa, dużo energii i słońce za oknem">Poranny kick</button>
+          <button type="button" class="chip mood-chip" data-mood="późna noc, ciemny pokój, leniwy bas i trip-hop">Nocny chill</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>Stacje</h2><span>Wybierz klimat muzyczny</span></div>
+      <div class="stations" id="stations"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>Wiadomości</h2><span>Wybierz jeden lub kilka tematów</span></div>
+      <div class="chips" id="categories"></div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>Na antenie dziś</h2><span id="queueInfo">Lista pojawi się po włączeniu radia</span></div>
+      <ul class="news" id="queue"><li class="empty">Po kliknięciu Graj zobaczysz tu wiadomości z linkami do źródeł.</li></ul>
+    </section>
+
+    <section class="legal" aria-label="Informacja o prawach autorskich">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>
+      <p><strong>Ta strona nie narusza praw autorskich.</strong> Cała muzyka jest generowana w czasie rzeczywistym przez model sztucznej inteligencji i nie pochodzi z nagrań artystów, płyt ani serwisów streamingowych. Nie odtwarzamy cudzych utworów. Audio zawiera cyfrowy znak wodny SynthID oznaczający treść wygenerowaną przez AI. Wiadomości przygotowuje AI na podstawie publicznych źródeł z linkami do oryginałów.</p>
+    </section>
+
+    <footer>
+      <span>DOS Radio · theones.io</span>
+      <span>Prywatna stacja ze sztuczną inteligencją</span>
+    </footer>
+  </div>
+
+  <div class="modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <div class="dialog">
+      <h2 id="authTitle">Słuchaj dalej za darmo</h2>
+      <p id="authLead">Twoje darmowe 10 minut minęło. Załóż konto, żeby słuchać bez limitu.</p>
+      <ul class="perks" id="perks">
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wszystkie stacje bez limitu czasu</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Komponowanie muzyki z własnego opisu nastroju</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wiadomości z wybranych tematów</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wkrótce w Plus: podcasty w duecie i dyskusje przeplatane muzyką</li>
+      </ul>
+      <form id="authForm" novalidate>
+        <input type="email" id="authEmail" placeholder="E-mail" autocomplete="email" required />
+        <input type="password" id="authPassword" placeholder="Hasło (min. 8 znaków)" autocomplete="new-password" minlength="8" required />
+        <div class="form-error" id="authError"></div>
+        <button class="btn primary" type="submit" id="authSubmit">Załóż konto i słuchaj</button>
+      </form>
+      <div class="switch" id="authSwitch">Masz już konto? <button type="button" id="toLogin">Zaloguj się</button></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/ui/dosradio.ts"></script>
+</body>
+</html>
