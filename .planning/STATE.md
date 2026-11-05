@@ -33,7 +33,17 @@ DOS Radio v1.0.0 — publiczne radio AI (Lyria RealTime, 14 stacji z prowadzący
   - [x] Weryfikacja E2E w Chrome (`scripts/diagnose.mjs` + `scripts/test-e2e-fixes.mjs`) na żywej produkcji `https://dosradio.theones.io`
   - [x] Naprawa crashu `toLocaleTimeString`, odblokowanie wiadomości on-demand, naprawa trasowania audio newsów i WebSocket Lyria
 
-## Next Steps (Backlog / v1.1)
-- [ ] **DOS Radio Plus (Premium):** generator dyskusji i podcastów w duecie (format NotebookLM po polsku) przeplatanych 4–7 min muzyki
-- [ ] **Personalizacja źródeł wiadomości:** własne słowa kluczowe i kanały RSS dla subskrybentów Plus
-- [ ] **Płatności Stripe:** podpięcie Stripe Checkout pod plan Plus (29–39 PLN/mies.) i ofertę B2B dla lokali
+- [x] **Phase 5: E-mail Verification (v1.1.0)**
+  - [x] Potwierdzenie adresu e-mail przez SMTP po rejestracji (token 24h)
+  - [x] Blokada logowania przed weryfikacją (HTTP 403) z opcją ponownej wysyłki linku
+  - [x] Obsługa lądowania na `/?verify=<token>` w UI
+
+- [x] **Phase 6: DOS Radio Plus & Monetyzacja (v1.2.0)**
+  - [x] **Duet Podcasts (NotebookLM-PL):** `POST /radio-api/plus/podcast` (Ania i Michał, `gemini-3.8-flash`, cache w `data/podcasts/`)
+  - [x] **Personalizacja wiadomości:** `PUT/GET /radio-api/plus/news-preferences` (RSS 2.0/Atom, keywords, 5s timeout per feed)
+  - [x] **Płatności Stripe:** `POST /radio-api/billing/checkout` (Plus 39 PLN, Plus+AI 59 PLN, B2B invoice), webhook podpisany
+  - [x] **UI Plus:** pływający widżet "Plus", modal planów i statusu, drawer "Twoje źródła"
+
+## Next Steps (Backlog / v1.3)
+- [ ] Podpięcie produkcyjnych kluczy Stripe (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) na serwerze
+- [ ] B2B Audio Streamer dla lokali i kawiarni (dedykowany profil licencyjny)
