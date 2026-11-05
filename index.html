@@ -15,6 +15,23 @@
   <meta name="apple-mobile-web-app-title" content="DOS Radio" />
   <link rel="apple-touch-icon" href="/icon-192.png" />
   <link rel="stylesheet" href="/src/ui/dosradio.css" />
+  <style>
+    /* DOS Radio Plus panel ("Twoje źródła" + duet podcast) — scoped styles for the Plus section. */
+    .plus-box { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; background: var(--panel);
+      border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+    .plus-form { display: grid; gap: 12px; align-content: start; }
+    .plus-field { display: grid; gap: 6px; font-size: 13px; color: var(--dim); }
+    .plus-form input, .plus-form textarea, .plus-podcast input { background: var(--bg-2); color: var(--text);
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 14px; resize: vertical; }
+    .plus-form input:focus, .plus-form textarea:focus, .plus-podcast input:focus { outline: none; border-color: var(--accent); }
+    .plus-info { min-height: 18px; font-size: 13px; color: var(--accent-2); }
+    .plus-digest { display: grid; gap: 10px; align-content: start; }
+    .plus-digest-head { font-size: 13px; color: var(--dim); }
+    .plus-digest .news { gap: 6px; }
+    .plus-podcast { margin-top: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end;
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+    @media (max-width: 860px) { .plus-box { grid-template-columns: 1fr; } .plus-podcast { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
   <div class="shell">
@@ -118,6 +135,43 @@
       <div class="chips" id="categories"></div>
     </section>
 
+    <!-- DOS Radio Plus: własne źródła wiadomości i podcasty w duecie -->
+    <section class="section" id="plusPanel" hidden>
+      <div class="section-head"><h2>Twoje źródła</h2><span>DOS Radio Plus · własne wiadomości i podcasty w duecie</span></div>
+      <div class="plus-box">
+        <form id="plusPrefsForm" class="plus-form" novalidate>
+          <label class="plus-field" for="plusKeywords">Słowa kluczowe (maks. 20, oddzielone przecinkiem)
+            <input type="text" id="plusKeywords" placeholder="np. AI, webdev, kosmos" />
+          </label>
+          <label class="plus-field" for="plusFeeds">Kanały RSS (maks. 10, jeden na linię)
+            <textarea id="plusFeeds" rows="3" placeholder="https://przyklad.pl/rss"></textarea>
+          </label>
+          <div class="plus-info" id="plusPrefsInfo" role="status"></div>
+          <button type="submit" class="btn primary" id="plusPrefsSave">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>
+            Zapisz źródła
+          </button>
+        </form>
+        <div class="plus-digest">
+          <div class="plus-digest-head" id="plusDigestHead">Dodaj słowa kluczowe albo kanały RSS, żeby słuchać własnych wiadomości</div>
+          <ul class="news" id="plusDigest"></ul>
+          <button type="button" class="btn" id="plusDigestPlay" hidden>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            Posłuchaj swoich wiadomości
+          </button>
+        </div>
+      </div>
+      <form id="podcastForm" class="plus-podcast" novalidate>
+        <label class="plus-field" for="podcastTopic">Podcast w duecie o wybranym temacie, przeplatany muzyką z archiwum stacji
+          <input type="text" id="podcastTopic" maxlength="200" placeholder="Temat rozmowy (opcjonalnie) — np. sen i produktywność" />
+        </label>
+        <button type="submit" class="btn" id="podcastBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          Wygeneruj podcast
+        </button>
+      </form>
+    </section>
+
     <section class="section">
       <div class="section-head"><h2>Na antenie dziś</h2><span id="queueInfo">Lista pojawi się po włączeniu radia</span></div>
       <ul class="news" id="queue"><li class="empty">Po kliknięciu Graj zobaczysz tu wiadomości z linkami do źródeł.</li></ul>
@@ -142,7 +196,7 @@
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wszystkie stacje bez limitu czasu</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Komponowanie muzyki z własnego opisu nastroju</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wiadomości z wybranych tematów</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wkrótce w Plus: podcasty w duecie i dyskusje przeplatane muzyką</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>W Plus: podcasty w duecie i własne źródła wiadomości</li>
       </ul>
       <form id="authForm" novalidate>
         <input type="email" id="authEmail" placeholder="E-mail" autocomplete="email" required />

@@ -5,6 +5,7 @@ import { NEWS_CATEGORIES, categoryLabel, sanitizeCategories, type NewsCategory, 
 import { DEFAULT_STATION_ID, STATIONS, stationById, type Station } from '../radio/stations';
 import type { BreakInterval } from '../radio/radioClock';
 import { initBackgroundAudio } from '../audio/backgroundAudio';
+import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from './plus';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -194,6 +195,7 @@ engine.setVolume(prefs.volume);
 async function refreshAccess(): Promise<AccessState> {
   access = await radioApi.me();
   renderAccess();
+  void refreshPlusPanel(access.plus).catch((error) => setStatus(`Plus: ${(error as Error).message}`, true));
   return access;
 }
 
@@ -212,6 +214,7 @@ function startTrialCountdown(): void {
 
 async function togglePlay(): Promise<void> {
   if (engine.isPlaying) { engine.stop(); setStatus('Pauza'); return; }
+  if (isPlusAudioPlaying()) stopPlusAudio(); // podcast/digest yields to the radio
   try {
     let state = await refreshAccess();
     if (!state.allowed) { openAuth('register', true); return; }
@@ -392,6 +395,12 @@ const bgAudio = initBackgroundAudio(
   () => void togglePlay(),
   () => void engine.newsNow(),
 );
+
+// --- DOS Radio Plus ("Twoje źródła" + duet podcast) -------------------------------
+initPlus({
+  onStatus: (text, isError) => setStatus(text, isError),
+  stopRadio: () => { if (engine.isPlaying) engine.stop(); },
+});
 
 // --- mood composer ---------------------------------------------------------------
 const moodForm = $<HTMLFormElement>('moodForm');

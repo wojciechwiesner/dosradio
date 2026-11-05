@@ -13,6 +13,7 @@ import wave
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import httpx
 
@@ -105,6 +106,8 @@ def parse_stories(reply_text: str, category: str) -> list[Story]:
 
 
 def story_script(story: Story) -> str:
+    if story.category == "personal":
+        return f"Wiadomości z twoich źródeł. {story.title}. {story.radio_text} Wracamy do muzyki."
     if story.category == "stoic":
         return f"Stoicka myśl. {story.title}. {story.radio_text} Wracamy do muzyki."
     label = CATEGORIES[story.category]["label"]
@@ -157,6 +160,12 @@ class GeminiClient:
                 log.warning("news %s attempt failed: %s: %s", category, type(error).__name__, error)
         raise RuntimeError(f"{type(last_error).__name__}: {last_error}") from last_error
 
+    async def chat(self, prompt: str) -> str:
+        """Single-shot text generation with the news model (no search grounding)."""
+        data = await self._call(self.news_model, {"contents": [{"parts": [{"text": prompt}]}]})
+        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+        return "".join(part.get("text", "") for part in parts)
+
     async def speak(self, text: str, voice: str, style: str = "") -> bytes:
         """Pure text in contents — Gemini TTS reads everything in contents verbatim."""
         data = await self._call(self.tts_model, {
@@ -198,6 +207,10 @@ class NewsService:
         self.cache: dict[str, CategoryCache] = {name: self._load_edition(name) for name in CATEGORIES}
         self.locks: dict[str, asyncio.Lock] = {name: asyncio.Lock() for name in CATEGORIES}
         self.tts_lock = asyncio.Semaphore(2)
+        # Stories outside the global editions (e.g. personalized RSS digest) are looked
+        # up here so /radio-api/story/{id}.wav can voice them on demand.
+        self.extra: dict[str, Story] = {}
+        self.on_personal_refresh: Any = None  # optional async hook set by PersonalNews
 
     # --- persistence -----------------------------------------------------------
     def _edition_path(self, category: str) -> Path:
@@ -243,6 +256,12 @@ class NewsService:
                 if self.is_stale(category):
                     await self.ensure(category)
             self.prune_old_audio()
+            if self.on_personal_refresh is not None:
+                # Personalized digests must never break the global news cycle.
+                try:
+                    await self.on_personal_refresh()
+                except Exception as error:
+                    log.warning("personal digest refresh failed: %s", error)
             await asyncio.sleep(60)
 
     def audio_path(self, story_id: str) -> Path:
@@ -302,7 +321,22 @@ class NewsService:
             for story in cache.stories:
                 if story.id == story_id:
                     return story
-        return None
+        return self.extra.get(story_id)
+
+    def remember(self, stories: list[Story]) -> None:
+        """Register non-edition stories so find()/render_story() can serve them."""
+        for story in stories:
+            self.extra[story.id] = story
+
+    def global_queue(self) -> list[Story]:
+        """All stories of the current global editions, interleaved across categories."""
+        pools = [list(cache.stories) for cache in self.cache.values() if cache.stories]
+        ordered: list[Story] = []
+        for index in range(max((len(pool) for pool in pools), default=0)):
+            for pool in pools:
+                if index < len(pool):
+                    ordered.append(pool[index])
+        return ordered
 
     def public(self, category: str) -> dict:
         cache = self.cache[category]

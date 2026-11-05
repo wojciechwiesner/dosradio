@@ -27,6 +27,9 @@ from .archive import ArchiveRegistry
 from .recorder import StationRecorder, STATION_SPECS
 from .notifier import trigger_telegram_alert
 from .hosts import HOSTS, host_for, intro_line
+from .personal_news import PersonalNews
+from .podcast import PodcastService
+from .plus_api import build_plus_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("dosradio")
@@ -38,6 +41,9 @@ gemini = GeminiClient(settings.gemini_api_key, settings.news_model, settings.tts
 news = NewsService(gemini, settings.data_dir / "audio", settings.news_refresh_seconds)
 archives = ArchiveRegistry(settings.data_dir / "archive")
 recorder = StationRecorder(settings.gemini_api_key, archives)
+podcasts = PodcastService(gemini, settings.data_dir / "podcasts", archives)
+personal = PersonalNews(db, news)
+news.on_personal_refresh = personal.refresh_all
 intro_dir = settings.data_dir / "audio" / "intro"
 static_audio_dir = settings.data_dir / "audio" / "static"
 intro_dir.mkdir(parents=True, exist_ok=True)
@@ -92,6 +98,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.include_router(build_router(access))
+app.include_router(build_plus_router(access, db, news, podcasts, personal))
 
 # Billing (Stripe) router — optional module, loaded only when present.
 try:
