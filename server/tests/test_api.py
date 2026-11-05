@@ -25,6 +25,19 @@ def client(tmp_path, monkeypatch):
     return TestClient(app, base_url="https://testserver")
 
 
+@pytest.fixture()
+def captured_emails(monkeypatch):
+    """Collect verification e-mails instead of sending them over SMTP."""
+    sent: list[tuple[str, str]] = []  # (recipient, verification link)
+    from app import mailer
+
+    def fake_send(to_email: str, token: str) -> None:
+        sent.append((to_email, f"{mailer.SITE_URL}/?verify={token}"))
+
+    monkeypatch.setattr(mailer, "send_verification_email", fake_send)
+    return sent
+
+
 def test_spoken_time():
     from app.spoken_time import spoken_time_pl
     assert spoken_time_pl(14, 20) == "czternasta dwadzieścia"
@@ -52,7 +65,7 @@ def test_parse_stories_keeps_only_sourced():
         parse_stories("Nie wiem.", "ai")
 
 
-def test_trial_then_register_then_login(client):
+def test_trial_then_register_then_login(client, captured_emails):
     me = client.get("/radio-api/me").json()
     assert me == {"allowed": True, "registered": False, "email": None, "trial_started": False, "trial_remaining": 600}
 
@@ -73,7 +86,19 @@ def test_trial_then_register_then_login(client):
     bad = client.post("/radio-api/register", json={"email": "zly", "password": "12345678"})
     assert bad.status_code == 422
     ok = client.post("/radio-api/register", json={"email": "Ola@Example.com", "password": "dlugiehaslo1"})
-    assert ok.status_code == 200 and ok.json()["email"] == "ola@example.com"
+    assert ok.status_code == 200 and ok.json()["pending_verification"] is True
+    assert len(captured_emails) == 1 and captured_emails[0][0] == "ola@example.com"
+
+    # Until the e-mail is confirmed there is no access and login is blocked.
+    assert client.get("/radio-api/me").json()["registered"] is False
+    login = client.post("/radio-api/login", json={"email": "ola@example.com", "password": "dlugiehaslo1"})
+    assert login.status_code == 403
+
+    # Wrong tokens are rejected, the real token from the e-mail confirms the account.
+    assert client.post("/radio-api/verify", json={"token": "nieprawidlowytoken"}).status_code == 400
+    token = captured_emails[0][1].split("verify=")[1]
+    verified = client.post("/radio-api/verify", json={"token": token})
+    assert verified.status_code == 200 and verified.json()["verified"] is True
     me = client.get("/radio-api/me").json()
     assert me["allowed"] is True and me["registered"] is True
 
@@ -82,6 +107,24 @@ def test_trial_then_register_then_login(client):
     client.cookies.clear()
     assert client.post("/radio-api/login", json={"email": "ola@example.com", "password": "zlehaslo99"}).status_code == 401
     assert client.post("/radio-api/login", json={"email": "ola@example.com", "password": "dlugiehaslo1"}).status_code == 200
+    assert client.get("/radio-api/me").json()["registered"] is True
+
+
+def test_expired_token_and_resend(client, captured_emails):
+    ok = client.post("/radio-api/register", json={"email": "ala@example.com", "password": "dlugiehaslo1"})
+    assert ok.status_code == 200
+
+    from app.main import db
+    with db.connect() as conn:
+        conn.execute("UPDATE users SET verify_expires = verify_expires - 100000 WHERE email = 'ala@example.com'")
+    token = captured_emails[0][1].split("verify=")[1]
+    assert client.post("/radio-api/verify", json={"token": token}).status_code == 400
+
+    # Resend issues a fresh token that works.
+    resent = client.post("/radio-api/resend-verification", json={"email": "ala@example.com", "password": "dlugiehaslo1"})
+    assert resent.status_code == 200 and resent.json()["sent"] is True
+    fresh_token = captured_emails[1][1].split("verify=")[1]
+    assert client.post("/radio-api/verify", json={"token": fresh_token}).status_code == 200
     assert client.get("/radio-api/me").json()["registered"] is True
 
 

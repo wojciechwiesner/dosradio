@@ -36,8 +36,10 @@ const postJson = <T>(path: string, body?: unknown) =>
 export const radioApi = {
   me: () => request<AccessState>('/radio-api/me'),
   startTrial: () => postJson<AccessState>('/radio-api/trial/start'),
-  register: (email: string, password: string) => postJson<{ email: string }>('/radio-api/register', { email, password }),
+  register: (email: string, password: string) => postJson<{ email: string; pending_verification: boolean }>('/radio-api/register', { email, password }),
   login: (email: string, password: string) => postJson<{ email: string }>('/radio-api/login', { email, password }),
+  verify: (token: string) => postJson<{ email: string; verified: boolean }>('/radio-api/verify', { token }),
+  resendVerification: (email: string, password: string) => postJson<{ ok: boolean; sent?: boolean }>('/radio-api/resend-verification', { email, password }),
   logout: () => postJson<{ ok: boolean }>('/radio-api/logout'),
   news: (categories: NewsCategory[]) =>
     request<{ categories: CategoryNews[] }>(`/radio-api/news?cats=${categories.join(',')}`),

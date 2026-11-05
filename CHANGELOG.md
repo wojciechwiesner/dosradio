@@ -5,6 +5,25 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-11-05
+
+### Added
+- **Mandatory e-mail confirmation after signup**: new accounts stay inactive until the
+  user clicks a verification link sent by e-mail (valid 24 h, token stored as SHA-256 hash).
+- `POST /radio-api/verify` (confirm token, opens session) and
+  `POST /radio-api/resend-verification` (password-checked re-send of the link).
+- SMTP verification mailer (`app/mailer.py`, STARTTLS, configured via `DOSRADIO_SMTP_*` env).
+- Frontend: "check your inbox" state after signup, resend link on blocked login,
+  and automatic handling of `/?verify=<token>` landing links.
+
+### Changed
+- `POST /radio-api/register` no longer opens a session immediately (returns
+  `pending_verification: true`); login returns 403 until the e-mail is confirmed.
+
+### Security
+- Verification tokens are stored hashed; resend requires valid account password;
+  resend for unknown addresses does not leak account existence.
+
 ## [1.0.0] - 2026-11-05
 
 ### Added

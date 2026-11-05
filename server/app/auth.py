@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import logging
 import re
 import secrets
 import time
@@ -12,7 +13,12 @@ from typing import Any, Callable
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
+from . import mailer
 from .db import Database
+
+log = logging.getLogger("dosradio.auth")
+
+VERIFY_TTL_SECONDS = mailer.VERIFY_TTL_SECONDS
 
 SESSION_COOKIE = "dr_session"
 ANON_COOKIE = "dr_anon"
@@ -83,7 +89,7 @@ class AccessService:
         session = cookies.get(SESSION_COOKIE)
         if session:
             user = self.db.user_for_session(token_hash(session))
-            if user:
+            if user and user["email_verified"]:
                 return Access(True, True, user["email"], True, self.trial_seconds)
         started = self.db.trial_started_at(self._trial_keys(ip, cookies.get(ANON_COOKIE)))
         if started is None:
@@ -108,6 +114,10 @@ class Credentials(BaseModel):
         if not EMAIL_RE.match(value):
             raise ValueError("Niepoprawny adres e-mail")
         return value
+
+
+class VerifyToken(BaseModel):
+    token: str = Field(min_length=10, max_length=200)
 
 
 def build_router(access: AccessService) -> APIRouter:
@@ -142,21 +152,55 @@ def build_router(access: AccessService) -> APIRouter:
         if access.db.find_user_by_email(body.email):
             raise HTTPException(409, "Konto z tym adresem już istnieje. Zaloguj się.")
         user_id = access.db.create_user(body.email, hash_password(body.password))
-        open_session(response, user_id)
+        _send_verification(body.email, user_id)
         if getattr(access, "on_register", None):
             try:
                 access.on_register(body.email, access.db.count_users())
             except Exception:
                 pass
-        return {"ok": True, "email": body.email}
+        return {"ok": True, "email": body.email, "pending_verification": True}
 
     @router.post("/login")
     def login(body: Credentials, response: Response) -> dict:
         user = access.db.find_user_by_email(body.email)
         if not user or not verify_password(body.password, user["password_hash"]):
             raise HTTPException(401, "Zły e-mail albo hasło.")
+        if not user["email_verified"]:
+            raise HTTPException(403, "Najpierw potwierdź adres e-mail — sprawdź skrzynkę (link wygasa po 24 h).")
         open_session(response, int(user["id"]))
         return {"ok": True, "email": body.email}
+
+    @router.post("/verify")
+    def verify(body: VerifyToken, response: Response) -> dict:
+        """Confirm an e-mail address with the token from the verification link."""
+        row = access.db.find_user_by_verify_token(token_hash(body.token))
+        if row is None or (row["verify_expires"] or 0) < time.time():
+            raise HTTPException(400, "Link nieprawidłowy albo wygasł. Zaloguj się i wyślij nowy.")
+        access.db.verify_email(int(row["id"]))
+        open_session(response, int(row["id"]))
+        return {"ok": True, "email": row["email"], "verified": True}
+
+    @router.post("/resend-verification")
+    def resend_verification(body: Credentials, response: Response) -> dict:
+        user = access.db.find_user_by_email(body.email)
+        if not user:
+            # Do not leak which addresses have accounts.
+            return {"ok": True}
+        if user and user["email_verified"]:
+            return {"ok": True}
+        if not verify_password(body.password, user["password_hash"]):
+            raise HTTPException(401, "Zły e-mail albo hasło.")
+        _send_verification(body.email, int(user["id"]))
+        return {"ok": True, "sent": True}
+
+    def _send_verification(email: str, user_id: int) -> None:
+        token = secrets.token_urlsafe(32)
+        access.db.set_email_verification(user_id, token_hash(token), time.time() + VERIFY_TTL_SECONDS)
+        try:
+            mailer.send_verification_email(email, token)
+        except Exception as error:
+            log.error("Verification e-mail failed for %s: %s", email, error)
+            raise HTTPException(503, "Nie udało się wysłać e-maila potwierdzającego. Spróbuj ponownie za chwilę.")
 
     @router.post("/logout")
     def logout(request: Request, response: Response) -> dict:

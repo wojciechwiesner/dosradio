@@ -245,6 +245,8 @@ function openAuth(mode: 'register' | 'login', trialEnded = false): void {
   $('authSwitch').firstChild!.textContent = mode === 'register' ? 'Masz już konto? ' : 'Nie masz konta? ';
   $('toLogin').textContent = mode === 'register' ? 'Zaloguj się' : 'Załóż konto';
   $('authError').textContent = '';
+  $('resendLink').hidden = true;
+  $('authForm').hidden = false;
   modal.classList.add('open');
   $<HTMLInputElement>('authEmail').focus();
 }
@@ -261,18 +263,60 @@ $('authForm').addEventListener('submit', async (event) => {
   const submit = $<HTMLButtonElement>('authSubmit');
   submit.disabled = true;
   try {
-    if (authMode === 'register') await radioApi.register(email, password);
-    else await radioApi.login(email, password);
+    if (authMode === 'register') {
+      await radioApi.register(email, password);
+      // Account created, but access is granted only after e-mail confirmation.
+      $('authError').textContent = '';
+      $('authLead').textContent = `Sprawdź skrzynkę ${email} (też spam) — wysłaliśmy link potwierdzający. Kliknij go, żeby aktywować konto.`;
+      $('authForm').hidden = true;
+      $('perks').hidden = true;
+      return;
+    }
+    await radioApi.login(email, password);
     modal.classList.remove('open');
     await refreshAccess();
     setStatus('Gotowe. Słuchasz bez limitu.');
     if (!engine.isPlaying) await togglePlay();
   } catch (error) {
-    $('authError').textContent = (error as Error).message;
+    const message = (error as Error).message;
+    $('authError').textContent = message;
+    $('resendLink').hidden = !message.includes('potwierdź');
   } finally {
     submit.disabled = false;
   }
 });
+
+// Re-send the confirmation e-mail for an unverified account (login form is pre-filled).
+$('resendLink').addEventListener('click', async () => {
+  const email = $<HTMLInputElement>('authEmail').value.trim();
+  const password = $<HTMLInputElement>('authPassword').value;
+  const resend = $<HTMLButtonElement>('resendLink');
+  resend.disabled = true;
+  try {
+    await radioApi.resendVerification(email, password);
+    $('authError').textContent = 'Nowy link poszedł. Sprawdź skrzynkę.';
+    resend.hidden = true;
+  } catch (error) {
+    $('authError').textContent = (error as Error).message;
+    resend.disabled = false;
+  }
+});
+
+// E-mail confirmation link lands here as /?verify=<token>.
+async function handleVerifyLink(): Promise<void> {
+  const params = new URLSearchParams(window.location.search);
+  const token = params.get('verify');
+  if (!token) return;
+  history.replaceState(null, '', window.location.pathname);
+  try {
+    const result = await radioApi.verify(token);
+    await refreshAccess();
+    setStatus(`Konto ${result.email} potwierdzone. Słuchasz bez limitu.`);
+  } catch (error) {
+    setStatus((error as Error).message, true);
+  }
+}
+void handleVerifyLink();
 
 $('authBtn').addEventListener('click', async () => {
   if (access?.registered) {
