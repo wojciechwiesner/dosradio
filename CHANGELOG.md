@@ -5,6 +5,26 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **DOS Radio Plus billing (Stripe Checkout, test mode)**: new `app/billing.py` router
+  mounted through the existing guarded hook in `main.py` — no changes to shared modules.
+  - `POST /radio-api/billing/checkout` (registered users) opens a Stripe Checkout session
+    for Plus (39 PLN/mo) or Plus+AI (59 PLN/mo); optional `b2b: true` switches the
+    subscription to invoice billing (`send_invoice`, 14 days due).
+  - `POST /radio-api/billing/webhook` verifies the Stripe signature and grants Plus
+    idempotently (`plan='plus'`, `plus_until=now+30d`) on `checkout.session.completed`.
+  - `GET /radio-api/billing/status` returns the caller's plan state and the plan catalogue.
+  - Missing `STRIPE_SECRET_KEY` makes checkout return a clear 503 JSON; the rest of the
+    app is unaffected. Env documented in `server/.env.example` (`STRIPE_SECRET_KEY`,
+    `STRIPE_WEBHOOK_SECRET`, `DOSRADIO_PLUS_PRICE_PLN` as optional Price ID override).
+  - `stripe>=8` added to `server/requirements.txt`; 12 offline tests in
+    `server/tests/test_billing.py` (faked SDK, locally computed webhook signatures).
+- **Frontend**: `src/ui/billing.ts` replaces the stub — floating "Plus" badge opens a
+  minimal Linear-style plan modal with live status, and handles the Stripe
+  `?billing=success|cancel` redirect back. Polish copy, SVG icons only, self-contained styles.
+
 ## [1.1.1] - 2026-11-05
 
 ### Fixed
