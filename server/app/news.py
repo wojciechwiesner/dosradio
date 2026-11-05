@@ -157,10 +157,9 @@ class GeminiClient:
                 log.warning("news %s attempt failed: %s: %s", category, type(error).__name__, error)
         raise RuntimeError(f"{type(last_error).__name__}: {last_error}") from last_error
 
-    async def speak(self, text: str, voice: str, style: str) -> bytes:
-        """Delivery style travels in systemInstruction, so it can never be read out loud."""
+    async def speak(self, text: str, voice: str, style: str = "") -> bytes:
+        """Pure text in contents — Gemini TTS reads everything in contents verbatim."""
         data = await self._call(self.tts_model, {
-            "systemInstruction": {"parts": [{"text": f"You are a Polish radio voice: {style}. Speak only the user's text, in Polish, word for word."}]},
             "contents": [{"parts": [{"text": text}]}],
             "generationConfig": {
                 "responseModalities": ["AUDIO"],
