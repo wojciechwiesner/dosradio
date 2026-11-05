@@ -67,7 +67,7 @@ def test_parse_stories_keeps_only_sourced():
 
 def test_trial_then_register_then_login(client, captured_emails):
     me = client.get("/radio-api/me").json()
-    assert me == {"allowed": True, "registered": False, "email": None, "trial_started": False, "trial_remaining": 600}
+    assert me == {"allowed": True, "registered": False, "email": None, "trial_started": False, "trial_remaining": 600, "plus": False}
 
     started = client.post("/radio-api/trial/start").json()
     assert started["trial_started"] is True and 595 <= started["trial_remaining"] <= 600

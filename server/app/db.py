@@ -15,7 +15,15 @@ CREATE TABLE IF NOT EXISTS users (
     created_at REAL NOT NULL,
     email_verified INTEGER NOT NULL DEFAULT 1,
     verify_token_hash TEXT,
-    verify_expires REAL
+    verify_expires REAL,
+    plan TEXT NOT NULL DEFAULT 'free',
+    plus_until REAL
+);
+CREATE TABLE IF NOT EXISTS news_preferences (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id),
+    keywords TEXT NOT NULL DEFAULT '[]',
+    rss_feeds TEXT NOT NULL DEFAULT '[]',
+    updated_at REAL NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
@@ -46,6 +54,10 @@ class Database:
             conn.execute("ALTER TABLE users ADD COLUMN verify_token_hash TEXT")
         if "verify_expires" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN verify_expires REAL")
+        if "plan" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
+        if "plus_until" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN plus_until REAL")
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
