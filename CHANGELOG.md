@@ -5,6 +5,20 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Voice loudness (v1.4 U1)**: host and news voice now sit 8 dB below full-volume music
+  (`VOICE_GAIN = 0.4` on the voice bus in `publicRadioEngine.ts`), and the music duck level
+  while voice is speaking rose from 0.16 to 0.34 (-9.4 dB). Previously the voice played at
+  0 dB against music ducked to -15.9 dB; now the voice (-8 dB) sits ~1.4 dB above the ducked
+  bed and 8 dB below full music, so it no longer overpowers the music.
+- **Server-side loudness normalization**: `GeminiClient.speak()` now runs every synthesized
+  clip (news stories, host jingles/chatter, podcast turns) through `normalize_loudness()`
+  (`server/app/news.py`), a single-pass ffmpeg `loudnorm` filter targeting -19 LUFS before
+  caching/returning the audio. Falls back to the original, unnormalized audio and logs a
+  warning if ffmpeg is missing or fails, so a broken normalizer never blocks speech.
+
 ## [1.3.0] - 2026-11-06
 
 ### Added

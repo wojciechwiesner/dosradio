@@ -8,6 +8,8 @@ import io
 import json
 import logging
 import re
+import subprocess
+import tempfile
 import time
 import wave
 from dataclasses import asdict, dataclass, field
@@ -21,6 +23,7 @@ from .hosts import NEWSROOM_VOICES
 
 log = logging.getLogger("dosradio.news")
 API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+TARGET_LUFS = -19.0
 
 CATEGORIES: dict[str, dict[str, str]] = {
     "ai": {
@@ -125,6 +128,44 @@ def pcm_to_wav(pcm: bytes, rate: int = 24000) -> bytes:
     return buffer.getvalue()
 
 
+def normalize_loudness(wav: bytes, target_lufs: float = TARGET_LUFS) -> bytes:
+    """Normalize voice clips to a broadcast-consistent loudness via ffmpeg's loudnorm.
+
+    Single-pass loudnorm: less sample-accurate than the two-pass variant (which needs
+    a prior analysis run to feed measured stats back in), but one ffmpeg call per clip
+    is simpler and cannot fail from a mismatched analysis step. Good enough for short
+    news/host clips where +-1 LU of drift is inaudible.
+
+    Uses real temp files rather than pipes: ffmpeg can only rewrite a correct WAV
+    header (size, format tag) when the output is seekable, otherwise it falls back to
+    WAVE_FORMAT_EXTENSIBLE with an unknown size, which Python's own `wave` module
+    cannot parse.
+
+    ffmpeg failures (missing binary, bad input) are logged and the original audio is
+    returned untouched, so a broken normalizer never blocks news or host speech.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        src_path = Path(tmp_dir) / "in.wav"
+        dst_path = Path(tmp_dir) / "out.wav"
+        src_path.write_bytes(wav)
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-i", str(src_path),
+            "-af", f"loudnorm=I={target_lufs}:TP=-1.5:LRA=11",
+            "-ar", "24000", "-ac", "1", "-sample_fmt", "s16", "-c:a", "pcm_s16le",
+            str(dst_path),
+        ]
+        try:
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+        except (FileNotFoundError, subprocess.TimeoutExpired) as error:
+            log.warning("loudnorm unavailable (%s), returning original audio", error)
+            return wav
+        if proc.returncode != 0 or not dst_path.exists():
+            log.warning("loudnorm failed (exit %s): %s", proc.returncode, proc.stderr.decode()[:200])
+            return wav
+        return dst_path.read_bytes()
+
+
 class GeminiClient:
     def __init__(self, api_key: str, news_model: str, tts_model: str) -> None:
         self.api_key = api_key
@@ -180,10 +221,10 @@ class GeminiClient:
         if not inline:
             raise RuntimeError(f"{self.tts_model} returned no audio")
         audio = base64.b64decode(inline["data"])
-        if "wav" in inline.get("mimeType", ""):
-            return audio
-        rate_match = re.search(r"rate=(\d+)", inline.get("mimeType", ""))
-        return pcm_to_wav(audio, int(rate_match.group(1)) if rate_match else 24000)
+        if "wav" not in inline.get("mimeType", ""):
+            rate_match = re.search(r"rate=(\d+)", inline.get("mimeType", ""))
+            audio = pcm_to_wav(audio, int(rate_match.group(1)) if rate_match else 24000)
+        return await asyncio.to_thread(normalize_loudness, audio)
 
 
 
