@@ -5,6 +5,27 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **News headlines**: each story carries a one-sentence `headline` (max 18 words) next to its
+  `radio_text`, which is now 45-70 words. `GET|HEAD /radio-api/story/{id}/headline.wav` voices
+  the headline once and caches it.
+- **Ramówka voices**: `GET|HEAD /radio-api/teaser.wav?story=&station=` (teaser for a story,
+  404 for unknown ids), `GET|HEAD /radio-api/outro.wav?station=&variant=0..3` ("Gramy dalej."
+  family) and `GET /radio-api/intro.wav?time=&station=&kind=flash|main|hourly`.
+- **Weather**: `GET /radio-api/weather?lat=&lon=&city=` returns city, temperature, summary and
+  text from Open-Meteo; `GET|HEAD /radio-api/weather.wav` voices that text for a station.
+  Forecasts are cached 30 minutes per coordinates rounded to two decimals.
+- **Aired ledger**: `GET /radio-api/aired?day=` and `POST /radio-api/aired` keep the stories a
+  verified listener already heard per day, merged as a union, capped at 500 ids per day.
+  Anonymous and unverified listeners get 401.
+
+### Changed
+- News prompt asks for headlines and the 45-70 word radio text, and every model reply passes
+  through `strip_emoji` before it is stored or voiced.
+- Old `GET /radio-api/intro.wav?time=` endpoint is replaced by the kind-aware one above.
+
 ## [1.3.0] - 2026-11-06
 
 ### Added
