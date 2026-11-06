@@ -5,6 +5,22 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **YouTube pill (Plus)**: `POST /radio-api/plus/pill {"url"}` and `GET /radio-api/plus/pill/{id}`
+  turn a video or channel link (latest upload, up to 3 h) into a "pigulka": pl (else en) subtitles,
+  Gemini picks ordered segments covering ~20% of the episode (20-120 s, snapped to cue boundaries),
+  yt-dlp + ffmpeg cut those exact fragments, each introduced by a one-sentence host summary and
+  wrapped in intro/outro bumpers. One job at a time, cached per video id, 402 without Plus.
+  New modules `youtube_pill.py` (pipeline) and `pill_service.py` (queue and cache); UI in `pill.ts`.
+- **Podcast bumpers**: ffmpeg-built stings (6-9 s music bed from the station archive, faded, ducked
+  under the host voice) for intro, break-out, break-in and outro; manifest parts get kind `bumper`.
+- Client podcast player schedules parts gaplessly and fades music and bumper edges by 1.5 s.
+
+### Changed
+- Podcast manifests carry `version: 2`; episodes cached before bumpers regenerate on next request.
+
 ## [1.3.0] - 2026-11-06
 
 ### Added

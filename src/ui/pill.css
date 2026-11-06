@@ -1,0 +1,9 @@
+/* YouTube pill form, rendered by pill.ts inside #plusPanel. */
+.pill-box { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.pill-box h3 { margin: 0; font-size: 15px; display: flex; align-items: center; gap: 8px; }
+.pill-box h3 svg { width: 18px; height: 18px; }
+.pill-hint { margin: 0; font-size: 13px; color: var(--muted, inherit); opacity: 0.8; }
+.pill-progress { font-size: 13px; min-height: 1.3em; }
+.pill-progress.error { color: #ff8f7a; }
+.pill-source { font-size: 13px; }
+.pill-source a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
