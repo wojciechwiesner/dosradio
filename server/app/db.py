@@ -8,6 +8,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
 
+SECONDS_PER_DAY = 86400
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -108,6 +110,14 @@ class Database:
             conn.execute(
                 "UPDATE users SET email_verified = 1, verify_token_hash = NULL, verify_expires = NULL WHERE id = ?",
                 (user_id,),
+            )
+
+    def grant_welcome_plus(self, user_id: int, days: int) -> None:
+        """Give a free account `days` of Plus; paid or unlimited plans are never touched."""
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE users SET plan = 'plus', plus_until = ? WHERE id = ? AND plan = 'free'",
+                (time.time() + days * SECONDS_PER_DAY, user_id),
             )
 
     # --- sessions ----------------------------------------------------------

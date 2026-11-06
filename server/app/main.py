@@ -30,6 +30,7 @@ from .hosts import HOSTS, host_for, intro_line
 from .personal_news import PersonalNews
 from .podcast import PodcastService
 from .plus_api import build_plus_router
+from .host_clips import build_router as build_host_clips_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("dosradio")
@@ -99,6 +100,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.include_router(build_router(access))
 app.include_router(build_plus_router(access, db, news, podcasts, personal))
+app.include_router(build_host_clips_router(gemini.speak, static_audio_dir))
 
 # Billing (Stripe) router — optional module, loaded only when present.
 try:

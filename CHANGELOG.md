@@ -5,6 +5,19 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Host clips**: `GET /radio-api/host-clips/{station_id}` lists each host's 4 jingles and
+  8 chatter remarks as wav URLs; `GET|HEAD /radio-api/host-clip/{station_id}/{kind}/{index}.wav`
+  voices a clip on first request and caches it under `data/audio/static/`. Unknown station,
+  kind or index returns 404.
+- **Welcome Plus**: a verified free account gets 30 days of Plus; paid or unlimited plans
+  are never shortened.
+
+### Changed
+- Anonymous trial lasts one hour (`DOSRADIO_TRIAL_SECONDS` default 3600, was 600).
+
 ## [1.2.0] - 2026-11-05
 
 ### Added
