@@ -38,7 +38,7 @@ export function spokenTimePl(date: Date): string {
 
 export const BREAK_INTERVALS = [5, 10, 15, 20, 30, 60] as const;
 export type BreakInterval = (typeof BREAK_INTERVALS)[number];
-export const DEFAULT_BREAK_INTERVAL: BreakInterval = 20;
+export const DEFAULT_BREAK_INTERVAL: BreakInterval = 5;
 
 /** Old or corrupted stored values fall back to the default; every old valid value (20/30/60) stays valid. */
 export function normalizeInterval(value: unknown): BreakInterval {

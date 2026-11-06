@@ -15,6 +15,8 @@ export const NEWS_CATEGORIES: { id: NewsCategory; label: string }[] = [
 export interface QueuedStory {
   id: string;
   title: string;
+  /** One sentence, <= 18 words; older servers omit it. */
+  headline?: string;
   radio_text: string;
   source_url: string;
   confirmed: boolean;
@@ -42,13 +44,13 @@ export function interleaveStories(groups: CategoryNews[]): QueuedStory[] {
   return result;
 }
 
-/** Next story not aired yet, preferring ones whose audio is already rendered; when everything was aired, start again. */
-export function pickNextStory(queue: QueuedStory[], aired: Set<string>): QueuedStory | null {
-  if (queue.length === 0) return null;
+/**
+ * Next story not aired yet, preferring ones whose audio is already rendered.
+ * Never restarts the cycle: when everything was aired today it returns null and the caller fills the time.
+ */
+export function pickNextStory(queue: QueuedStory[], aired: ReadonlySet<string>): QueuedStory | null {
   const unaired = queue.filter((story) => !aired.has(story.id));
-  if (unaired.length) return unaired.find((story) => story.audio_ready) ?? unaired[0];
-  aired.clear();
-  return queue.find((story) => story.audio_ready) ?? queue[0];
+  return unaired.find((story) => story.audio_ready) ?? unaired[0] ?? null;
 }
 
 export function categoryLabel(id: NewsCategory): string {

@@ -8,20 +8,20 @@
  * - Instant start in ~100ms with the station host's voice greeting while music buffers.
  * - Gapless hybrid stream (70% archive / 30% live) with prefetch and crossfade.
  */
-import { GoogleGenAI } from '@google/genai';
 import { LiveMusicHelper } from '../audio/LiveMusicHelper';
 import { getSharedAudioContext } from '../audio/iosAudioUnlock';
-import type { MusicGenerationConfig, Prompt } from '../types';
+import { applyStationToHelper, createLyriaHelper } from './liveLyria';
 import { radioApi, TrialEndedError } from './radioApi';
-import { interleaveStories, pickNextStory, type NewsCategory, type QueuedStory } from './newsQueue';
-import { hostStationId, isPresetStation, NEGATIVE_PROMPT, type Station } from './stations';
+import { interleaveStories, type NewsCategory, type QueuedStory } from './newsQueue';
+import { hostStationId, isPresetStation, type Station } from './stations';
 import { DEFAULT_BREAK_INTERVAL, FIRST_BREAK_DELAY_MS, nextScheduledBreak, type BreakInterval } from './radioClock';
 import { HostClipPlayer } from './hostClipPlayer';
 import { ChunkStreamer } from './chunkStreamer';
+import { AiredStore } from './airedStore';
+import { ProgrammeState } from './programmeState';
+import { breakClips, planBreak, upcomingStory, HOURLY_MAX_MS, type WeatherPlace } from './programme';
+import { runClips } from './breakRunner';
 
-const LYRIA_MODEL = 'lyria-realtime-exp';
-const LYRIA_PROXY_BASE = '/radio-ws/lyria';
-const PLACEHOLDER_KEY = 'server-side';
 const DUCK_LEVEL = 0.16;
 const NEWS_POLL_MS = 10 * 60_000;
 
@@ -34,6 +34,8 @@ export interface PublicRadioEvents {
   onQueue: (queue: QueuedStory[], airingId: string | null) => void;
   onOnAir: (story: QueuedStory | null) => void;
   onNextBreak: (at: Date | null) => void;
+  /** The story the next break will lead with or tease (for the "Za m:ss" line); null when nothing is left. */
+  onUpcoming?: (story: QueuedStory | null) => void;
   onTrialEnded: () => void;
   onLevel: (level: number) => void;
   onHostModeChange?: (mode: HostMode) => void;
@@ -53,7 +55,7 @@ export class PublicRadioEngine {
   private station: Station;
   private categories: NewsCategory[];
   private queue: QueuedStory[] = [];
-  private aired = new Set<string>();
+  private nextSlot: Date | null = null;
 
   private timers: ReturnType<typeof setTimeout>[] = [];
   private newsTimer: ReturnType<typeof setInterval> | null = null;
@@ -72,6 +74,7 @@ export class PublicRadioEngine {
     play: (url) => this.airHostClip(url),
   });
 
+  public readonly programme: ProgrammeState;
   public interval: BreakInterval = DEFAULT_BREAK_INTERVAL;
   /** First news break comes this long after play is pressed (not on the clock grid). */
   public firstBreakDelayMs = FIRST_BREAK_DELAY_MS;
@@ -79,7 +82,13 @@ export class PublicRadioEngine {
   /** When false the host still chats, but scheduled news breaks are skipped ("Bez wiadomości"). */
   public newsEnabled = true;
 
-  constructor(station: Station, categories: NewsCategory[], private readonly events: PublicRadioEvents) {
+  constructor(
+    station: Station,
+    categories: NewsCategory[],
+    private readonly events: PublicRadioEvents,
+    airedStore: AiredStore = new AiredStore(localStorage),
+  ) {
+    this.programme = new ProgrammeState(airedStore);
     this.station = station;
     this.categories = categories;
 
@@ -127,6 +136,8 @@ export class PublicRadioEngine {
     this.events.onState('loading');
     this.playing = true; // set first: greeting, watchdog and breaks all check it
     this.resetBreakSchedule();
+    this.programme.startSession(new Date());
+    void this.programme.aired.pull();
     this.startLevelMeter();
 
     if (this.hostMode === 'with-host') {
@@ -234,6 +245,14 @@ export class PublicRadioEngine {
     }
   }
 
+  /** Topic of the day (leads the main stories) and the hourly-bulletin options; takes effect on the next break. */
+  setProgramme(options: { dayTopic: NewsCategory | null; hourlyEnabled: boolean; place: WeatherPlace | null }): void {
+    this.programme.dayTopic = options.dayTopic;
+    this.programme.hourlyEnabled = options.hourlyEnabled;
+    this.programme.place = options.place;
+    this.emitUpcoming();
+  }
+
   setInterval(interval: BreakInterval): void {
     this.interval = interval;
     if (this.playing && this.hostMode === 'with-host') {
@@ -256,12 +275,7 @@ export class PublicRadioEngine {
   }
 
   private createHelper(): LiveMusicHelper {
-    const ai = new GoogleGenAI({
-      apiKey: PLACEHOLDER_KEY,
-      httpOptions: { apiVersion: 'v1alpha', baseUrl: location.origin + LYRIA_PROXY_BASE },
-    });
-    const helper = new LiveMusicHelper(ai, LYRIA_MODEL);
-    helper.extraDestination = this.musicBus;
+    const helper = createLyriaHelper(this.musicBus);
 
     // Automatic reconnection watchdog on disconnection (Google drops at ~10 minutes)
     helper.addEventListener('error', (async () => {
@@ -278,20 +292,7 @@ export class PublicRadioEngine {
   }
 
   private async applyStation(): Promise<void> {
-    if (!this.helper) return;
-    const prompts = new Map<string, Prompt>([
-      ['mood', { promptId: 'mood', text: this.station.prompt, weight: 1.3, cc: 0, color: '#888' }],
-      ['neg', { promptId: 'neg', text: NEGATIVE_PROMPT, weight: 0.25, cc: 0, color: '#444' }],
-    ]);
-    const config = {
-      bpm: this.station.bpm,
-      density: this.station.density,
-      brightness: this.station.brightness,
-      guidance: 4.0,
-      temperature: 1.0,
-    } as MusicGenerationConfig;
-    await this.helper.setWeightedPrompts(prompts);
-    await this.helper.setMusicGenerationConfig(config);
+    if (this.helper) await applyStationToHelper(this.helper, this.station);
   }
 
   private async playWelcomeIntro(): Promise<void> {
@@ -374,6 +375,7 @@ export class PublicRadioEngine {
       const { categories } = await radioApi.news(this.categories);
       this.queue = interleaveStories(categories);
       this.events.onQueue(this.queue, null);
+      this.emitUpcoming();
     } catch (error) {
       if (error instanceof TrialEndedError) return this.endTrial();
       // Silently retry on next tick
@@ -397,6 +399,8 @@ export class PublicRadioEngine {
       firstBreakDelayMs: this.firstBreakDelayMs,
     });
     this.events.onNextBreak(slot);
+    this.nextSlot = slot;
+    this.emitUpcoming();
     this.timers.push(
       setTimeout(async () => {
         await this.airBreak(slot);
@@ -440,39 +444,66 @@ export class PublicRadioEngine {
     return this.ctx.decodeAudioData(await radioApi.audio(path));
   }
 
+  private emitUpcoming(): void {
+    const at = this.nextSlot ?? new Date();
+    this.events.onUpcoming?.(upcomingStory(this.programme.context(this.queue, at)));
+  }
+
+  /** Reload the live Lyria session while the voice plays, so the music comes back fresh after the break. */
+  private async reloadLiveSession(): Promise<void> {
+    if (!this.helper || this.chunkStreamer || !this.playing) return;
+    try {
+      this.helper.stop();
+      await this.applyStation();
+      await this.helper.play();
+    } catch {
+      void this.triggerDeadAirRecovery();
+    }
+  }
+
+  /** Nothing new to report today: say so briefly and let the host chat instead of repeating a story. */
+  private async airFiller(): Promise<void> {
+    this.events.onStatus('To już wszystkie nowe wiadomości na dziś. Zaraz coś od prowadzącego.');
+    const clips = await radioApi.hostClips(hostStationId(this.station));
+    const url = clips?.chatter[Math.floor(Math.random() * (clips?.chatter.length ?? 0))];
+    if (url) await this.airHostClip(url).catch(() => {});
+  }
+
   private async airBreak(slot: Date, standalone = false): Promise<void> {
     if (this.speaking || (!this.playing && !standalone) || this.hostMode === 'music-only') return;
-    this.speaking = true;
     this.lastBreakAt = new Date();
+    const plan = planBreak(this.programme.context(this.queue, this.lastBreakAt));
+    if (plan.empty) return this.airFiller();
+
+    this.speaking = true;
     const hhmm = `${String(slot.getHours()).padStart(2, '0')}:${String(slot.getMinutes()).padStart(2, '0')}`;
-    const sid = hostStationId(this.station);
-    const story = pickNextStory(this.queue, this.aired);
+    const clips = breakClips(plan, { hhmm, stationId: hostStationId(this.station), place: this.programme.place });
+    let played: typeof clips = [];
 
     try {
       this.events.onHostState?.(true, 'news');
-      const intro = await this.decode(`/radio-api/intro.wav?time=${hhmm}&station=${sid}`).catch(() => null);
-      const body = story ? await this.decode(`/radio-api/story/${story.id}.wav`).catch(() => null) : null;
-      if (!intro && !body) return;
-
-      this.events.onOnAir(story);
-      if (story) {
-        this.aired.add(story.id);
-        this.events.onQueue(this.queue, story.id);
-      }
-
+      this.events.onOnAir(plan.full[0] ?? null);
+      if (plan.full[0]) this.events.onQueue(this.queue, plan.full[0].id);
       if (this.playing) {
         this.duck(DUCK_LEVEL, 1.2);
+        void this.reloadLiveSession();
         await new Promise((r) => setTimeout(r, 600));
       }
-      if (intro) await this.playVoice(intro);
-      if (body) await this.playVoice(body);
+      played = await runClips(
+        clips,
+        { decode: (path) => this.decode(path).catch(() => null), play: (buffer) => this.playVoice(buffer), now: Date.now },
+        plan.kind === 'hourly' ? HOURLY_MAX_MS : undefined,
+      );
     } catch (error) {
       if (error instanceof TrialEndedError) return this.endTrial();
     } finally {
+      this.programme.record(plan, played, new Date());
+      this.events.onQueue(this.queue, null); // re-render: just-aired stories turn grey
       if (this.playing) this.duck(1.0, 2.0);
       this.speaking = false;
       this.events.onHostState?.(false, null);
       this.events.onOnAir(null);
+      this.emitUpcoming();
     }
   }
 

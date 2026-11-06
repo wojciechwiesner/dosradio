@@ -5,6 +5,27 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Ramówka planner** (`programme.ts`): two short break formats alternate every break. FLASH reads 2-3
+  one-sentence headlines plus a teaser for the next story; MAIN tells one story (topic of the day first)
+  plus a teaser. The first break after every full hour is an extended bulletin: remaining headlines,
+  the top 2 stories in full and the weather, capped at 4 minutes. Opt-out toggle "Pełne wiadomości co godzinę".
+- **No repeats** (`airedStore.ts`): stories aired today are stored in `dosradio.aired.v1`, reset at local
+  midnight and merged with `GET|POST /radio-api/aired` for logged-in listeners (best effort, never blocks audio).
+  `pickNextStory` no longer restarts the cycle; with nothing new the host chats instead of replaying.
+- **Topic of the day**: star on a news chip in the onboarding; that topic leads the main stories.
+- **FOMO line** under the player: "Za 3:12: <headline of what comes next>", updated every second.
+- **Weather** in the hourly bulletin by city name or browser geolocation ("Użyj mojej lokalizacji").
+- **Live Lyria reload** during every news break when live generation is in use; music returns fresh after the voice.
+- Every new server call (`headline.wav`, `teaser.wav`, `weather.wav`, `intro.wav?kind=`, `/aired`) is fail-soft:
+  a missing endpoint falls back to the old behaviour.
+
+### Changed
+- Default break interval is now 5 minutes (stored choices are kept).
+- Live Lyria wiring moved from `publicRadioEngine.ts` to `liveLyria.ts`; break playback to `breakRunner.ts`.
+
 ## [1.3.0] - 2026-11-06
 
 ### Added
