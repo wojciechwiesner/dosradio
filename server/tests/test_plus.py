@@ -71,6 +71,21 @@ def fake_gemini(monkeypatch):
     return calls
 
 
+@pytest.fixture(autouse=True)
+def fake_ffmpeg(client, monkeypatch):
+    """No ffmpeg in tests: the runner just creates the output file (last argv entry). Returns the argv log."""
+    from app.main import podcasts
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], timeout: int) -> str:
+        calls.append(args)
+        Path(args[-1]).write_bytes(b"BUMPER")
+        return ""
+
+    monkeypatch.setattr(podcasts, "run", fake_run)
+    return calls
+
+
 def seed_archive_segments(count: int = 8) -> None:
     from app.main import settings
     station_dir = settings.data_dir / "archive" / "dos-groove"
@@ -87,11 +102,14 @@ def test_plus_endpoints_gated_for_anonymous_and_free_users(client, fake_gemini, 
 
     for method, path in [
         ("post", "/radio-api/plus/podcast"),
+        ("post", "/radio-api/plus/pill"),
+        ("get", "/radio-api/plus/pill/abc"),
         ("put", "/radio-api/plus/news-preferences"),
         ("get", "/radio-api/plus/news-preferences"),
         ("get", "/radio-api/plus/news-digest"),
     ]:
-        kwargs = {"json": {}} if method in ("post", "put") else {}
+        kwargs = {"json": {"url": "https://youtu.be/dQw4w9WgXcQ"} if path.endswith("/pill") else {}} \
+            if method in ("post", "put") else {}
         response = getattr(client, method)(path, **kwargs)
         assert response.status_code == 402, f"{method} {path}"
         assert "Plus" in response.json()["detail"]
@@ -137,7 +155,7 @@ def test_preferences_validation_and_roundtrip(plus_client):
 
 # --- podcasts ------------------------------------------------------------------------
 
-def test_podcast_generates_voices_with_music_and_caches(plus_client, fake_gemini):
+def test_podcast_generates_voices_with_music_and_caches(plus_client, fake_gemini, fake_ffmpeg):
     seed_archive_segments()
     created = plus_client.post("/radio-api/plus/podcast", json={"topic": "Sen i produktywność"})
     assert created.status_code == 200
@@ -147,7 +165,18 @@ def test_podcast_generates_voices_with_music_and_caches(plus_client, fake_gemini
     kinds = [part["kind"] for part in manifest["parts"]]
     assert kinds.count("voice") == 5
     assert kinds.count("music") >= 4  # two breaks of continuous archive segments
-    assert fake_gemini["speak"] == 5
+    # Radio bumpers: intro, break-out + break-in around each music break, outro; never two music edges bare.
+    assert kinds[0] == "bumper" and kinds[-1] == "bumper"
+    assert kinds.count("bumper") == 2 + 2 * 2
+    first_music = kinds.index("music")
+    assert kinds[first_music - 1] == "bumper"
+    assert kinds[len(kinds) - 1 - kinds[::-1].index("music") + 1] == "bumper"
+    assert manifest["version"] >= 2
+    assert fake_gemini["speak"] == 5 + kinds.count("bumper")
+    mixes = [args for args in fake_ffmpeg if "-filter_complex" in args]
+    assert len(mixes) == kinds.count("bumper")
+    assert "sidechaincompress" in mixes[0][mixes[0].index("-filter_complex") + 1]
+    assert "afade=t=in" in mixes[0][mixes[0].index("-filter_complex") + 1]
 
     # Every part is served back to a Plus listener.
     for part in manifest["parts"]:
@@ -156,9 +185,10 @@ def test_podcast_generates_voices_with_music_and_caches(plus_client, fake_gemini
         assert served.content
 
     # Same topic on the same day: served from cache, no new TTS calls.
+    spoken = fake_gemini["speak"]
     again = plus_client.post("/radio-api/plus/podcast", json={"topic": "Sen i produktywność"})
     assert again.json()["id"] == manifest["id"]
-    assert fake_gemini["speak"] == 5
+    assert fake_gemini["speak"] == spoken
 
     # Manifest endpoint and traversal guard.
     assert plus_client.get(f"/radio-api/plus/podcast/{manifest['id']}").json()["title"] == "Testowy odcinek"
@@ -170,6 +200,30 @@ def test_podcast_survives_without_archive_music(plus_client, fake_gemini):
     manifest = plus_client.post("/radio-api/plus/podcast", json={"topic": "Odporność na błędy"}).json()
     kinds = [part["kind"] for part in manifest["parts"]]
     assert "voice" in kinds and "music" not in kinds
+    assert kinds[0] == "bumper" and kinds[-1] == "bumper"  # voice-only bumpers still frame the episode
+
+
+def test_stale_podcast_manifest_regenerates(plus_client, fake_gemini):
+    from app.main import podcasts
+    first = plus_client.post("/radio-api/plus/podcast", json={"topic": "Wersje"}).json()
+    manifest_path = podcasts.dir / first["id"] / "manifest.json"
+    stored = json.loads(manifest_path.read_text())
+    del stored["version"]  # simulate an episode generated before bumpers existed
+    manifest_path.write_text(json.dumps(stored))
+    spoken = fake_gemini["speak"]
+    again = plus_client.post("/radio-api/plus/podcast", json={"topic": "Wersje"}).json()
+    assert fake_gemini["speak"] > spoken and again["version"] >= 2
+
+
+def test_podcast_bumper_failure_does_not_break_episode(plus_client, fake_gemini, monkeypatch):
+    from app.main import podcasts
+
+    def broken(args, timeout):
+        raise RuntimeError("ffmpeg is not installed")
+
+    monkeypatch.setattr(podcasts, "run", broken)
+    kinds = [part["kind"] for part in plus_client.post("/radio-api/plus/podcast", json={"topic": "Bez ffmpeg"}).json()["parts"]]
+    assert kinds.count("voice") == 5 and "bumper" not in kinds
 
 
 # --- personal digest ---------------------------------------------------------------

@@ -17,6 +17,7 @@ from datetime import date
 from pathlib import Path
 
 from .archive import ArchiveRegistry
+from .bumpers import Runner, make_voiced_bumper, subprocess_runner
 from .news import GeminiClient
 
 log = logging.getLogger("dosradio.podcast")
@@ -24,6 +25,7 @@ log = logging.getLogger("dosradio.podcast")
 MAX_EPISODES_KEPT = 30
 MIN_TURNS = 4
 MUSIC_SEGMENTS_PER_BREAK = (4, 6)  # 30 s each -> 2-3 minute music interludes
+MANIFEST_VERSION = 2  # v2 = episodes with radio bumpers; older cached episodes regenerate
 
 # Two distinct Polish-speaking hosts: warm curious lead and calm witty co-host.
 PODCAST_HOSTS = (
@@ -31,13 +33,22 @@ PODCAST_HOSTS = (
     {"name": "Michał", "voice": "Charon", "style": "a calm, witty, grounded Polish podcast co-host"},
 )
 DEFAULT_TOPIC = "najciekawsze wydarzenia dnia ze świata technologii i sztucznej inteligencji"
-_PART_NAME_RE = re.compile(r"^[vm]\d{2,4}\.(wav|opus)$")
+BUMPER_TEXTS = {
+    "break-out": "Gramy dalej. Przerwa muzyczna, lecimy.",
+    "break-in": "Wracamy do rozmowy.",
+    "outro": "To był podcast DOS Radio. Gramy dalej!",
+}
+_PART_NAME_RE = re.compile(r"^[vmbc]\d{2,4}\.(wav|opus)$")
 _EPISODE_ID_RE = re.compile(r"^[a-z0-9-]+$")
 
 
 def slugify(text: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return slug[:40].rstrip("-")
+
+
+def intro_bumper_text(title: str) -> str:
+    return f"Rozmowy DOS Radio. {title}."
 
 
 def build_podcast_prompt(topic: str, today: date) -> str:
@@ -86,8 +97,9 @@ def split_into_sections(turns: list[dict], sections: int = 3) -> list[list[dict]
 
 class PodcastService:
     def __init__(self, client: GeminiClient, podcasts_dir: Path, archives: ArchiveRegistry,
-                 station_id: str = "dos-groove") -> None:
+                 station_id: str = "dos-groove", run: Runner = subprocess_runner) -> None:
         self.client = client
+        self.run = run
         self.archives = archives
         self.station_id = station_id
         self.dir = podcasts_dir
@@ -108,10 +120,13 @@ class PodcastService:
         if not path.exists():
             return None
         try:
-            return json.loads(path.read_text())
+            manifest = json.loads(path.read_text())
         except Exception as error:
             log.warning("manifest %s unreadable: %s", episode_id, error)
             return None
+        if manifest.get("version", 1) < MANIFEST_VERSION:
+            return None  # stale format: regenerate with bumpers
+        return manifest
 
     def part_path(self, episode_id: str, file_name: str) -> Path:
         if not _PART_NAME_RE.match(file_name):
@@ -155,6 +170,7 @@ class PodcastService:
         sections = split_into_sections(turns)
         music_runs = self._pick_music_runs(len(sections) - 1)
         turn_index = 0
+        await self._add_bumper(parts, workdir, intro_bumper_text(title))
         for section_index, section in enumerate(sections):
             for turn in section:
                 file_name = f"v{turn_index:02d}.wav"
@@ -168,16 +184,20 @@ class PodcastService:
                 parts.append({"kind": "voice", "file": file_name, "speaker": turn["speaker"]})
                 turn_index += 1
             if section_index < len(music_runs) and music_runs[section_index]:
+                await self._add_bumper(parts, workdir, BUMPER_TEXTS["break-out"])
                 for segment in music_runs[section_index]:
                     file_name = f"m{len(parts):02d}.opus"
                     shutil.copyfile(segment, workdir / file_name)
                     parts.append({"kind": "music", "file": file_name, "station": self.station_id})
+                await self._add_bumper(parts, workdir, BUMPER_TEXTS["break-in"])
+        await self._add_bumper(parts, workdir, BUMPER_TEXTS["outro"])
 
         if not any(part["kind"] == "voice" for part in parts):
             raise RuntimeError("podcast generation produced no voice parts")
 
         manifest = {
             "id": episode_id,
+            "version": MANIFEST_VERSION,
             "topic": topic,
             "title": title,
             "station": self.station_id,
@@ -191,6 +211,25 @@ class PodcastService:
         tmp.replace(workdir / "manifest.json")
         log.info("podcast %s generated: %d parts", episode_id, len(parts))
         return manifest
+
+    async def _add_bumper(self, parts: list[dict], workdir: Path, text: str) -> None:
+        """Voice a short host line over a music bed; a failed bumper never breaks the episode."""
+        host = PODCAST_HOSTS[0]
+        file_name = f"b{len(parts):02d}.opus"
+
+        async def speak(line: str) -> bytes:
+            return await self.client.speak(line, host["voice"], host["style"])
+
+        try:
+            await make_voiced_bumper(speak, self.run, text, self._random_segment(), workdir / file_name)
+        except Exception as error:
+            log.warning("podcast bumper %r skipped: %s", text, error)
+            return
+        parts.append({"kind": "bumper", "file": file_name})
+
+    def _random_segment(self) -> Path | None:
+        segments = self.archives.get(self.station_id).list_segments()
+        return random.choice(segments) if segments else None
 
     def _pick_music_runs(self, breaks: int) -> list[list[Path]]:
         """One run of consecutive archive segments per break -> continuous 2-3 min of music."""
