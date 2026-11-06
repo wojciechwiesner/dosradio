@@ -48,8 +48,13 @@ export interface PodcastManifest {
   parts: PodcastPart[];
 }
 
+export interface HostClips {
+  jingles: string[];
+  chatter: string[];
+}
+
 export class TrialEndedError extends Error {
-  constructor() { super('Darmowe 10 minut minęło. Załóż konto, żeby słuchać dalej.'); }
+  constructor() { super('Darmowa godzina minęła. Załóż konto, żeby słuchać dalej.'); }
 }
 
 const isPlusPath = (path: string): boolean => path.includes('/radio-api/plus/');
@@ -107,5 +112,16 @@ export const radioApi = {
     putJson<NewsPreferences>('/radio-api/plus/news-preferences', { keywords, rss_feeds: rssFeeds }),
   newsDigest: () => request<NewsDigest>('/radio-api/plus/news-digest'),
   podcast: (topic?: string) => postJson<PodcastManifest>('/radio-api/plus/podcast', topic ? { topic } : {}),
+  /** Host jingles and chatter for a station; null when the endpoint is missing or fails. */
+  hostClips: async (stationId: string): Promise<HostClips | null> => {
+    try {
+      const response = await fetch(`/radio-api/host-clips/${encodeURIComponent(stationId)}`, { credentials: 'same-origin' });
+      if (!response.ok) return null;
+      const body = (await response.json()) as Partial<HostClips>;
+      return { jingles: body.jingles ?? [], chatter: body.chatter ?? [] };
+    } catch {
+      return null;
+    }
+  },
   audio: fetchAudio,
 };

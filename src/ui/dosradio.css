@@ -194,3 +194,19 @@ footer { margin-top: 18px; color: var(--faint); font-size: 12.5px; display: flex
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* onboarding */
+.ob-dialog { width: min(560px, 100%); max-height: 92vh; overflow-y: auto; }
+.ob-headline { font-size: 24px; line-height: 1.25; }
+.ob-sub { color: var(--accent-2); font-size: 17px; font-weight: 600; }
+.ob-step { display: flex; align-items: center; gap: 10px; margin: 18px 0 10px; font-size: 15px; }
+.ob-num { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 12px;
+  background: var(--accent-2); color: #1a0d08; }
+.ob-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ob-card { cursor: pointer; display: grid; gap: 6px; justify-items: start; text-align: left; padding: 16px; border-radius: 14px;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line); font: inherit; }
+.ob-card small { color: var(--dim); }
+.ob-card .ob-icon svg { width: 26px; height: 26px; }
+.ob-card[aria-pressed='true'] { border-color: rgba(255, 179, 71, 0.6); background: rgba(255, 179, 71, 0.1); }
+.ob-go { margin-top: 22px; width: 100%; padding: 14px; font-size: 16px; }
+@media (max-width: 480px) { .ob-cards { grid-template-columns: 1fr; } }

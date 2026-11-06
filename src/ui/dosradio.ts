@@ -2,9 +2,11 @@
 import { PublicRadioEngine, type HostMode } from '../radio/publicRadioEngine';
 import { radioApi, type AccessState } from '../radio/radioApi';
 import { NEWS_CATEGORIES, categoryLabel, sanitizeCategories, type NewsCategory, type QueuedStory } from '../radio/newsQueue';
-import { DEFAULT_STATION_ID, STATIONS, stationById, type Station } from '../radio/stations';
+import { STATIONS, stationById, type Station } from '../radio/stations';
 import type { BreakInterval } from '../radio/radioClock';
 import { initBackgroundAudio } from '../audio/backgroundAudio';
+import { applyOnboardingChoice, isOnboarded, loadPrefs, markOnboarded, savePrefs as persistPrefs, type OnboardingChoice } from './prefs';
+import { openOnboarding } from './onboarding';
 import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from './plus';
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -13,30 +15,25 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return element as T;
 };
 
-const PREFS_KEY = 'dosradio.prefs.v1';
+const TRIAL_FALLBACK_SECONDS = 3600;
+const SECONDS_PER_HOUR = 3600;
+const SECONDS_PER_MINUTE = 60;
+
+/** 3600 -> "1:00:00", 125 -> "2:05" (hours only shown when the trial is an hour or more). */
+function formatTrialLeft(seconds: number): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const minutes = Math.floor((seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
+  const secs = seconds % SECONDS_PER_MINUTE;
+  if (seconds >= SECONDS_PER_HOUR) return `${Math.floor(seconds / SECONDS_PER_HOUR)}:${pad(minutes)}:${pad(secs)}`;
+  return `${minutes}:${pad(secs)}`;
+}
+
 const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 const PAUSE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
 const TICK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg>';
 
-interface Prefs { station: string; categories: NewsCategory[]; interval: BreakInterval; volume: number; hostMode: HostMode }
-
-function loadPrefs(): Prefs {
-  try {
-    const raw = JSON.parse(localStorage.getItem(PREFS_KEY) || '{}') as Partial<Prefs>;
-    return {
-      station: stationById(raw.station).id,
-      categories: sanitizeCategories(raw.categories ?? ['ai']),
-      interval: ([20, 30, 60] as const).includes(raw.interval as BreakInterval) ? raw.interval as BreakInterval : 20,
-      volume: typeof raw.volume === 'number' ? raw.volume : 0.9,
-      hostMode: raw.hostMode === 'music-only' ? 'music-only' : 'with-host',
-    };
-  } catch {
-    return { station: DEFAULT_STATION_ID, categories: ['ai'], interval: 20, volume: 0.9, hostMode: 'with-host' };
-  }
-}
-
-const prefs = loadPrefs();
-const savePrefs = () => localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+let prefs = loadPrefs(localStorage);
+const savePrefs = () => persistPrefs(localStorage, prefs);
 
 let access: AccessState | null = null;
 let trialTimer: ReturnType<typeof setInterval> | null = null;
@@ -144,8 +141,8 @@ function renderAccess(): void {
     authBtn.textContent = 'Zaloguj się';
     // Only show the countdown once listening started and time is left; an expired trial shows the modal instead.
     pill.hidden = !access?.trial_started || !access.allowed;
-    const left = Math.max(0, access?.trial_remaining ?? 600);
-    $('trialLeft').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    const left = Math.max(0, access?.trial_remaining ?? TRIAL_FALLBACK_SECONDS);
+    $('trialLeft').textContent = formatTrialLeft(left);
   }
 }
 
@@ -189,6 +186,7 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
   onLevel: renderLevel,
 });
 engine.interval = prefs.interval;
+engine.newsEnabled = prefs.newsEnabled;
 engine.setVolume(prefs.volume);
 (window as unknown as { dosRadio: PublicRadioEngine }).dosRadio = engine; // debug handle for runtime probes
 
@@ -214,6 +212,32 @@ function startTrialCountdown(): void {
 
 async function togglePlay(): Promise<void> {
   if (engine.isPlaying) { engine.stop(); setStatus('Pauza'); return; }
+  if (!isOnboarded(localStorage)) { showOnboarding(); return; }
+  await startPlayback();
+}
+
+/** First play and "Zmień, co chcesz słyszeć" both land here; "Graj!" saves the answers and starts the radio. */
+function showOnboarding(): void {
+  openOnboarding(prefs, (choice) => {
+    applyChoice(choice);
+    markOnboarded(localStorage);
+    if (!engine.isPlaying) void startPlayback();
+  });
+}
+
+function applyChoice(choice: OnboardingChoice): void {
+  prefs = applyOnboardingChoice(prefs, choice);
+  savePrefs();
+  intervalSelect.value = String(prefs.interval);
+  engine.interval = prefs.interval;
+  engine.setNewsEnabled(prefs.newsEnabled);
+  engine.setHostMode(prefs.hostMode);
+  renderHostMode(prefs.hostMode);
+  renderCategories();
+  void engine.setCategories(prefs.categories);
+}
+
+async function startPlayback(): Promise<void> {
   if (isPlusAudioPlaying()) stopPlusAudio(); // podcast/digest yields to the radio
   try {
     let state = await refreshAccess();
@@ -251,10 +275,10 @@ function openAuth(mode: 'register' | 'login', trialEnded = false): void {
   authMode = mode;
   $('authTitle').textContent = mode === 'register' ? (trialEnded ? 'Słuchaj dalej za darmo' : 'Załóż darmowe konto') : 'Zaloguj się';
   $('authLead').textContent = mode === 'register'
-    ? (trialEnded ? 'Twoje darmowe 10 minut minęło. Załóż konto, żeby słuchać bez limitu.' : 'Konto daje słuchanie bez limitu czasu.')
+    ? (trialEnded ? 'Twoja darmowa godzina minęła. Załóż konto i dostań 30 dni Plus za darmo.' : 'Załóż konto i dostań 30 dni Plus za darmo.')
     : 'Wpisz e-mail i hasło, żeby słuchać dalej.';
   $('perks').hidden = mode === 'login';
-  $('authSubmit').textContent = mode === 'register' ? 'Załóż konto i słuchaj' : 'Zaloguj się';
+  $('authSubmit').textContent = mode === 'register' ? 'Załóż konto i dostań 30 dni Plus za darmo' : 'Zaloguj się';
   $<HTMLInputElement>('authPassword').autocomplete = mode === 'register' ? 'new-password' : 'current-password';
   $('authSwitch').firstChild!.textContent = mode === 'register' ? 'Masz już konto? ' : 'Nie masz konta? ';
   $('toLogin').textContent = mode === 'register' ? 'Zaloguj się' : 'Załóż konto';
@@ -343,6 +367,8 @@ $('authBtn').addEventListener('click', async () => {
   }
 });
 
+const intervalSelect = $<HTMLSelectElement>('interval');
+
 // --- wiring ----------------------------------------------------------------------
 playButton.addEventListener('click', () => void togglePlay());
 newsButton.addEventListener('click', async () => {
@@ -356,7 +382,6 @@ newsButton.addEventListener('click', async () => {
     newsButton.disabled = false;
   }
 });
-const intervalSelect = $<HTMLSelectElement>('interval');
 intervalSelect.value = String(prefs.interval);
 intervalSelect.addEventListener('change', () => {
   prefs.interval = Number(intervalSelect.value) as BreakInterval;
@@ -389,6 +414,8 @@ hostModeBtn.addEventListener('click', () => {
   renderHostMode(nextMode);
   setStatus(nextMode === 'music-only' ? 'Tryb: tylko muzyka bez przerw na głos' : 'Tryb: z prowadzącym i wiadomościami');
 });
+
+$('reopenOnboarding').addEventListener('click', showOnboarding);
 
 // --- background audio keep-alive & lock screen controls -------------------------
 const bgAudio = initBackgroundAudio(
