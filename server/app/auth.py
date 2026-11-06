@@ -1,4 +1,4 @@
-"""Accounts, cookies and the listening allowance (10 min trial, then registration)."""
+"""Accounts, cookies and the listening allowance (1 h trial, then registration)."""
 from __future__ import annotations
 
 import hashlib
@@ -19,6 +19,7 @@ from .db import Database
 log = logging.getLogger("dosradio.auth")
 
 VERIFY_TTL_SECONDS = mailer.VERIFY_TTL_SECONDS
+WELCOME_PLUS_DAYS = 30
 
 SESSION_COOKIE = "dr_session"
 ANON_COOKIE = "dr_anon"
@@ -182,6 +183,7 @@ def build_router(access: AccessService) -> APIRouter:
         if row is None or (row["verify_expires"] or 0) < time.time():
             raise HTTPException(400, "Link nieprawidłowy albo wygasł. Zaloguj się i wyślij nowy.")
         access.db.verify_email(int(row["id"]))
+        access.db.grant_welcome_plus(int(row["id"]), days=WELCOME_PLUS_DAYS)
         open_session(response, int(row["id"]))
         return {"ok": True, "email": row["email"], "verified": True}
 
