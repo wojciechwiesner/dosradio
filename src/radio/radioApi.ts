@@ -2,6 +2,7 @@
  * Thin client for the DOS Radio API (same origin). The Gemini key lives only on the server.
  */
 import type { CategoryNews, NewsCategory } from './newsQueue';
+import type { AiredRemote } from './airedStore';
 
 export interface AccessState {
   allowed: boolean;
@@ -93,6 +94,25 @@ async function fetchAudio(path: string): Promise<ArrayBuffer> {
   }
   return response.arrayBuffer();
 }
+
+/** Server-side "already aired today" set; registered users only, so any failure (401, 404, offline) means null. */
+export const airedRemote: AiredRemote = {
+  fetchIds: async (day) => {
+    const response = await fetch(`/radio-api/aired?day=${encodeURIComponent(day)}`, { credentials: 'same-origin' });
+    if (!response.ok) return null;
+    return ((await response.json()) as { ids?: string[] }).ids ?? null;
+  },
+  pushIds: async (day, ids) => {
+    const response = await fetch('/radio-api/aired', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ day, ids }),
+    });
+    if (!response.ok) return null;
+    return ((await response.json()) as { ids?: string[] }).ids ?? null;
+  },
+};
 
 export const radioApi = {
   me: () => request<AccessState>('/radio-api/me'),

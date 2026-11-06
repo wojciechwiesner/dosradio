@@ -1,11 +1,13 @@
 /** dosradio.theones.io page: stations, news topics, trial countdown, registration. */
 import { PublicRadioEngine, type HostMode } from '../radio/publicRadioEngine';
-import { radioApi, type AccessState } from '../radio/radioApi';
+import { airedRemote, radioApi, type AccessState } from '../radio/radioApi';
 import { NEWS_CATEGORIES, categoryLabel, sanitizeCategories, type NewsCategory, type QueuedStory } from '../radio/newsQueue';
 import { STATIONS, stationById, type Station } from '../radio/stations';
 import type { BreakInterval } from '../radio/radioClock';
 import { initBackgroundAudio } from '../audio/backgroundAudio';
-import { applyOnboardingChoice, isOnboarded, loadPrefs, markOnboarded, savePrefs as persistPrefs, type OnboardingChoice } from './prefs';
+import { applyOnboardingChoice, isOnboarded, loadPrefs, markOnboarded, programmeOptions, sanitizeDayTopic, savePrefs as persistPrefs, type OnboardingChoice } from './prefs';
+import { initUpcoming } from './upcoming';
+import { initRamowkaSettings } from './ramowkaSettings';
 import { openOnboarding } from './onboarding';
 import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from './plus';
 
@@ -96,7 +98,7 @@ function renderQueue(queue: QueuedStory[], airingId: string | null): void {
   list.replaceChildren(...queue.map((story) => {
     const item = document.createElement('li');
     if (story.id === airingId) item.className = 'airing';
-    else if (airedIds.has(story.id)) item.className = 'aired';
+    else if (engine.programme.aired.has(story.id)) item.className = 'aired';
     const tag = document.createElement('span');
     tag.className = 'tag';
     tag.textContent = categoryLabel(story.category);
@@ -116,7 +118,7 @@ function renderQueue(queue: QueuedStory[], airingId: string | null): void {
   }));
 }
 
-const airedIds = new Set<string>();
+const upcoming = initUpcoming($('upcoming'));
 const bars = $('bars');
 const BAR_COUNT = 36;
 bars.replaceChildren(...Array.from({ length: BAR_COUNT }, () => document.createElement('span')));
@@ -157,7 +159,8 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
   },
   onStatus: (text) => setStatus(text),
   onError: (text) => setStatus(text, true),
-  onQueue: (queue, airingId) => { if (airingId) airedIds.add(airingId); renderQueue(queue, airingId); },
+  onQueue: (queue, airingId) => renderQueue(queue, airingId),
+  onUpcoming: (story) => upcoming.setStory(story),
   onOnAir: (story) => {
     $('onAir').classList.toggle('live', story !== null || false);
     $('onAirText').textContent = story ? 'Na antenie' : (engine.isPlaying ? 'Muzyka' : 'Poza anteną');
@@ -171,6 +174,7 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     }
   },
   onNextBreak: (at) => {
+    upcoming.setNextBreak(at);
     const el = $('nextBreak');
     if (el) el.textContent = at ? at.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '—';
   },
@@ -187,12 +191,15 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
 });
 engine.interval = prefs.interval;
 engine.newsEnabled = prefs.newsEnabled;
+engine.setProgramme(programmeOptions(prefs));
 engine.setVolume(prefs.volume);
 (window as unknown as { dosRadio: PublicRadioEngine }).dosRadio = engine; // debug handle for runtime probes
 
 async function refreshAccess(): Promise<AccessState> {
   access = await radioApi.me();
   renderAccess();
+  engine.programme.aired.setRemote(access.registered ? airedRemote : null);
+  void engine.programme.aired.pull();
   void refreshPlusPanel(access.plus).catch((error) => setStatus(`Plus: ${(error as Error).message}`, true));
   return access;
 }
@@ -231,6 +238,7 @@ function applyChoice(choice: OnboardingChoice): void {
   intervalSelect.value = String(prefs.interval);
   engine.interval = prefs.interval;
   engine.setNewsEnabled(prefs.newsEnabled);
+  engine.setProgramme(programmeOptions(prefs));
   engine.setHostMode(prefs.hostMode);
   renderHostMode(prefs.hostMode);
   renderCategories();
@@ -263,6 +271,8 @@ async function toggleCategory(id: NewsCategory): Promise<void> {
   const next = prefs.categories.includes(id) ? prefs.categories.filter((c) => c !== id) : [...prefs.categories, id];
   if (!next.length) { setStatus('Zostaw przynajmniej jeden temat wiadomości.', true); return; }
   prefs.categories = sanitizeCategories(next);
+  prefs.dayTopic = sanitizeDayTopic(prefs.dayTopic, prefs.categories);
+  engine.setProgramme(programmeOptions(prefs));
   savePrefs();
   renderCategories();
   await engine.setCategories(prefs.categories);
@@ -415,6 +425,10 @@ hostModeBtn.addEventListener('click', () => {
   setStatus(nextMode === 'music-only' ? 'Tryb: tylko muzyka bez przerw na głos' : 'Tryb: z prowadzącym i wiadomościami');
 });
 
+initRamowkaSettings({
+  prefs: () => prefs,
+  changed: () => { savePrefs(); engine.setProgramme(programmeOptions(prefs)); },
+});
 $('reopenOnboarding').addEventListener('click', showOnboarding);
 
 // --- background audio keep-alive & lock screen controls -------------------------

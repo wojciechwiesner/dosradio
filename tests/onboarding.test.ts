@@ -45,8 +45,8 @@ describe('Break schedule', () => {
 describe('Intervals and host clip delay', () => {
   it('keeps old values valid and widens to 5/10/15', () => {
     [5, 10, 15, 20, 30, 60].forEach((value) => expect(normalizeInterval(value)).toBe(value));
-    expect(normalizeInterval(7)).toBe(20);
-    expect(normalizeInterval(undefined)).toBe(20);
+    expect(normalizeInterval(7)).toBe(5);
+    expect(normalizeInterval(undefined)).toBe(5);
   });
 
   it('host clip delay stays within 6-12 minutes', () => {

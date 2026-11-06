@@ -210,3 +210,18 @@ footer { margin-top: 18px; color: var(--faint); font-size: 12.5px; display: flex
 .ob-card[aria-pressed='true'] { border-color: rgba(255, 179, 71, 0.6); background: rgba(255, 179, 71, 0.1); }
 .ob-go { margin-top: 22px; width: 100%; padding: 14px; font-size: 16px; }
 @media (max-width: 480px) { .ob-cards { grid-template-columns: 1fr; } }
+
+/* --- ramowka: topic-of-the-day star, upcoming line, programme settings --- */
+.chip-wrap { display: inline-flex; align-items: center; gap: 4px; }
+.chip-star { cursor: pointer; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border-radius: 50%;
+  border: 1px solid var(--line-strong); background: transparent; color: var(--dim); }
+.chip-star svg { width: 16px; height: 16px; }
+.chip-star[aria-pressed='true'] { border-color: rgba(255, 179, 71, 0.6); background: rgba(255, 179, 71, 0.18); color: #ffd9a3; }
+.chip-star[aria-pressed='true'] svg { fill: currentColor; }
+.ob-hint { margin: 8px 0 0; font-size: 13px; color: var(--dim); }
+.upcoming { margin-top: 6px; min-height: 20px; font-size: 14px; color: var(--accent-2); position: relative; z-index: 1; }
+.upcoming b { font-variant-numeric: tabular-nums; }
+.settings .check { display: flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; }
+.settings .place-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.settings .place-row input[type='text'] { flex: 1 1 140px; min-width: 0; }
+.settings .place-info { min-height: 18px; font-size: 12px; color: var(--dim); }

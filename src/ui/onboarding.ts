@@ -14,6 +14,8 @@ const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 const NOTE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>';
 const TICK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="m5 12 5 5 9-10"/></svg>';
 
+const STAR_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>';
+
 const HOST_CARDS: { mode: HostMode; title: string; text: string; icon: string }[] = [
   { mode: 'with-host', title: 'Z prowadzącym', text: 'Ktoś do pogadania między piosenkami.', icon: MIC_SVG },
   { mode: 'music-only', title: 'Sama muzyka', text: 'Cisza w eterze, gra tylko muzyka.', icon: NOTE_SVG },
@@ -53,6 +55,7 @@ export function openOnboarding(prefs: Prefs, onDone: (choice: OnboardingChoice) 
   let hostMode: HostMode = prefs.hostMode;
   const categories = new Set<NewsCategory>(prefs.newsEnabled ? prefs.categories : []);
   let interval: BreakInterval = prefs.interval;
+  let dayTopic: NewsCategory | null = prefs.newsEnabled ? prefs.dayTopic : null;
 
   const close = () => { modal.classList.remove('open'); document.removeEventListener('keydown', onKey); };
   const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
@@ -70,6 +73,12 @@ export function openOnboarding(prefs: Prefs, onDone: (choice: OnboardingChoice) 
   });
 
   const noNews = toggleButton('chip', categories.size === 0);
+  const stars = new Map<NewsCategory, HTMLButtonElement>();
+  const renderStars = () => stars.forEach((star, id) => {
+    setPressed(star, dayTopic === id);
+    star.hidden = !categories.has(id);
+  });
+
   const categoryChips = NEWS_CATEGORIES.map((category) => {
     const chip = toggleButton('chip', categories.has(category.id));
     const tick = el('span', 'tick');
@@ -77,17 +86,38 @@ export function openOnboarding(prefs: Prefs, onDone: (choice: OnboardingChoice) 
     chip.append(tick, document.createTextNode(category.label));
     chip.addEventListener('click', () => {
       if (categories.has(category.id)) categories.delete(category.id); else categories.add(category.id);
+      if (!categories.has(category.id) && dayTopic === category.id) dayTopic = null;
       setPressed(chip, categories.has(category.id));
       setPressed(noNews, categories.size === 0);
+      renderStars();
     });
     return chip;
   });
   noNews.append(document.createTextNode('Bez wiadomości'));
   noNews.addEventListener('click', () => {
     categories.clear();
+    dayTopic = null;
     categoryChips.forEach((chip) => setPressed(chip, false));
     setPressed(noNews, true);
+    renderStars();
   });
+
+  /** Chip plus a star: the star marks the topic of the day (at most one). */
+  const categoryItems = NEWS_CATEGORIES.map((category, index) => {
+    const star = toggleButton('chip-star', dayTopic === category.id);
+    star.innerHTML = STAR_SVG; // static SVG constant
+    star.setAttribute('aria-label', `Temat dnia: ${category.label}`);
+    star.title = 'Temat dnia: usłyszysz o nim najwięcej';
+    star.addEventListener('click', () => {
+      dayTopic = dayTopic === category.id ? null : category.id;
+      renderStars();
+    });
+    stars.set(category.id, star);
+    const wrap = el('span', 'chip-wrap');
+    wrap.append(categoryChips[index], star);
+    return wrap;
+  });
+  renderStars();
 
   const intervalPills = BREAK_INTERVALS.map((minutes) => {
     const pill = toggleButton('chip', interval === minutes);
@@ -103,7 +133,7 @@ export function openOnboarding(prefs: Prefs, onDone: (choice: OnboardingChoice) 
   go.type = 'button';
   go.addEventListener('click', () => {
     close();
-    onDone({ hostMode, categories: [...categories], interval });
+    onDone({ hostMode, categories: [...categories], interval, dayTopic });
   });
 
   const dialog = el('div', 'dialog ob-dialog');
@@ -114,13 +144,14 @@ export function openOnboarding(prefs: Prefs, onDone: (choice: OnboardingChoice) 
     el('div', 'ob-cards'),
     sectionTitle('2', 'Jakie wiadomości cię interesują?'),
     el('div', 'chips'),
+    el('p', 'ob-hint', 'Gwiazdka przy temacie oznacza temat dnia: o nim usłyszysz najwięcej.'),
     sectionTitle('3', 'Jak często mają wchodzić?'),
     el('div', 'chips'),
     go,
   );
   const [cards, newsChips, intervalChips] = Array.from(dialog.querySelectorAll('.ob-cards, .chips'));
   cards.append(...hostCards);
-  newsChips.append(...categoryChips, noNews);
+  newsChips.append(...categoryItems, noNews);
   intervalChips.append(...intervalPills);
 
   modal.replaceChildren(dialog);
