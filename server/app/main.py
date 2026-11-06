@@ -24,6 +24,7 @@ from .db import Database
 from .news import CATEGORIES, GeminiClient, NewsService
 from .spoken_time import spoken_time_pl
 from .archive import ArchiveRegistry
+from .stream import build_stream_router
 from .recorder import StationRecorder, STATION_SPECS
 from .notifier import trigger_telegram_alert
 from .hosts import HOSTS, host_for, intro_line
@@ -223,6 +224,8 @@ async def jingle_audio(station_id: str) -> FileResponse:
         raise HTTPException(502, f"Nie udało się nagrać dżingla: {error}") from error
     return FileResponse(path, media_type="audio/wav", headers={"cache-control": "public, max-age=604800"})
 
+
+app.include_router(build_stream_router(archives, require_access))
 
 @app.api_route("/radio-api/station/{station_id}/next-chunk", methods=["GET", "HEAD"])
 async def next_station_chunk(

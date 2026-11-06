@@ -18,6 +18,7 @@ import { hostStationId, isPresetStation, NEGATIVE_PROMPT, type Station } from '.
 import { DEFAULT_BREAK_INTERVAL, FIRST_BREAK_DELAY_MS, nextScheduledBreak, type BreakInterval } from './radioClock';
 import { HostClipPlayer } from './hostClipPlayer';
 import { ChunkStreamer } from './chunkStreamer';
+import { createStreamElement, isIOS, type StreamHandle } from '../audio/streamElement';
 
 const LYRIA_MODEL = 'lyria-realtime-exp';
 const LYRIA_PROXY_BASE = '/radio-ws/lyria';
@@ -50,6 +51,7 @@ export class PublicRadioEngine {
 
   private helper: LiveMusicHelper | null = null;
   private chunkStreamer: ChunkStreamer | null = null;
+  private streamHandle: StreamHandle | null = null;
   private station: Station;
   private categories: NewsCategory[];
   private queue: QueuedStory[] = [];
@@ -153,8 +155,59 @@ export class PublicRadioEngine {
     }
   }
 
+
+  /**
+   * Play the station through a real <audio> element. Resolves false (so the
+   * chunk streamer takes over) when the element errors or the platform refuses
+   * to create a media element source.
+   */
+  private async startStreamElement(): Promise<boolean> {
+    const url = `/radio-api/station/${this.station.id}/stream.ogg`;
+    let handle: StreamHandle;
+    try {
+      handle = createStreamElement(this.ctx, url, this.musicBus);
+    } catch {
+      return false;
+    }
+    this.streamHandle = handle;
+    handle.el.addEventListener('error', () => {
+      if (this.streamHandle !== handle) return;
+      this.stopStreamElement();
+      void this.startChunkFallback();
+    });
+    handle.el.addEventListener('playing', () => { this.silentTicks = 0; });
+    try {
+      await handle.el.play();
+    } catch {
+      this.stopStreamElement();
+      return false;
+    }
+    return true;
+  }
+
+  /** The chunk path, used on iOS and whenever the stream element fails. */
+  private async startChunkFallback(): Promise<boolean> {
+    if (this.chunkStreamer) return true;
+    this.chunkStreamer = new ChunkStreamer(this.ctx, this.musicBus, this.station.id, {
+      onChunk: () => { this.silentTicks = 0; },
+      onError: (reason) => {
+        if (reason === 'trial-ended') { this.endTrial(); return; }
+        this.triggerDeadAirRecovery();
+      },
+    });
+    return this.chunkStreamer.start();
+  }
+
+  private stopStreamElement(): void {
+    this.streamHandle?.destroy();
+    this.streamHandle = null;
+  }
+
   /** Archive stream first (scales to any number of listeners), live Lyria only as a fallback. */
   private async startMusic(): Promise<boolean> {
+    // A real <audio> element keeps Android Chrome alive after the browser is
+    // closed. iOS Safari stays on the chunk path (MediaElementSource bug).
+    if (isPresetStation(this.station) && !isIOS() && (await this.startStreamElement())) return true;
     if (!this.chunkStreamer) {
       this.chunkStreamer = new ChunkStreamer(this.ctx, this.musicBus, this.station.id, {
         onChunk: () => { this.silentTicks = 0; },
@@ -188,6 +241,7 @@ export class PublicRadioEngine {
       this.chunkStreamer.stop();
       this.chunkStreamer = null;
     }
+    this.stopStreamElement();
     this.helper?.pause();
     this.playing = false;
     this.events.onState('paused');
@@ -211,6 +265,7 @@ export class PublicRadioEngine {
       // A mood station has no archive: generate it live with Lyria.
       this.chunkStreamer?.stop();
       this.chunkStreamer = null;
+      this.stopStreamElement();
       if (!this.helper) this.helper = this.createHelper();
       await this.applyStation();
       if (station.bpm !== prev.bpm) await this.helper.resetContext();
@@ -329,6 +384,7 @@ export class PublicRadioEngine {
       // 2. Restart music; retry with backoff until it plays or the user stops the radio.
       for (let attempt = 0; this.playing; attempt++) {
         this.chunkStreamer?.stop();
+        this.stopStreamElement();
         this.helper?.stop();
         if (await this.startMusic()) {
           this.events.onStatus(`Gra ${this.station.name}`);
