@@ -3,42 +3,18 @@
 Segments are 30-second OGG/Opus files at 96 kbps (~360 KB each).
 100 hours per station = 12,000 segments = ~4.3 GB (within Borg's 199 GB free disk).
 Segments older than the 100-hour cap are rotated out automatically.
-
-Each recording session also gets a `session-<id>.json` sidecar (SessionMeta)
-holding its measured beatgrid (see beatgrid.py) and whether it is safe to
-beatmatch-mix (U3a — metadata only; the actual mixer is a later unit).
 """
 from __future__ import annotations
 
-import json
 import logging
 import random
 import time
-from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 log = logging.getLogger("dosradio.archive")
 TARGET_SEGMENT_SECONDS = 30.0
 MAX_HOURS_PER_STATION = 100
 MAX_SEGMENTS_PER_STATION = int((MAX_HOURS_PER_STATION * 3600) / TARGET_SEGMENT_SECONDS)  # 12,000
-SESSION_META_GLOB = "session-*.json"
-
-
-@dataclass
-class SessionMeta:
-    """Beatgrid sidecar for one recording session (one continuous Lyria WS connection)."""
-
-    session_id: str
-    station_id: str
-    segments: list[str] = field(default_factory=list)
-    started_ns: int = 0
-    bpm_target: float = 0.0
-    bpm_measured: float = 0.0
-    beat_period_s: float = 0.0
-    first_downbeat_offset_s: float = 0.0
-    grid_confidence: float = 0.0
-    ended_on_limit: bool = False
-    mixable: bool = False
 
 
 class StationArchive:
@@ -49,8 +25,6 @@ class StationArchive:
         self.dir.mkdir(parents=True, exist_ok=True)
         self.live_dir = root / station_id / "live"
         self.live_dir.mkdir(parents=True, exist_ok=True)
-        self._session_meta_cache: dict[str, SessionMeta] = {}
-        self._session_meta_cached_files: set[str] = set()
 
     def list_segments(self) -> list[Path]:
         return sorted(self.dir.glob("seg-*.opus"), key=lambda p: p.name)
@@ -118,43 +92,6 @@ class StationArchive:
             start = max(0, len(archive_files) - 10)  # newest ~5 minutes = the live pool
             return archive_files[start], True
         return random.choice(archive_files), False
-
-    def write_session_meta(self, meta: SessionMeta) -> Path:
-        """Persist the beatgrid sidecar for a recording session (atomic write)."""
-        path = self.dir / f"session-{meta.session_id}.json"
-        tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(asdict(meta), indent=2))
-        tmp.replace(path)
-        self._session_meta_cache[path.name] = meta
-        self._session_meta_cached_files.add(path.name)
-        return path
-
-    def session_meta_for(self, segment_name: str) -> SessionMeta | None:
-        """Find the SessionMeta sidecar whose `segments` list contains `segment_name`.
-
-        Sidecar files are small and rarely change once written, so we cache
-        parsed results in memory keyed by filename and only re-read files
-        we haven't seen yet.
-        """
-        for meta in self._session_meta_cache.values():
-            if segment_name in meta.segments:
-                return meta
-
-        for path in sorted(self.dir.glob(SESSION_META_GLOB)):
-            if path.name in self._session_meta_cached_files:
-                continue
-            try:
-                raw = json.loads(path.read_text())
-                meta = SessionMeta(**raw)
-            except (OSError, ValueError, TypeError) as exc:
-                log.warning("Skipping unreadable session meta %s: %s", path, exc)
-                self._session_meta_cached_files.add(path.name)
-                continue
-            self._session_meta_cache[path.name] = meta
-            self._session_meta_cached_files.add(path.name)
-            if segment_name in meta.segments:
-                return meta
-        return None
 
 
 class ArchiveRegistry:

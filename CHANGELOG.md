@@ -5,29 +5,6 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-- **U3a beatgrid analysis**: `server/app/beatgrid.py` — stdlib-only (no numpy/librosa)
-  `analyze_bpm()` measures real BPM, beat period, first downbeat offset and a
-  0..1 `grid_confidence` from a recorded session's raw PCM, using frame-energy
-  onset detection + autocorrelation around the station's target BPM (±40%,
-  clamped 60-200 BPM).
-- `SessionMeta` sidecar: `StationArchive.write_session_meta()` persists
-  `session-<id>.json` per recording session (atomic tmp+rename);
-  `session_meta_for(segment_name)` finds the sidecar covering a given segment
-  (in-memory cache, re-reads only new files). `list_segments()` continues to
-  only glob `seg-*.opus`, so sidecars never leak into playback selection.
-- `StationRecorder.record_session` now accumulates the session's PCM and runs
-  `analyze_bpm` via `asyncio.to_thread` after the Lyria session ends, then
-  writes the sidecar with `bpm_target` (from `STATION_SPECS`), `ended_on_limit`
-  (fewer segments saved than requested) and a `mixable` flag: always `False`
-  for `deep-ambient`/`stoa`, `False` when `grid_confidence < 0.5` or
-  `ended_on_limit`, otherwise `True`. A failed analysis never aborts
-  recording — it falls back to `bpm_measured = bpm_target`,
-  `grid_confidence = 0.0`, `mixable = False` and logs a warning.
-- Metadata-only: no mixer/playback changes (U3b/U3c are separate units).
-
 ## [1.3.0] - 2026-11-06
 
 ### Added
