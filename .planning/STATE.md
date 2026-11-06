@@ -44,6 +44,14 @@ DOS Radio v1.0.0 — publiczne radio AI (Lyria RealTime, 14 stacji z prowadzący
   - [x] **Płatności Stripe:** `POST /radio-api/billing/checkout` (Plus 39 PLN, Plus+AI 59 PLN, B2B invoice), webhook podpisany
   - [x] **UI Plus:** pływający widżet "Plus", modal planów i statusu, drawer "Twoje źródła"
 
+- [x] **Phase 7: Onboarding Wave (v1.3.0, 2026-11-06)**
+  - [x] Trial bez logowania 1 h (prod .env DOSRADIO_TRIAL_SECONDS=3600)
+  - [x] Pierwsze wiadomości 5 min po Graj, częstotliwość 5/10/15/20/30/60 min
+  - [x] Onboarding przy pierwszym odtworzeniu (motto, prowadzący tak/nie, obszary wiadomości, częstotliwość)
+  - [x] 30 dni Plus po potwierdzeniu e-maila + jednorazowo 4 istniejące konta
+  - [x] 56 dżingli + 112 gadek prowadzących (TTS przy pierwszym użyciu, cache)
+  - [x] Orkiestracja cmux: W1 Sonnet 5.5 (frontend), W2 Haiku 5.5 (backend)
+
 ## Next Steps (Backlog / v1.3)
 - [ ] Podpięcie produkcyjnych kluczy Stripe (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) na serwerze
 - [ ] B2B Audio Streamer dla lokali i kawiarni (dedykowany profil licencyjny)
