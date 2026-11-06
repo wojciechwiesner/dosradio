@@ -12,16 +12,22 @@ import json
 import logging
 import subprocess
 import time
+import uuid
 from pathlib import Path
 
 import websockets
 
-from .archive import ArchiveRegistry, TARGET_SEGMENT_SECONDS
+from .archive import ArchiveRegistry, SessionMeta, TARGET_SEGMENT_SECONDS
+from .beatgrid import analyze_bpm
 
 log = logging.getLogger("dosradio.recorder")
 LYRIA_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic?key="
 BYTES_PER_SECOND = 48000 * 2 * 2  # 48kHz, 16-bit, stereo = 192,000 bytes/sec
 TARGET_CHUNK_BYTES = int(TARGET_SEGMENT_SECONDS * BYTES_PER_SECOND)
+
+# U3a beatgrid: stations deliberately free of a steady beat are never mixable
+NON_MIXABLE_STATIONS = {"deep-ambient", "stoa"}
+MIXABLE_MIN_GRID_CONFIDENCE = 0.5
 
 # Prompt dictionary matching src/radio/stations.ts (14 stations)
 STATION_SPECS: dict[str, dict] = {
@@ -137,6 +143,11 @@ class StationRecorder:
     async def record_session(self, station_id: str, spec: dict, num_segments: int = 10) -> None:
         arch = self.archives.get(station_id)
         url = LYRIA_URL + self.api_key
+        session_id = uuid.uuid4().hex[:12]
+        started_ns = time.time_ns()
+        session_segment_names: list[str] = []
+        session_pcm = bytearray()  # one session at a time (~5 min stereo 48k ~= 115 MB)
+
         async with websockets.connect(url, max_size=None, open_timeout=20) as ws:
             await ws.send(json.dumps({"setup": {"model": "models/lyria-realtime-exp"}}))
             await ws.send(json.dumps({"clientContent": {"weightedPrompts": [
@@ -166,10 +177,65 @@ class StationRecorder:
                     if len(pcm_buffer) >= TARGET_CHUNK_BYTES:
                         slice_bytes = bytes(pcm_buffer[:TARGET_CHUNK_BYTES])
                         del pcm_buffer[:TARGET_CHUNK_BYTES]
+                        session_pcm.extend(slice_bytes)
                         # Encode to Opus off the event loop
                         opus_data = await asyncio.to_thread(encode_pcm_to_opus, slice_bytes)
-                        arch.add_segment(opus_data, is_live=True)
+                        segment_path = arch.add_segment(opus_data, is_live=True)
+                        session_segment_names.append(segment_path.name)
                         segments_saved += 1
                         self.total_recorded_segments += 1
                         log.info("[%s] Saved segment #%d (total %s: %.2f h)",
                                  station_id, segments_saved, station_id, arch.total_hours())
+
+        ended_on_limit = segments_saved < num_segments
+        await self._write_session_beatgrid(
+            arch, station_id, spec, session_id, started_ns,
+            session_segment_names, bytes(session_pcm), ended_on_limit,
+        )
+
+    async def _write_session_beatgrid(
+        self, arch, station_id: str, spec: dict, session_id: str, started_ns: int,
+        segment_names: list[str], session_pcm: bytes, ended_on_limit: bool,
+    ) -> None:
+        """Measure the session's real BPM/beat grid and persist the sidecar.
+
+        Analysis never takes the recorder down: on failure we still write a
+        sidecar (marked not mixable) so downstream tooling has a predictable
+        file to read.
+        """
+        bpm_target = float(spec["bpm"])
+        try:
+            grid = await asyncio.to_thread(analyze_bpm, session_pcm, 48000, 2, bpm_target)
+            bpm_measured = grid.bpm_measured
+            beat_period_s = grid.beat_period_s
+            first_downbeat_offset_s = grid.first_downbeat_offset_s
+            grid_confidence = grid.grid_confidence
+        except Exception as error:
+            log.warning("[%s] Beatgrid analysis failed: %s", station_id, error)
+            bpm_measured = bpm_target
+            beat_period_s = 60.0 / bpm_target
+            first_downbeat_offset_s = 0.0
+            grid_confidence = 0.0
+
+        mixable = (
+            station_id not in NON_MIXABLE_STATIONS
+            and grid_confidence >= MIXABLE_MIN_GRID_CONFIDENCE
+            and not ended_on_limit
+        )
+
+        meta = SessionMeta(
+            session_id=session_id,
+            station_id=station_id,
+            segments=segment_names,
+            started_ns=started_ns,
+            bpm_target=bpm_target,
+            bpm_measured=bpm_measured,
+            beat_period_s=beat_period_s,
+            first_downbeat_offset_s=first_downbeat_offset_s,
+            grid_confidence=grid_confidence,
+            ended_on_limit=ended_on_limit,
+            mixable=mixable,
+        )
+        arch.write_session_meta(meta)
+        log.info("[%s] Session %s beatgrid: bpm=%.1f confidence=%.2f mixable=%s",
+                  station_id, session_id, bpm_measured, grid_confidence, mixable)
