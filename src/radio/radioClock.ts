@@ -36,7 +36,42 @@ export function spokenTimePl(date: Date): string {
   return `${HOURS_PL[hours]} ${minutesToWords(minutes)}`;
 }
 
-export type BreakInterval = 20 | 30 | 60;
+export const BREAK_INTERVALS = [5, 10, 15, 20, 30, 60] as const;
+export type BreakInterval = (typeof BREAK_INTERVALS)[number];
+export const DEFAULT_BREAK_INTERVAL: BreakInterval = 20;
+
+/** Old or corrupted stored values fall back to the default; every old valid value (20/30/60) stays valid. */
+export function normalizeInterval(value: unknown): BreakInterval {
+  return (BREAK_INTERVALS as readonly unknown[]).includes(value) ? (value as BreakInterval) : DEFAULT_BREAK_INTERVAL;
+}
+
+const MS_PER_MINUTE = 60_000;
+/** The first news break comes this long after the listener pressed play. */
+export const FIRST_BREAK_DELAY_MS = 5 * MS_PER_MINUTE;
+
+export interface BreakSchedule {
+  startedAt: Date;
+  lastBreakAt: Date | null;
+  interval: BreakInterval;
+  firstBreakDelayMs?: number;
+}
+
+/**
+ * Listener-relative schedule: first break at start + delay, every later break `interval`
+ * minutes after the previous one (not aligned to the wall clock).
+ */
+export function nextScheduledBreak(schedule: BreakSchedule): Date {
+  const { startedAt, lastBreakAt, interval, firstBreakDelayMs = FIRST_BREAK_DELAY_MS } = schedule;
+  if (!lastBreakAt) return new Date(startedAt.getTime() + firstBreakDelayMs);
+  return new Date(lastBreakAt.getTime() + interval * MS_PER_MINUTE);
+}
+
+/** Random pause before the next host clip: 6-12 minutes. `random` is injectable for tests. */
+export const HOST_CLIP_MIN_MS = 6 * MS_PER_MINUTE;
+export const HOST_CLIP_MAX_MS = 12 * MS_PER_MINUTE;
+export function nextHostClipDelayMs(random: () => number = Math.random): number {
+  return HOST_CLIP_MIN_MS + Math.floor(random() * (HOST_CLIP_MAX_MS - HOST_CLIP_MIN_MS + 1));
+}
 
 /**
  * Next break strictly after `now`, aligned to the clock (:00, :20, :40 for 20 min).

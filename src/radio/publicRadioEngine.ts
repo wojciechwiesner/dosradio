@@ -15,7 +15,8 @@ import type { MusicGenerationConfig, Prompt } from '../types';
 import { radioApi, TrialEndedError } from './radioApi';
 import { interleaveStories, pickNextStory, type NewsCategory, type QueuedStory } from './newsQueue';
 import { hostStationId, isPresetStation, NEGATIVE_PROMPT, type Station } from './stations';
-import { msUntilNextBreak, nextBreakAt, type BreakInterval } from './radioClock';
+import { DEFAULT_BREAK_INTERVAL, FIRST_BREAK_DELAY_MS, nextScheduledBreak, type BreakInterval } from './radioClock';
+import { HostClipPlayer } from './hostClipPlayer';
 import { ChunkStreamer } from './chunkStreamer';
 
 const LYRIA_MODEL = 'lyria-realtime-exp';
@@ -63,8 +64,20 @@ export class PublicRadioEngine {
   private speaking = false;
   private playing = false;
 
-  public interval: BreakInterval = 20;
+  private startedAt = new Date();
+  private lastBreakAt: Date | null = null;
+  private readonly clipPlayer = new HostClipPlayer({
+    stationId: () => hostStationId(this.station),
+    canPlay: () => this.playing && this.hostMode === 'with-host' && !this.speaking,
+    play: (url) => this.airHostClip(url),
+  });
+
+  public interval: BreakInterval = DEFAULT_BREAK_INTERVAL;
+  /** First news break comes this long after play is pressed (not on the clock grid). */
+  public firstBreakDelayMs = FIRST_BREAK_DELAY_MS;
   public hostMode: HostMode = 'with-host';
+  /** When false the host still chats, but scheduled news breaks are skipped ("Bez wiadomości"). */
+  public newsEnabled = true;
 
   constructor(station: Station, categories: NewsCategory[], private readonly events: PublicRadioEvents) {
     this.station = station;
@@ -99,8 +112,11 @@ export class PublicRadioEngine {
     if (this.playing) {
       this.clearSchedule();
       if (mode === 'with-host') {
+        this.resetBreakSchedule();
         this.scheduleNextBreak();
+        this.clipPlayer.start();
       } else {
+        this.clipPlayer.stop();
         this.events.onNextBreak(null);
       }
     }
@@ -110,6 +126,7 @@ export class PublicRadioEngine {
     await this.ctx.resume();
     this.events.onState('loading');
     this.playing = true; // set first: greeting, watchdog and breaks all check it
+    this.resetBreakSchedule();
     this.startLevelMeter();
 
     if (this.hostMode === 'with-host') {
@@ -130,6 +147,7 @@ export class PublicRadioEngine {
       void this.refreshNews();
       this.newsTimer = setInterval(() => void this.refreshNews(), NEWS_POLL_MS);
       this.scheduleNextBreak();
+      this.clipPlayer.start();
     } else {
       this.events.onNextBreak(null);
     }
@@ -160,6 +178,7 @@ export class PublicRadioEngine {
 
   stop(): void {
     this.clearSchedule();
+    this.clipPlayer.stop();
     if (this.newsTimer) clearInterval(this.newsTimer);
     if (this.levelTimer) clearInterval(this.levelTimer);
     this.newsTimer = null;
@@ -207,6 +226,14 @@ export class PublicRadioEngine {
     }
   }
 
+  setNewsEnabled(enabled: boolean): void {
+    this.newsEnabled = enabled;
+    if (this.playing && this.hostMode === 'with-host') {
+      this.clearSchedule();
+      this.scheduleNextBreak();
+    }
+  }
+
   setInterval(interval: BreakInterval): void {
     this.interval = interval;
     if (this.playing && this.hostMode === 'with-host') {
@@ -222,6 +249,10 @@ export class PublicRadioEngine {
     }
     if (!this.queue.length) await this.refreshNews();
     await this.airBreak(new Date(), true);
+    if (this.playing && this.hostMode === 'with-host') {
+      this.clearSchedule();
+      this.scheduleNextBreak(); // counted from this break
+    }
   }
 
   private createHelper(): LiveMusicHelper {
@@ -355,16 +386,46 @@ export class PublicRadioEngine {
   }
 
   private scheduleNextBreak(): void {
-    if (this.hostMode === 'music-only') return;
-    const now = new Date();
-    const slot = nextBreakAt(now, this.interval);
+    if (this.hostMode === 'music-only' || !this.newsEnabled) {
+      this.events.onNextBreak(null);
+      return;
+    }
+    const slot = nextScheduledBreak({
+      startedAt: this.startedAt,
+      lastBreakAt: this.lastBreakAt,
+      interval: this.interval,
+      firstBreakDelayMs: this.firstBreakDelayMs,
+    });
     this.events.onNextBreak(slot);
     this.timers.push(
       setTimeout(async () => {
         await this.airBreak(slot);
         if (this.playing && this.hostMode === 'with-host') this.scheduleNextBreak();
-      }, msUntilNextBreak(now, this.interval)),
+      }, Math.max(0, slot.getTime() - Date.now())),
     );
+  }
+
+  /** A fresh listening session (or host mode switched on) restarts the 5 minute countdown. */
+  private resetBreakSchedule(): void {
+    this.startedAt = new Date();
+    this.lastBreakAt = null;
+  }
+
+  /** Random jingle/chatter between songs: ducks the music like a news break. */
+  private async airHostClip(url: string): Promise<void> {
+    const buffer = await this.decode(url);
+    if (!this.playing || this.speaking) return;
+    this.speaking = true;
+    try {
+      this.events.onHostState?.(true, 'host');
+      this.duck(DUCK_LEVEL, 1.0);
+      await new Promise((r) => setTimeout(r, 500));
+      await this.playVoice(buffer);
+    } finally {
+      if (this.playing) this.duck(1.0, 1.8);
+      this.speaking = false;
+      this.events.onHostState?.(false, null);
+    }
   }
 
   private duck(level: number, seconds: number): void {
@@ -382,6 +443,7 @@ export class PublicRadioEngine {
   private async airBreak(slot: Date, standalone = false): Promise<void> {
     if (this.speaking || (!this.playing && !standalone) || this.hostMode === 'music-only') return;
     this.speaking = true;
+    this.lastBreakAt = new Date();
     const hhmm = `${String(slot.getHours()).padStart(2, '0')}:${String(slot.getMinutes()).padStart(2, '0')}`;
     const sid = hostStationId(this.station);
     const story = pickNextStory(this.queue, this.aired);

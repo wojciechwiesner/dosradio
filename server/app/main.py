@@ -1,4 +1,4 @@
-"""DOS Radio API: accounts + 10 min trial, AI news per category, shared TTS cache, Lyria RealTime WebSocket proxy.
+"""DOS Radio API: accounts + 1 h trial, AI news per category, shared TTS cache, Lyria RealTime WebSocket proxy.
 
 The Gemini key never leaves the server. Run: uvicorn app.main:app --port 3015
 """
@@ -114,7 +114,7 @@ except ImportError:
 def require_access(request: Request) -> None:
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
     if not access.resolve(request.cookies, ip).allowed:
-        raise HTTPException(402, "Darmowe 10 minut minęło. Załóż konto, żeby słuchać dalej.")
+        raise HTTPException(402, "Darmowa godzina minęła. Załóż konto i odbierz 30 dni Plus za darmo.")
 
 
 @app.get("/radio-api/health")

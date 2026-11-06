@@ -5,7 +5,7 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.3.0] - 2026-11-06
 
 ### Added
 - **Host clips**: `GET /radio-api/host-clips/{station_id}` lists each host's 4 jingles and
@@ -13,10 +13,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   voices a clip on first request and caches it under `data/audio/static/`. Unknown station,
   kind or index returns 404.
 - **Welcome Plus**: a verified free account gets 30 days of Plus; paid or unlimited plans
-  are never shortened.
+  are never shortened. Existing verified free accounts received the same 30 days at release.
+- **Onboarding on first play**: modal with the motto, "Z prowadzącym / Sama muzyka" cards,
+  news-area chips (incl. "Bez wiadomości") and a news frequency picker. Stored in
+  `dosradio.onboarded` + prefs; re-openable via "Zmień, co chcesz słyszeć".
+- **Random host clips**: between songs (with host on) the engine plays a random jingle or
+  chatter from `GET /radio-api/host-clips/{station}` every 6-12 minutes, ducked like news;
+  silently skipped when the endpoint is missing.
 
 ### Changed
 - Anonymous trial lasts one hour (`DOSRADIO_TRIAL_SECONDS` default 3600, was 600).
+- **News frequency**: every 5, 10, 15, 20, 30 or 60 minutes (old stored values stay valid).
+- First news break fires 5 minutes after play is pressed; later breaks follow the chosen
+  interval counted from the previous break (no longer the wall-clock grid).
+- Trial copy and countdown moved from 10 minutes to one hour; register CTA offers
+  "30 dni Plus za darmo".
 
 ## [1.2.0] - 2026-11-05
 

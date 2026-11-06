@@ -78,14 +78,14 @@
               <input type="range" id="volume" min="0" max="1" step="0.01" value="0.9" />
             </label>
           </div>
-          <div class="status" id="status">Kliknij Graj. Pierwsze 10 minut za darmo, bez konta.</div>
+          <div class="status" id="status">Kliknij Graj. Pierwsza godzina za darmo, bez konta.</div>
         </div>
       </div>
 
       <aside class="card onair">
         <div class="eyebrow" id="onAirLabel">Wiadomości</div>
-        <h3 id="storyTitle">Prowadzący wchodzi co 20 minut</h3>
-        <p id="storyText">Najpierw podaje godzinę, potem jedną krótką wiadomość z wybranych tematów. Muzyka cichnie pod głos i wraca.</p>
+        <h3 id="storyTitle">Pierwsze wiadomości po 5 minutach</h3>
+        <p id="storyText">Potem wchodzi tak często, jak chcesz. Najpierw podaje godzinę, potem jedną krótką wiadomość z wybranych tematów. Muzyka cichnie pod głos i wraca.</p>
         <a class="src" id="storySrc" href="#" target="_blank" rel="noopener" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>
           Źródło
@@ -93,11 +93,15 @@
         <div class="settings">
           <label class="field">Jak często prowadzący
             <select id="interval">
+              <option value="5">Co 5 minut</option>
+              <option value="10">Co 10 minut</option>
+              <option value="15">Co 15 minut</option>
               <option value="20">Co 20 minut</option>
               <option value="30">Co 30 minut</option>
               <option value="60">Co godzinę</option>
             </select>
           </label>
+          <button class="btn" id="reopenOnboarding" type="button">Zmień, co chcesz słyszeć</button>
         </div>
       </aside>
     </section>
@@ -191,9 +195,9 @@
   <div class="modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
     <div class="dialog">
       <h2 id="authTitle">Słuchaj dalej za darmo</h2>
-      <p id="authLead">Twoje darmowe 10 minut minęło. Załóż konto, żeby słuchać bez limitu.</p>
+      <p id="authLead">Twoja darmowa godzina minęła. Załóż konto i dostań 30 dni Plus za darmo.</p>
       <ul class="perks" id="perks">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wszystkie stacje bez limitu czasu</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>30 dni Plus za darmo po potwierdzeniu e-maila</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Komponowanie muzyki z własnego opisu nastroju</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wiadomości z wybranych tematów</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>W Plus: podcasty w duecie i własne źródła wiadomości</li>
@@ -203,11 +207,13 @@
         <input type="password" id="authPassword" placeholder="Hasło (min. 8 znaków)" autocomplete="new-password" minlength="8" required />
         <div class="form-error" id="authError"></div>
         <button type="button" id="resendLink" hidden>Wyślij link potwierdzający ponownie</button>
-        <button class="btn primary" type="submit" id="authSubmit">Załóż konto i słuchaj</button>
+        <button class="btn primary" type="submit" id="authSubmit">Załóż konto i dostań 30 dni Plus za darmo</button>
       </form>
       <div class="switch" id="authSwitch">Masz już konto? <button type="button" id="toLogin">Zaloguj się</button></div>
     </div>
   </div>
+
+  <div class="modal" id="onboardModal" role="dialog" aria-modal="true" aria-label="Co chcesz usłyszeć"></div>
 
   <script type="module" src="/src/ui/dosradio.ts"></script>
   <script type="module" src="/src/ui/billing.ts"></script>
