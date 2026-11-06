@@ -22,15 +22,17 @@ from .auth import AccessService, build_router, client_ip
 from .config import load_settings
 from .db import Database
 from .news import CATEGORIES, GeminiClient, NewsService
-from .spoken_time import spoken_time_pl
 from .archive import ArchiveRegistry
 from .recorder import StationRecorder, STATION_SPECS
 from .notifier import trigger_telegram_alert
-from .hosts import HOSTS, host_for, intro_line
+from .hosts import HOSTS, host_for
 from .personal_news import PersonalNews
 from .podcast import PodcastService
 from .plus_api import build_plus_router
 from .host_clips import build_router as build_host_clips_router
+from .weather import WeatherService
+from .voice_routes import build_voice_router
+from .aired import build_aired_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("dosradio")
@@ -45,9 +47,8 @@ recorder = StationRecorder(settings.gemini_api_key, archives)
 podcasts = PodcastService(gemini, settings.data_dir / "podcasts", archives)
 personal = PersonalNews(db, news)
 news.on_personal_refresh = personal.refresh_all
-intro_dir = settings.data_dir / "audio" / "intro"
+weather = WeatherService()
 static_audio_dir = settings.data_dir / "audio" / "static"
-intro_dir.mkdir(parents=True, exist_ok=True)
 static_audio_dir.mkdir(parents=True, exist_ok=True)
 
 # Notify on Telegram when a listener registers
@@ -95,6 +96,7 @@ async def lifespan(_: FastAPI):
     for task in tasks:
         task.cancel()
     await gemini.http.aclose()
+    await weather.aclose()
 
 
 app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url=None)
@@ -115,6 +117,12 @@ def require_access(request: Request) -> None:
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
     if not access.resolve(request.cookies, ip).allowed:
         raise HTTPException(402, "Darmowa godzina minęła. Załóż konto i odbierz 30 dni Plus za darmo.")
+
+
+app.include_router(build_voice_router(
+    require_access, news, gemini, settings.data_dir / "audio" / "voice", weather,
+))
+app.include_router(build_aired_router(db))
 
 
 @app.get("/radio-api/health")
@@ -279,27 +287,6 @@ async def story_audio(request: Request, story_id: str) -> FileResponse:
             path = await news.render_story(story)
         except Exception as error:
             raise HTTPException(502, f"Nie udało się nagrać wiadomości: {error}") from error
-    return FileResponse(path, media_type="audio/wav", headers={"cache-control": "private, max-age=86400"})
-
-
-@app.get("/radio-api/intro.wav")
-async def intro_audio(request: Request, time_hm: str = Query(..., alias="time"), station: str = Query("dos-groove")) -> FileResponse:
-    """Spoken time by the station host ('Czternasta dwadzieścia. Z tej strony Kuba, DOS Groove...'), cached for all."""
-    require_access(request)
-    match = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", time_hm)
-    if not match or station not in HOSTS:
-        raise HTTPException(400, "bad time or station")
-    host = host_for(station)
-    path = intro_dir / f"{station}-{time_hm.replace(':', '')}.wav"
-    if not path.exists():
-        text = f"{spoken_time_pl(int(match.group(1)), int(match.group(2))).capitalize()}. {intro_line(station)}"
-        try:
-            audio = await gemini.speak(text, host.voice, host.style)
-        except Exception as error:
-            raise HTTPException(502, f"Nie udało się nagrać zapowiedzi: {error}") from error
-        tmp = path.with_suffix(".tmp")
-        tmp.write_bytes(audio)
-        tmp.replace(path)
     return FileResponse(path, media_type="audio/wav", headers={"cache-control": "private, max-age=86400"})
 
 

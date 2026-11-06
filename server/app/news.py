@@ -18,9 +18,16 @@ from typing import Any
 import httpx
 
 from .hosts import NEWSROOM_VOICES
+from .radio_script import sentence, strip_emoji, word_count
 
 log = logging.getLogger("dosradio.news")
 API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+NEWS_ITEM_COUNT = 6
+NEWS_WINDOW_HOURS = 48
+HEADLINE_MAX_WORDS = 18
+RADIO_MIN_WORDS = 45
+RADIO_MAX_WORDS = 70
+MIN_RADIO_CHARS = 80
 
 CATEGORIES: dict[str, dict[str, str]] = {
     "ai": {
@@ -60,6 +67,11 @@ class Story:
     confirmed: bool
     category: str
     audio_ready: bool = False
+    headline: str = ""
+
+
+def story_headline(story: Story) -> str:
+    return story.headline or story.title
 
 
 @dataclass
@@ -73,11 +85,12 @@ def build_news_prompt(category: str, today: date) -> str:
     spec = CATEGORIES[category]
     return "\n".join([
         f"Dzisiaj jest {today.isoformat()}.",
-        f"Znajdź 6 aktualnych wiadomości z ostatnich 48 godzin: {spec['brief']}.",
+        f"Znajdź {NEWS_ITEM_COUNT} aktualnych wiadomości z ostatnich {NEWS_WINDOW_HOURS} godzin: {spec['brief']}.",
         "Kolejność: najciekawsze najpierw. Każda historia musi mieć link do PIERWOTNEGO źródła.",
-        f"Dla każdej napisz radio_text po polsku do przeczytania w radiu (90-130 słów): {spec['angle']}.",
-        "Bez markdown, bez emoji, bez list. Nie wymyślaj faktów. Plotki oznacz confirmed=false i powiedz w tekście, że to niepotwierdzone.",
-        'Zwróć WYŁĄCZNIE JSON: [{"title":"...","radio_text":"...","source_url":"https://...","confirmed":true}]',
+        f"Dla każdej podaj headline: jedno zdanie po polsku, najwyżej {HEADLINE_MAX_WORDS} słów, z konkretem.",
+        f"Dla każdej podaj radio_text po polsku do przeczytania w radiu: {RADIO_MIN_WORDS}-{RADIO_MAX_WORDS} słów, konkretnie, bez wypełniaczy: {spec['angle']}.",
+        "Bez markdown, bez list. NO EMOJI. Nie wymyślaj faktów. Plotki oznacz confirmed=false i powiedz w tekście, że to niepotwierdzone.",
+        'Zwróć WYŁĄCZNIE JSON: [{"title":"...","headline":"...","radio_text":"...","source_url":"https://...","confirmed":true}]',
     ])
 
 
@@ -93,13 +106,18 @@ def parse_stories(reply_text: str, category: str) -> list[Story]:
     for item in raw:
         if not isinstance(item, dict):
             continue
-        title = str(item.get("title") or "").strip()
-        text = str(item.get("radio_text") or "").strip()
+        title = strip_emoji(str(item.get("title") or ""))
+        text = strip_emoji(str(item.get("radio_text") or ""))
         url = str(item.get("source_url") or "").strip()
-        if not title or len(text) < 80 or not re.match(r"^https?://", url):
+        if not title or len(text) < MIN_RADIO_CHARS or not re.match(r"^https?://", url):
             continue  # autocheck spot: every story needs a source and real text
+        headline = strip_emoji(str(item.get("headline") or ""))
+        if not 0 < word_count(headline) <= HEADLINE_MAX_WORDS:
+            headline = " ".join(title.split()[:HEADLINE_MAX_WORDS])
         story_id = hashlib.sha1(f"{category}|{title}".encode()).hexdigest()[:12]
-        stories.append(Story(story_id, title, text, url, item.get("confirmed") is not False, category))
+        stories.append(Story(
+            story_id, title, text, url, item.get("confirmed") is not False, category, headline=headline,
+        ))
     if not stories:
         raise ValueError("news reply had no valid stories")
     return stories
@@ -241,12 +259,13 @@ class NewsService:
         """Drop voiced stories older than 48 h; current editions are always kept."""
         keep = {story.id for cache in self.cache.values() for story in cache.stories}
         removed = 0
-        for path in self.audio_dir.glob("story-*.wav"):
-            if path.stem.removeprefix("story-") in keep:
-                continue
-            if time.time() - path.stat().st_mtime > STORY_AUDIO_MAX_AGE_S:
-                path.unlink(missing_ok=True)
-                removed += 1
+        for prefix in ("story-", "headline-"):
+            for path in self.audio_dir.glob(f"{prefix}*.wav"):
+                if path.stem.removeprefix(prefix) in keep:
+                    continue
+                if time.time() - path.stat().st_mtime > STORY_AUDIO_MAX_AGE_S:
+                    path.unlink(missing_ok=True)
+                    removed += 1
         return removed
 
     async def hourly_loop(self) -> None:
@@ -294,20 +313,28 @@ class NewsService:
                 cache.fetched_at = time.time() - self.refresh_seconds + 300  # retry in 5 min
             return self.cache[category]
 
-    async def render_story(self, story: Story) -> Path:
-        path = self.audio_path(story.id)
+    def headline_path(self, story_id: str) -> Path:
+        return self.audio_dir / f"headline-{story_id}.wav"
+
+    async def _voice_once(self, path: Path, text: str, category: str) -> Path:
         if path.exists():
-            story.audio_ready = True
             return path
-        voice, style = NEWSROOM_VOICES.get(story.category, NEWSROOM_VOICES["ai"])
+        voice, style = NEWSROOM_VOICES.get(category, NEWSROOM_VOICES["ai"])
         async with self.tts_lock:
             if not path.exists():
-                audio = await self.client.speak(story_script(story), voice, style)
+                audio = await self.client.speak(text, voice, style)
                 tmp = path.with_suffix(".tmp")
                 tmp.write_bytes(audio)
                 tmp.replace(path)
+        return path
+
+    async def render_story(self, story: Story) -> Path:
+        path = await self._voice_once(self.audio_path(story.id), story_script(story), story.category)
         story.audio_ready = True
         return path
+
+    async def render_headline(self, story: Story) -> Path:
+        return await self._voice_once(self.headline_path(story.id), sentence(story_headline(story)), story.category)
 
     async def render_all(self, category: str) -> None:
         for story in list(self.cache[category].stories):

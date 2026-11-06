@@ -37,6 +37,12 @@ CREATE TABLE IF NOT EXISTS trials (
     key TEXT PRIMARY KEY,          -- 'ip:<hash>' or 'anon:<id>'
     started_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS aired_items (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    day TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    PRIMARY KEY (user_id, day, item_id)
+);
 """
 
 
@@ -172,6 +178,22 @@ class Database:
             (int(row["user_id"]), {"keywords": json.loads(row["keywords"]), "rss_feeds": json.loads(row["rss_feeds"])})
             for row in rows
         ]
+
+    # --- ramówka aired items (nothing repeats within a day) -----------------
+    def aired_ids(self, user_id: int, day: str) -> list[str]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT item_id FROM aired_items WHERE user_id = ? AND day = ? ORDER BY item_id",
+                (user_id, day),
+            ).fetchall()
+        return [row["item_id"] for row in rows]
+
+    def add_aired_ids(self, user_id: int, day: str, item_ids: list[str]) -> None:
+        with self.connect() as conn:
+            conn.executemany(
+                "INSERT OR IGNORE INTO aired_items (user_id, day, item_id) VALUES (?, ?, ?)",
+                [(user_id, day, item_id) for item_id in item_ids],
+            )
 
     # --- trials ------------------------------------------------------------
     def trial_started_at(self, keys: list[str]) -> float | None:
