@@ -22,10 +22,15 @@ import { ProgrammeState } from './programmeState';
 import { breakClips, planBreak, upcomingStory, HOURLY_MAX_MS, type WeatherPlace } from './programme';
 import { runClips } from './breakRunner';
 import { createStreamElement, isIOS, type StreamHandle } from '../audio/streamElement';
+import { ToneKiller } from '../dsp/toneKiller';
+import { PillQueue } from './pillQueue';
+import type { BreakPlan } from './programme';
 
 /** Music bed volume while voice is speaking, relative to full volume. */
 export const DUCK_LEVEL = 0.34;
 const NEWS_POLL_MS = 10 * 60_000;
+/** A scheduled break with news switched off: no stories, only what the programme queue holds. */
+const NO_NEWS_PLAN: BreakPlan = { kind: 'main', headlines: [], full: [], teaser: null, weather: false, empty: true };
 /** Host and news voice sit 8 dB below full-volume music, so the voice never outshouts the music bed. */
 export const VOICE_GAIN = 0.4;
 
@@ -51,6 +56,8 @@ export class PublicRadioEngine {
   private readonly master = this.ctx.createGain();
   private readonly limiter = this.ctx.createDynamicsCompressor();
   private readonly musicBus = this.ctx.createGain();
+  /** Notches steady tones (the Lyria whine) on the music only; voice never passes through it. */
+  private readonly toneKiller = new ToneKiller(this.ctx);
   private readonly voiceGain = this.ctx.createGain();
   private readonly analyser = this.ctx.createAnalyser();
 
@@ -81,6 +88,8 @@ export class PublicRadioEngine {
   });
 
   public readonly programme: ProgrammeState;
+  /** YouTube pills waiting to air inside the news breaks. */
+  public readonly pillQueue: PillQueue;
   public interval: BreakInterval = DEFAULT_BREAK_INTERVAL;
   /** First news break comes this long after play is pressed (not on the clock grid). */
   public firstBreakDelayMs = FIRST_BREAK_DELAY_MS;
@@ -93,15 +102,18 @@ export class PublicRadioEngine {
     categories: NewsCategory[],
     private readonly events: PublicRadioEvents,
     airedStore: AiredStore = new AiredStore(localStorage),
+    pillQueue: PillQueue = new PillQueue(localStorage),
   ) {
     this.programme = new ProgrammeState(airedStore);
+    this.pillQueue = pillQueue;
     this.station = station;
     this.categories = categories;
 
     this.limiter.threshold.value = -2;
     this.limiter.ratio.value = 12;
 
-    this.musicBus.connect(this.master);
+    this.musicBus.connect(this.toneKiller.input);
+    this.toneKiller.output.connect(this.master);
     this.voiceGain.gain.value = VOICE_GAIN;
     this.voiceGain.connect(this.master);
     this.master.connect(this.limiter);
@@ -146,6 +158,7 @@ export class PublicRadioEngine {
     this.programme.startSession(new Date());
     void this.programme.aired.pull();
     this.startLevelMeter();
+    this.toneKiller.start();
 
     if (this.hostMode === 'with-host') {
       void this.playWelcomeIntro(); // host speaks within ~100 ms while music loads underneath
@@ -178,7 +191,18 @@ export class PublicRadioEngine {
    * to create a media element source.
    */
   private async startStreamElement(): Promise<boolean> {
-    const url = `/radio-api/station/${this.station.id}/stream.ogg`;
+    return this.openStream(this.streamUrl());
+  }
+
+  private streamUrl(): string {
+    return `/radio-api/station/${this.station.id}/stream.ogg`;
+  }
+
+  /**
+   * Opens `url` in a new <audio> element on the music bus. With `previous` (a restart) the old element
+   * keeps playing until the new one runs, then it is torn down; on failure the old one stays.
+   */
+  private async openStream(url: string, previous: StreamHandle | null = null): Promise<boolean> {
     let handle: StreamHandle;
     try {
       handle = createStreamElement(this.ctx, url, this.musicBus);
@@ -195,10 +219,25 @@ export class PublicRadioEngine {
     try {
       await handle.el.play();
     } catch {
-      this.stopStreamElement();
+      handle.destroy();
+      this.streamHandle = previous;
       return false;
     }
+    if (previous) {
+      previous.destroy();
+      if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing'; // destroy() reset it
+    }
     return true;
+  }
+
+  /**
+   * Break reset on the stream path: the archive stream cannot be reloaded like a live session, so the
+   * listener is moved to a fresh point (the server honours `seek=fresh`); the music is ducked meanwhile.
+   */
+  private async restartStreamElement(): Promise<void> {
+    const previous = this.streamHandle;
+    if (!previous || !this.playing || this.chunkStreamer) return;
+    await this.openStream(`${this.streamUrl()}?seek=fresh&t=${Date.now()}`, previous);
   }
 
   /** The chunk path, used on iOS and whenever the stream element fails. */
@@ -252,6 +291,7 @@ export class PublicRadioEngine {
     if (this.levelTimer) clearInterval(this.levelTimer);
     this.newsTimer = null;
     this.levelTimer = null;
+    this.toneKiller.stop();
 
     if (this.chunkStreamer) {
       this.chunkStreamer.stop();
@@ -303,6 +343,16 @@ export class PublicRadioEngine {
       this.clearSchedule();
       this.scheduleNextBreak();
     }
+  }
+
+  /** Puts a pill into the programme; it airs one unit per break, after the news. */
+  enqueuePill(pill: { id: string; title: string; parts: { kind: string; url: string }[] }): boolean {
+    const added = this.pillQueue.enqueue(pill);
+    if (added && this.playing && this.hostMode === 'with-host') {
+      this.clearSchedule();
+      this.scheduleNextBreak();
+    }
+    return added;
   }
 
   /** Topic of the day (leads the main stories) and the hourly-bulletin options; takes effect on the next break. */
@@ -449,7 +499,7 @@ export class PublicRadioEngine {
   }
 
   private scheduleNextBreak(): void {
-    if (this.hostMode === 'music-only' || !this.newsEnabled) {
+    if (this.hostMode === 'music-only' || (!this.newsEnabled && this.pillQueue.isEmpty)) {
       this.events.onNextBreak(null);
       return;
     }
@@ -535,13 +585,16 @@ export class PublicRadioEngine {
   private async airBreak(slot: Date, standalone = false): Promise<void> {
     if (this.speaking || (!this.playing && !standalone) || this.hostMode === 'music-only') return;
     this.lastBreakAt = new Date();
-    const plan = planBreak(this.programme.context(this.queue, this.lastBreakAt));
-    if (plan.empty) return this.airFiller();
+    const newsAllowed = this.newsEnabled || standalone; // "Bez wiadomości" still airs queued pills
+    const plan = newsAllowed ? planBreak(this.programme.context(this.queue, this.lastBreakAt)) : NO_NEWS_PLAN;
+    const pillUnit = this.pillQueue.peekUnit();
+    if (plan.empty && !pillUnit) return this.airFiller();
 
     this.speaking = true;
     const hhmm = `${String(slot.getHours()).padStart(2, '0')}:${String(slot.getMinutes()).padStart(2, '0')}`;
-    const clips = breakClips(plan, { hhmm, stationId: hostStationId(this.station), place: this.programme.place });
+    const clips = breakClips(plan, { hhmm, stationId: hostStationId(this.station), place: this.programme.place, pillUnit });
     let played: typeof clips = [];
+    let streamRestarted = false;
 
     try {
       this.events.onHostState?.(true, 'news');
@@ -554,13 +607,24 @@ export class PublicRadioEngine {
       }
       played = await runClips(
         clips,
-        { decode: (path) => this.decode(path).catch(() => null), play: (buffer) => this.playVoice(buffer), now: Date.now },
+        {
+          decode: (path) => this.decode(path).catch(() => null),
+          play: (buffer) => {
+            if (!streamRestarted) { // the voice has started: bring the music back from a fresh point
+              streamRestarted = true;
+              void this.restartStreamElement();
+            }
+            return this.playVoice(buffer);
+          },
+          now: Date.now,
+        },
         plan.kind === 'hourly' ? HOURLY_MAX_MS : undefined,
       );
+      if (pillUnit) this.pillQueue.commitUnit(); // an unloadable unit is skipped, never retried forever
     } catch (error) {
       if (error instanceof TrialEndedError) return this.endTrial();
     } finally {
-      this.programme.record(plan, played, new Date());
+      if (!plan.empty) this.programme.record(plan, played, new Date());
       this.lastBreakEndedAt = new Date();
       this.events.onQueue(this.queue, null); // re-render: just-aired stories turn grey
       if (this.playing) this.duck(1.0, 2.0);

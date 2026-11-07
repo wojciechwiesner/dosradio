@@ -6,6 +6,7 @@
  * Stories already aired today are never planned again.
  */
 import type { NewsCategory, QueuedStory } from './newsQueue';
+import type { PillPart } from './pillQueue';
 
 export type BreakKind = 'flash' | 'main' | 'hourly';
 export type ShortFormat = 'flash' | 'main';
@@ -51,7 +52,7 @@ export interface BreakPlan {
 }
 
 export interface BreakClip {
-  role: 'intro' | 'headline' | 'story' | 'teaser' | 'weather';
+  role: 'intro' | 'headline' | 'story' | 'teaser' | 'weather' | 'pill';
   path: string;
   storyId?: string;
 }
@@ -120,14 +121,17 @@ export interface ClipOptions {
   hhmm: string;
   stationId: string;
   place: WeatherPlace | null;
+  /** One pill unit (see pillQueue.splitUnits) aired after the news; alone it makes a pill-only break. */
+  pillUnit?: PillPart[] | null;
 }
 
 /** Ordered audio of one break. Every clip may 404 on an older server: the engine skips what it cannot load. */
 export function breakClips(plan: BreakPlan, options: ClipOptions): BreakClip[] {
   const { hhmm, stationId, place } = options;
-  const clips: BreakClip[] = [
-    { role: 'intro', path: `/radio-api/intro.wav?time=${hhmm}&station=${stationId}&kind=${plan.kind}` },
-  ];
+  const clips: BreakClip[] = [];
+  if (!plan.empty) {
+    clips.push({ role: 'intro', path: `/radio-api/intro.wav?time=${hhmm}&station=${stationId}&kind=${plan.kind}` });
+  }
   for (const story of plan.headlines) {
     clips.push({ role: 'headline', path: `/radio-api/story/${story.id}/headline.wav`, storyId: story.id });
   }
@@ -141,5 +145,6 @@ export function breakClips(plan: BreakPlan, options: ClipOptions): BreakClip[] {
     const query = new URLSearchParams({ story: plan.teaser.id, station: stationId });
     clips.push({ role: 'teaser', path: `/radio-api/teaser.wav?${query}`, storyId: plan.teaser.id });
   }
+  for (const part of options.pillUnit ?? []) clips.push({ role: 'pill', path: part.url });
   return clips;
 }

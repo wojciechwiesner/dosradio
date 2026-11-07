@@ -10,6 +10,7 @@ import { initUpcoming } from './upcoming';
 import { initRamowkaSettings } from './ramowkaSettings';
 import { openOnboarding } from './onboarding';
 import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from './plus';
+import { initProgrammeLine } from './pill';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -450,7 +451,14 @@ const bgAudio = initBackgroundAudio(
 initPlus({
   onStatus: (text, isError) => setStatus(text, isError),
   stopRadio: () => { if (engine.isPlaying) engine.stop(); },
+  enqueuePill: async (pill) => {
+    if (!engine.enqueuePill(pill)) { setStatus('Ta pigułka jest już w programie.'); return; }
+    setStatus(`W programie: ${pill.title}. Wejdzie w najbliższej przerwie, po wiadomościach.`);
+    if (!engine.isPlaying) await togglePlay(); // a pill never replaces the radio, it joins it
+    if (engine.hostMode === 'music-only') setStatus('Pigułka czeka w programie: włącz prowadzącego, żeby ją usłyszeć.');
+  },
 });
+initProgrammeLine($('inProgramme'), engine.pillQueue);
 
 // --- mood composer ---------------------------------------------------------------
 const moodForm = $<HTMLFormElement>('moodForm');
