@@ -208,6 +208,7 @@ def build_selection_prompt(title: str, cues: list[Cue], duration: float) -> str:
         f"Wybierz najważniejsze fragmenty, łącznie około {target} s (około 20% odcinka), po kolei w czasie.",
         f"Każdy fragment trwa od {int(MIN_SEGMENT_S)} do {int(MAX_SEGMENT_S)} s i jest zrozumiały bez reszty odcinka.",
         'Dla każdego napisz jedno zdanie po polsku (maks. 25 słów), o czym jest, bez emoji i markdownu.',
+        'Pisz poprawną polszczyzną z pełnymi polskimi znakami (ą, ć, ę, ł, ń, ó, ś, ź, ż) — lektor czyta to na głos.',
         'Zwróć WYŁĄCZNIE JSON: {"segments":[{"start":12,"end":80,"summary":"..."}]}',
         "", transcript,
     ])
