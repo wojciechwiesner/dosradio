@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   finds steady Lyria tones in archived segments and rewrites them with notch filters; originals stay in
   `<station>/originals/` until purged.
 - **Fresh stream start**: `stream.ogg?seek=fresh` opens a private stream that starts at a Lyria session start.
+- **Whine removal on the client (ToneTracker + ToneKiller)**: steady tones (the Lyria whine, 300 Hz - 16 kHz,
+  >= 12 dB over the neighbourhood, same bin for 80% of 4 s) are notched on the music bus only
+  (peaking -36 dB, Q 30, max 4 notches, released 3 s after the tone ends), so the stream element,
+  the chunk fallback and the live helper are all covered. Voice never passes through it.
+- **Pills join the programme**: pressing play on a YouTube pill no longer stops the radio. The pill goes
+  into a persisted queue (`dosradio.pillQueue.v1`) and airs one unit per news break, after the news
+  (bumper, or voice summary + clip), with the music ducked under it. The player shows
+  "W programie: <title> (n/N)" with a remove button; a queued pill also makes a pill-only break when
+  no news is left, or when news is switched off.
 - **Moje pigułki**: every YouTube pill a Plus listener makes is saved on the account
   (`user_pills` table) and listed under the pill form with one-tap replay;
   `GET /radio-api/plus/pills` returns them newest first.
@@ -20,6 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Lyria whine no longer baked into the archive**: recorder sessions capture 2 segments (~60 s) instead of 10,
   with the temperature jittered per session; every segment is notched on steady tones
   (up to 4 filters, -36 dB) before Opus encoding. Adds `numpy` to the server requirements.
+- **Music reset during breaks (stream path)**: when the voice starts, the stream element is replaced by a
+  new one opened with `?seek=fresh&t=<ms>`, so the music comes back from a fresh point instead of the
+  drifted one (the live helper is still reloaded on the live path).
 - **News frequency: any minute from 1 to 60** — settings slider with a live label
   ("Co minutę", "Co 3 minuty", "Co 25 minut", "Co godzinę"); onboarding quick picks 1/3/5/10/15/30/60.
   Stored values are rounded and clamped, old ones stay valid.

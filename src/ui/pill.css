@@ -14,3 +14,12 @@
   background: transparent; color: var(--accent); display: grid; place-items: center; cursor: pointer; }
 .pill-saved-play svg { width: 14px; height: 14px; }
 .pill-saved-play:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* "W programie: <pill> (3/16)" line under the player, rendered by initProgrammeLine in pill.ts. */
+.in-programme { margin-top: 4px; font-size: 14px; color: var(--accent); position: relative; z-index: 1; display: grid; gap: 2px; }
+.in-programme[hidden] { display: none; }
+.in-programme-row { display: flex; align-items: center; gap: 8px; }
+.in-programme-remove { flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid currentColor;
+  background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer; }
+.in-programme-remove svg { width: 12px; height: 12px; }
+.in-programme-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

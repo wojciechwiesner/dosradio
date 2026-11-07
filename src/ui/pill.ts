@@ -4,6 +4,7 @@
  * the form inside #plusPanel, polls the job every 3 s and hands the finished parts to the player.
  */
 import './pill.css';
+import type { PillQueue } from '../radio/pillQueue';
 
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLLS = 400; // 20 minutes
@@ -11,7 +12,7 @@ const MAX_URL_LENGTH = 300;
 
 const PILL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)"/><path d="m9.5 7.5 7 9"/></svg>';
 const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
-const STOP_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>';
+const CLOSE_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 
 type PillStatus = 'queued' | 'working' | 'ready' | 'error';
 
@@ -32,10 +33,8 @@ interface PillState {
 
 export interface PillOptions {
   onStatus: (text: string, isError?: boolean) => void;
-  /** Plays the finished parts through the podcast player (stops the radio first). */
-  play: (title: string, parts: PillPart[]) => Promise<void>;
-  stop: () => void;
-  isPlaying: () => boolean;
+  /** Puts the finished pill into the radio programme (starts the radio when it is not playing). */
+  enqueue: (pill: { id: string; title: string; parts: PillPart[] }) => Promise<void>;
 }
 
 const STATUS_COPY: Record<'queued' | 'working', string> = {
@@ -50,6 +49,32 @@ let progress: HTMLElement;
 let source: HTMLElement;
 let savedList: HTMLElement;
 let busy = false;
+
+/**
+ * "W programie: <title> (3/16)": one row per queued pill with a remove button. Kept in sync with the
+ * queue, so parts aired inside the news breaks advance the counter.
+ */
+export function initProgrammeLine(element: HTMLElement, queue: PillQueue): void {
+  const render = () => {
+    element.replaceChildren(...queue.progress().map((pill) => {
+      const row = document.createElement('div');
+      row.className = 'in-programme-row';
+      const label = document.createElement('span');
+      label.textContent = `W programie: ${pill.title} (${pill.done}/${pill.total})`;
+      const remove = document.createElement('button');
+      remove.type = 'button';
+      remove.className = 'in-programme-remove';
+      remove.innerHTML = CLOSE_SVG;
+      remove.setAttribute('aria-label', `Usuń z programu: ${pill.title}`);
+      remove.addEventListener('click', () => queue.remove(pill.pillId));
+      row.append(label, remove);
+      return row;
+    }));
+    element.hidden = queue.isEmpty;
+  };
+  queue.subscribe(render);
+  render();
+}
 
 // --- own fetch helpers (radioApi.ts is owned by another module) ----------------------------------
 
@@ -120,7 +145,7 @@ export async function refreshSavedPills(): Promise<void> {
     play.type = 'button';
     play.className = 'pill-saved-play';
     play.innerHTML = PLAY_SVG;
-    play.setAttribute('aria-label', `Odtwórz pigułkę: ${pill.title}`);
+    play.setAttribute('aria-label', `Dodaj pigułkę do programu: ${pill.title}`);
     play.addEventListener('click', () => void playSaved(pill));
     const label = document.createElement('span');
     label.textContent = pill.author ? `${pill.title} — ${pill.author}` : pill.title;
@@ -133,9 +158,9 @@ async function playSaved(pill: SavedPill): Promise<void> {
   if (busy) return;
   busy = true;
   showSource({ ...pill, status: 'ready', error: '' });
-  setProgress(`Gra: ${pill.title}`);
+  setProgress(`Dodano do programu: ${pill.title}. Wejdzie w najbliższej przerwie, po wiadomościach.`);
   try {
-    await options.play(`Pigułka: ${pill.title}`, pill.parts);
+    await options.enqueue({ id: pill.id, title: pill.title, parts: pill.parts });
   } catch (error) {
     setProgress((error as Error).message, true);
   } finally {
@@ -146,10 +171,6 @@ async function playSaved(pill: SavedPill): Promise<void> {
 function setProgress(text: string, isError = false): void {
   progress.textContent = text;
   progress.classList.toggle('error', isError);
-}
-
-function setButton(playing: boolean): void {
-  button.innerHTML = playing ? `${STOP_SVG} Zatrzymaj` : `${PILL_SVG} Zrób pigułkę`;
 }
 
 /** Author and link to the original episode; only http(s) links are rendered as links. */
@@ -165,11 +186,6 @@ function showSource(state: PillState): void {
 }
 
 async function handleSubmit(): Promise<void> {
-  if (options.isPlaying()) {
-    options.stop();
-    options.onStatus('Zatrzymano.');
-    return;
-  }
   if (busy) return;
   const url = urlInput.value.trim();
   if (!/^https?:\/\//i.test(url)) {
@@ -183,16 +199,13 @@ async function handleSubmit(): Promise<void> {
     const finished = await runJob(url);
     showSource(finished);
     void refreshSavedPills();
-    setProgress(`Gotowe: ${finished.title}`);
-    button.disabled = false;
-    setButton(true);
-    await options.play(`Pigułka: ${finished.title}`, finished.parts);
+    setProgress(`Gotowe: ${finished.title}. Wejdzie do programu w najbliższej przerwie, po wiadomościach.`);
+    await options.enqueue({ id: finished.id, title: finished.title, parts: finished.parts });
   } catch (error) {
     setProgress((error as Error).message, true);
   } finally {
     busy = false;
     button.disabled = false;
-    setButton(false);
   }
 }
 

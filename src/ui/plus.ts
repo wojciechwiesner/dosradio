@@ -20,6 +20,8 @@ export interface PlusOptions {
   onStatus: (text: string, isError?: boolean) => void;
   /** Radio must yield its audio output while a podcast or digest is playing. */
   stopRadio: () => void;
+  /** Puts a finished YouTube pill into the radio programme; the radio keeps playing. */
+  enqueuePill: (pill: { id: string; title: string; parts: AudioPart[] }) => Promise<void>;
 }
 
 /** One audio file of a sequence; `kind` decides whether its edges are faded (music and bumpers). */
@@ -139,13 +141,7 @@ export function initPlus(events: PlusOptions): void {
   $('plusPrefsForm').addEventListener('submit', (event) => { event.preventDefault(); void savePreferences(); });
   $('podcastForm').addEventListener('submit', (event) => { event.preventDefault(); void handlePodcast(); });
   $('plusDigestPlay').addEventListener('click', () => void playDigest());
-  initPill({ onStatus: events.onStatus, play: playPillParts, stop: stopPlusAudio, isPlaying: isPlusAudioPlaying });
-}
-
-/** Plays a finished YouTube pill through the podcast player; toggles off when already playing. */
-async function playPillParts(title: string, parts: AudioPart[]): Promise<void> {
-  options.stopRadio();
-  await player.play(title, parts, options.onStatus);
+  initPill({ onStatus: events.onStatus, enqueue: events.enqueuePill });
 }
 
 /** Called by the page whenever /radio-api/me changes; shows the panel for Plus only. */
