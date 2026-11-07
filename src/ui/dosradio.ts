@@ -1,7 +1,7 @@
 /** dosradio.theones.io page: stations, news topics, trial countdown, registration. */
 import { PublicRadioEngine, type HostMode } from '../radio/publicRadioEngine';
 import { airedRemote, radioApi, type AccessState } from '../radio/radioApi';
-import { NEWS_CATEGORIES, categoryLabel, sanitizeCategories, type NewsCategory, type QueuedStory } from '../radio/newsQueue';
+import { availableCategories, categoryLabel, sanitizeCategories, type NewsCategory, type QueuedStory } from '../radio/newsQueue';
 import { STATIONS, stationById, type Station } from '../radio/stations';
 import type { BreakInterval } from '../radio/radioClock';
 import { initBackgroundAudio } from '../audio/backgroundAudio';
@@ -72,7 +72,7 @@ function renderStations(): void {
 }
 
 function renderCategories(): void {
-  $('categories').replaceChildren(...NEWS_CATEGORIES.map((category) => {
+  $('categories').replaceChildren(...availableCategories(Boolean(access?.plus)).map((category) => {
     const chip = document.createElement('button');
     chip.className = 'chip';
     chip.setAttribute('aria-pressed', String(prefs.categories.includes(category.id)));
@@ -201,6 +201,7 @@ async function refreshAccess(): Promise<AccessState> {
   engine.programme.aired.setRemote(access.registered ? airedRemote : null);
   void engine.programme.aired.pull();
   void refreshPlusPanel(access.plus).catch((error) => setStatus(`Plus: ${(error as Error).message}`, true));
+  renderCategories(); // "Moje źródła" appears only for Plus listeners
   return access;
 }
 
@@ -229,7 +230,7 @@ function showOnboarding(): void {
     applyChoice(choice);
     markOnboarded(localStorage);
     if (!engine.isPlaying) void startPlayback();
-  });
+  }, Boolean(access?.plus));
 }
 
 function applyChoice(choice: OnboardingChoice): void {

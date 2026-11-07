@@ -14,6 +14,7 @@ from typing import Optional
 from pathlib import Path
 
 import websockets
+from dataclasses import asdict
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
@@ -263,14 +264,44 @@ async def next_station_chunk(
 @app.get("/radio-api/news")
 async def get_news(request: Request, cats: str = Query("ai")) -> dict:
     require_access(request)
-    wanted = [c for c in cats.split(",") if c in CATEGORIES][:len(CATEGORIES)]
-    if not wanted:
+    requested = cats.split(",")
+    wanted = [c for c in requested if c in CATEGORIES][:len(CATEGORIES)]
+    wants_personal = PERSONAL_CATEGORY in requested
+    if not wanted and not wants_personal:
         raise HTTPException(400, "Wybierz przynajmniej jedną kategorię wiadomości.")
     # Editions are produced by news.hourly_loop; a topic with no edition yet is fetched once here.
     missing = [c for c in wanted if not news.cache[c].stories]
     if missing:
         await asyncio.gather(*(news.ensure(c) for c in missing))
-    return {"categories": [news.public(c) for c in wanted]}
+    groups = [news.public(c) for c in wanted]
+    if wants_personal:
+        groups.append(await personal_group(request))
+    return {"categories": groups}
+
+
+PERSONAL_CATEGORY = "mine"
+
+
+async def personal_group(request: Request) -> dict:
+    """The listener's own RSS feeds and keywords as one more news topic (Plus only)."""
+    group = {"category": PERSONAL_CATEGORY, "label": "Moje źródła", "fetched_at": time.time(),
+             "edition": None, "error": None, "stories": []}
+    ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
+    current = access.resolve(request.cookies, ip)
+    user = db.find_user_by_email(current.email or "") if current.registered else None
+    if user is None or not current.plus:
+        group["error"] = "Własne źródła są w DOS Radio Plus."
+        return group
+    prefs = db.get_news_preferences(int(user["id"])) or {}
+    if not prefs.get("rss_feeds") and not prefs.get("keywords"):
+        group["error"] = "Dodaj kanał RSS w panelu Plus."
+        return group
+    is_personal, stories = await personal.digest(int(user["id"]), prefs)
+    if not is_personal:
+        group["error"] = "Twoje kanały teraz nie odpowiadają."
+        return group
+    group["stories"] = [asdict(story) for story in stories]
+    return group
 
 
 @app.get("/radio-api/story/{story_id}.wav")

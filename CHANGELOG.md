@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **RSS feeds as a news source**: a feed saved in the Plus panel can now be picked as the
+  "Moje źródła" news topic (chip in settings and onboarding, Plus only) and the radio reads it
+  in regular breaks via `/radio-api/news?cats=mine`. Keywords now rank feed stories instead of
+  dropping every story that did not match (a feed with no keyword hit used to yield nothing).
+- **YouTube pill**: subtitles are tried in order (human pl/en, original-language auto captions,
+  en) and one failing track (HTTP 429 on auto-translated captions) no longer aborts the pill;
+  yt-dlp is taken from the app venv (`yt-dlp[default]>=2026.10` in requirements) because the
+  distro build is blocked by YouTube (403/SABR).
+
 ### Added
 - **YouTube pill (Plus)**: `POST /radio-api/plus/pill {"url"}` and `GET /radio-api/plus/pill/{id}`
   turn a video or channel link (latest upload, up to 3 h) into a "pigulka": pl (else en) subtitles,

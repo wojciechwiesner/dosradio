@@ -2,7 +2,10 @@
  * Pure news helpers for the public DOS Radio client. Fetching, validation and TTS happen on the server.
  */
 
-export type NewsCategory = 'ai' | 'beauty' | 'sport' | 'funny' | 'stoic';
+export type NewsCategory = 'ai' | 'beauty' | 'sport' | 'funny' | 'stoic' | 'mine';
+
+/** The listener's own RSS feeds and keywords (Plus); served as one more topic by /radio-api/news. */
+export const PERSONAL_CATEGORY: NewsCategory = 'mine';
 
 export const NEWS_CATEGORIES: { id: NewsCategory; label: string }[] = [
   { id: 'ai', label: 'AI' },
@@ -10,7 +13,13 @@ export const NEWS_CATEGORIES: { id: NewsCategory; label: string }[] = [
   { id: 'sport', label: 'Sport' },
   { id: 'funny', label: 'Głupie' },
   { id: 'stoic', label: 'Stoicka myśl' },
+  { id: 'mine', label: 'Moje źródła' },
 ];
+
+/** Topics a listener can pick; "Moje źródła" only exists for Plus listeners with their own feeds. */
+export function availableCategories(plus: boolean): { id: NewsCategory; label: string }[] {
+  return NEWS_CATEGORIES.filter((category) => plus || category.id !== PERSONAL_CATEGORY);
+}
 
 export interface QueuedStory {
   id: string;

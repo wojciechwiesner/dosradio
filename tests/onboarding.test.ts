@@ -93,3 +93,12 @@ describe('Onboarding preferences persistence', () => {
     expect(loadPrefs(storage)).toEqual(defaultPrefs());
   });
 });
+
+describe('Moje źródła topic', () => {
+  it('is offered only to Plus listeners and survives sanitizing', async () => {
+    const { availableCategories, sanitizeCategories } = await import('../src/radio/newsQueue');
+    expect(availableCategories(false).map((c) => c.id)).not.toContain('mine');
+    expect(availableCategories(true).map((c) => c.id)).toContain('mine');
+    expect(sanitizeCategories(['mine', 'ai'])).toEqual(['ai', 'mine']);
+  });
+});

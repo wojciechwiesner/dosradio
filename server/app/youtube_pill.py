@@ -11,6 +11,8 @@ import asyncio
 import json
 import logging
 import re
+import shutil
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -28,9 +30,19 @@ TARGET_FRACTION = 0.2
 BUDGET_TOLERANCE = 1.25  # stop adding segments once the total passes target * tolerance
 MIN_SEGMENT_S = 20.0
 MAX_SEGMENT_S = 120.0
-SUBTITLE_LANGS = ("pl", "en")
 PROMPT_WINDOW_S = 15.0
 METADATA_TIMEOUT_S = 90
+
+
+def _find_yt_dlp() -> str:
+    """Prefer yt-dlp from the app's own venv: distro builds go stale and YouTube blocks them (403/SABR)."""
+    venv_binary = Path(sys.executable).with_name("yt-dlp")
+    if venv_binary.exists():
+        return str(venv_binary)
+    return shutil.which("yt-dlp") or "yt-dlp"
+
+
+YT_DLP = _find_yt_dlp()
 SUBTITLE_TIMEOUT_S = 90
 DOWNLOAD_TIMEOUT_S = 900
 CUT_TIMEOUT_S = 120
@@ -88,7 +100,7 @@ def is_channel_url(url: str) -> bool:
 # --- step 1: metadata -----------------------------------------------------------------------
 
 def _dump_json(run: Runner, url: str, extra: list[str]) -> dict:
-    out = run(["yt-dlp", "--dump-single-json", "--no-warnings", *extra, url], METADATA_TIMEOUT_S)
+    out = run([YT_DLP, "--dump-single-json", "--no-warnings", *extra, url], METADATA_TIMEOUT_S)
     return json.loads(out)
 
 
@@ -122,13 +134,28 @@ def fetch_metadata(run: Runner, url: str) -> dict:
 
 # --- step 2/3: subtitles -------------------------------------------------------------------------
 
+# Subtitle attempts in order of quality. Auto-translated captions (e.g. en -> pl) are skipped on
+# purpose: YouTube rate-limits them (HTTP 429) and they are worse than the original language.
+SUBTITLE_ATTEMPTS: tuple[tuple[str, str], ...] = (
+    ("--write-subs", "pl,en"),          # human-made subtitles
+    ("--write-auto-subs", ".*-orig"),   # automatic captions in the video's own language
+    ("--write-auto-subs", "en"),        # last resort
+)
+
+
 def fetch_subtitles(run: Runner, source_url: str, workdir: Path) -> str | None:
-    """Download pl (else en) VTT subtitles; returns the file text or None when there are none."""
-    run(["yt-dlp", "--skip-download", "--write-subs", "--write-auto-subs", "--sub-langs", ",".join(SUBTITLE_LANGS),
-         "--sub-format", "vtt", "--no-playlist", "--no-warnings", "-o", str(workdir / "subs"), source_url],
-        SUBTITLE_TIMEOUT_S)
-    for lang in SUBTITLE_LANGS:
-        found = sorted(workdir.glob(f"subs.{lang}*.vtt"))
+    """Return VTT text from the first subtitle source that works, or None when the video has none.
+
+    Each attempt is isolated: one failing track (429, missing language) never aborts the pill.
+    """
+    for flag, langs in SUBTITLE_ATTEMPTS:
+        try:
+            run([YT_DLP, "--skip-download", flag, "--sub-langs", langs, "--sub-format", "vtt",
+                 "--no-playlist", "--no-warnings", "-o", str(workdir / "subs"), source_url],
+                SUBTITLE_TIMEOUT_S)
+        except Exception as error:  # yt-dlp exits 1 when any requested track fails
+            log.warning("subtitle attempt %s %s failed: %s", flag, langs, error)
+        found = sorted(workdir.glob("subs.*.vtt"))
         if found:
             return found[0].read_text(encoding="utf-8", errors="replace")
     return None
@@ -233,7 +260,7 @@ async def select_segments(summarise: Summarise, title: str, cues: list[Cue], dur
 # --- step 5: audio -----------------------------------------------------------------------------------
 
 def download_audio(run: Runner, source_url: str, workdir: Path) -> Path:
-    run(["yt-dlp", "-f", "bestaudio", "--no-playlist", "--no-warnings", "-o", str(workdir / "source.%(ext)s"), source_url],
+    run([YT_DLP, "-f", "bestaudio", "--no-playlist", "--no-warnings", "-o", str(workdir / "source.%(ext)s"), source_url],
         DOWNLOAD_TIMEOUT_S)
     found = [path for path in workdir.glob("source.*") if path.suffix != ".part"]
     if not found:

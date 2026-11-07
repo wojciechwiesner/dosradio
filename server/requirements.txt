@@ -5,3 +5,4 @@ stripe>=8
 websockets==15.0.1
 pytest>=8
 psutil>=5.9.0
+yt-dlp[default]>=2026.10

@@ -187,7 +187,7 @@ async function savePreferences(): Promise<void> {
   save.disabled = true;
   try {
     await radioApi.saveNewsPreferences(keywords, feeds);
-    info.textContent = 'Zapisano. Wiadomości z twoich źródeł za chwilę się odświeżą.';
+    info.textContent = 'Zapisano. Zaznacz temat "Moje źródła" w wiadomościach, a radio będzie je czytać.';
     await renderDigest();
   } catch (error) {
     info.textContent = (error as Error).message;

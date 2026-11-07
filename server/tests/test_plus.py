@@ -287,7 +287,7 @@ def test_personal_digest_serves_rss_stories(plus_client, monkeypatch):
     })
     body = plus_client.get("/radio-api/plus/news-digest").json()
     assert body["personal"] is True
-    assert [s["title"] for s in body["stories"]] == ["Wyprawa na Marsa"]
+    assert [s["title"] for s in body["stories"]] == ["Wyprawa na Marsa", "Nowy model AI"]  # keyword hit first
 
     # The digest story is remembered, so the shared story audio endpoint can voice it.
     from app.main import news
@@ -295,3 +295,38 @@ def test_personal_digest_serves_rss_stories(plus_client, monkeypatch):
     assert story is not None and story.category == "personal"
     from app.news import story_script
     assert "twoich źródeł" in story_script(story)
+
+
+def test_keywords_rank_feed_stories_instead_of_dropping_them(monkeypatch):
+    """Regression: a feed with no keyword hits used to yield zero stories (feed unusable)."""
+    import asyncio
+    from app import personal_news
+    stories = personal_news.parse_rss(RSS_SAMPLE, "https://feed.pl")
+
+    async def fake_fetch(url):
+        return stories
+
+    monkeypatch.setattr(personal_news, "fetch_feed", fake_fetch)
+    ranked = asyncio.run(personal_news.collect_personal_stories(["marsa"], ["https://feed.pl/rss"]))
+    assert [s.title for s in ranked] == ["Wyprawa na Marsa", "Nowy model AI"]  # hit first, rest kept
+
+
+def test_news_endpoint_serves_my_feeds_as_a_topic(plus_client, monkeypatch):
+    from app import personal_news
+    stories = personal_news.parse_rss(RSS_SAMPLE, "https://feed.pl")
+
+    async def fake_collect(keywords, feeds):
+        return stories
+
+    monkeypatch.setattr(personal_news, "collect_personal_stories", fake_collect)
+    plus_client.put("/radio-api/plus/news-preferences", json={"keywords": ["prezydent"], "rss_feeds": ["https://feed.pl/rss"]})
+    body = plus_client.get("/radio-api/news?cats=mine").json()
+    mine = body["categories"][0]
+    assert mine["category"] == "mine" and mine["error"] is None
+    assert [s["title"] for s in mine["stories"]] == ["Nowy model AI", "Wyprawa na Marsa"]
+
+
+def test_my_feeds_topic_is_plus_only(client):
+    body = client.get("/radio-api/news?cats=mine").json()
+    assert body["categories"][0]["stories"] == []
+    assert "Plus" in body["categories"][0]["error"]

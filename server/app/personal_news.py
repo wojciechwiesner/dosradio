@@ -124,7 +124,9 @@ async def collect_personal_stories(keywords: list[str], rss_feeds: list[str]) ->
                 seen.add(story.id)
                 stories.append(story)
     if keywords:
-        stories = [story for story in stories if matches_keywords(story, keywords)]
+        # Keywords rank, they do not erase: a feed the listener added is always a source,
+        # stories matching a keyword simply go first.
+        stories.sort(key=lambda story: not matches_keywords(story, keywords))
     return stories[:MAX_DIGEST_STORIES]
 
 

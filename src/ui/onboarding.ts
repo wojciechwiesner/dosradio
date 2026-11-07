@@ -2,7 +2,7 @@
  * First-play onboarding modal: host or not, which news areas, how often. Re-openable from the page.
  * Pure persistence lives in prefs.ts; this file only builds and wires the DOM.
  */
-import { NEWS_CATEGORIES, type NewsCategory } from '../radio/newsQueue';
+import { availableCategories, type NewsCategory } from '../radio/newsQueue';
 import { BREAK_INTERVALS, type BreakInterval } from '../radio/radioClock';
 import type { HostMode } from '../radio/publicRadioEngine';
 import type { OnboardingChoice, Prefs } from './prefs';
@@ -48,7 +48,8 @@ function setPressed(button: HTMLElement, pressed: boolean): void {
   button.setAttribute('aria-pressed', String(pressed));
 }
 
-export function openOnboarding(prefs: Prefs, onDone: (choice: OnboardingChoice) => void): void {
+export function openOnboarding(prefs: Prefs, onDone: (choice: OnboardingChoice) => void, plus = false): void {
+  const topics = availableCategories(plus);
   const modal = document.getElementById('onboardModal');
   if (!modal) throw new Error('missing #onboardModal'); // autocheck spot: page and script must match
 
@@ -79,7 +80,7 @@ export function openOnboarding(prefs: Prefs, onDone: (choice: OnboardingChoice) 
     star.hidden = !categories.has(id);
   });
 
-  const categoryChips = NEWS_CATEGORIES.map((category) => {
+  const categoryChips = topics.map((category) => {
     const chip = toggleButton('chip', categories.has(category.id));
     const tick = el('span', 'tick');
     tick.innerHTML = TICK_SVG; // static SVG constant
@@ -103,7 +104,7 @@ export function openOnboarding(prefs: Prefs, onDone: (choice: OnboardingChoice) 
   });
 
   /** Chip plus a star: the star marks the topic of the day (at most one). */
-  const categoryItems = NEWS_CATEGORIES.map((category, index) => {
+  const categoryItems = topics.map((category, index) => {
     const star = toggleButton('chip-star', dayTopic === category.id);
     star.innerHTML = STAR_SVG; // static SVG constant
     star.setAttribute('aria-label', `Temat dnia: ${category.label}`);
