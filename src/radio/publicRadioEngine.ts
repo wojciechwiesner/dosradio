@@ -22,8 +22,11 @@ import { ProgrammeState } from './programmeState';
 import { breakClips, planBreak, upcomingStory, HOURLY_MAX_MS, type WeatherPlace } from './programme';
 import { runClips } from './breakRunner';
 
-const DUCK_LEVEL = 0.16;
+/** Music bed volume while voice is speaking, relative to full volume. */
+export const DUCK_LEVEL = 0.34;
 const NEWS_POLL_MS = 10 * 60_000;
+/** Host and news voice sit 8 dB below full-volume music, so the voice never outshouts the music bed. */
+export const VOICE_GAIN = 0.4;
 
 export type HostMode = 'with-host' | 'music-only';
 
@@ -97,6 +100,7 @@ export class PublicRadioEngine {
     this.limiter.ratio.value = 12;
 
     this.musicBus.connect(this.master);
+    this.voiceGain.gain.value = VOICE_GAIN;
     this.voiceGain.connect(this.master);
     this.master.connect(this.limiter);
     this.limiter.connect(this.analyser);
