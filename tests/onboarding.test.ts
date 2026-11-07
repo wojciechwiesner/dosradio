@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  FIRST_BREAK_DELAY_MS, nextScheduledBreak, nextHostClipDelayMs, normalizeInterval,
+  FIRST_BREAK_DELAY_MS, nextScheduledBreak, nextHostClipDelayMs, normalizeInterval, intervalLabel,
   HOST_CLIP_MIN_MS, HOST_CLIP_MAX_MS,
 } from '../src/radio/radioClock';
 import {
@@ -44,9 +44,28 @@ describe('Break schedule', () => {
 
 describe('Intervals and host clip delay', () => {
   it('keeps old values valid and widens to 5/10/15', () => {
-    [5, 10, 15, 20, 30, 60].forEach((value) => expect(normalizeInterval(value)).toBe(value));
-    expect(normalizeInterval(7)).toBe(5);
+    [1, 5, 7, 10, 15, 20, 30, 60].forEach((value) => expect(normalizeInterval(value)).toBe(value));
+    expect(normalizeInterval('12')).toBe(12);   // range input gives strings
+    expect(normalizeInterval(0)).toBe(1);       // clamped, never zero
+    expect(normalizeInterval(90)).toBe(60);
+    expect(normalizeInterval(2.6)).toBe(3);
     expect(normalizeInterval(undefined)).toBe(5);
+    expect(normalizeInterval('abc')).toBe(5);
+  });
+
+  it('labels every minute in good Polish', () => {
+    expect([1, 2, 3, 5, 12, 22, 25, 60].map(intervalLabel)).toEqual([
+      'Co minutę', 'Co 2 minuty', 'Co 3 minuty', 'Co 5 minut', 'Co 12 minut', 'Co 22 minuty', 'Co 25 minut', 'Co godzinę',
+    ]);
+  });
+
+  it('keeps 45 s of music after a long break even at one break per minute', () => {
+    const lastBreakAt = new Date('2026-11-07T10:00:00');
+    const lastBreakEndedAt = new Date('2026-11-07T10:00:40'); // 40 s of talking
+    const next = nextScheduledBreak({ startedAt: lastBreakAt, lastBreakAt, lastBreakEndedAt, interval: 1 });
+    expect(next.getTime() - lastBreakEndedAt.getTime()).toBe(45_000);
+    const relaxed = nextScheduledBreak({ startedAt: lastBreakAt, lastBreakAt, lastBreakEndedAt, interval: 7 });
+    expect(relaxed.getTime() - lastBreakAt.getTime()).toBe(7 * 60_000);
   });
 
   it('host clip delay stays within 6-12 minutes', () => {

@@ -92,15 +92,9 @@
           Źródło
         </a>
         <div class="settings">
-          <label class="field">Jak często prowadzący
-            <select id="interval">
-              <option value="5">Co 5 minut</option>
-              <option value="10">Co 10 minut</option>
-              <option value="15">Co 15 minut</option>
-              <option value="20">Co 20 minut</option>
-              <option value="30">Co 30 minut</option>
-              <option value="60">Co godzinę</option>
-            </select>
+          <label class="field">Jak często wiadomości: <output id="intervalValue">Co 5 minut</output>
+            <input type="range" id="interval" min="1" max="60" step="1" value="5"
+                   aria-describedby="intervalValue" />
           </label>
           <label class="check">
             <input type="checkbox" id="hourlyBulletin" checked />

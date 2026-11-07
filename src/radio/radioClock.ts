@@ -36,13 +36,29 @@ export function spokenTimePl(date: Date): string {
   return `${HOURS_PL[hours]} ${minutesToWords(minutes)}`;
 }
 
-export const BREAK_INTERVALS = [5, 10, 15, 20, 30, 60] as const;
-export type BreakInterval = (typeof BREAK_INTERVALS)[number];
+/** Minutes between news breaks: any whole number from 1 to 60, chosen by the listener. */
+export type BreakInterval = number;
+export const MIN_BREAK_INTERVAL = 1;
+export const MAX_BREAK_INTERVAL = 60;
+/** Quick picks shown in onboarding; the settings slider allows every minute in between. */
+export const BREAK_INTERVALS: readonly BreakInterval[] = [1, 3, 5, 10, 15, 30, 60];
 export const DEFAULT_BREAK_INTERVAL: BreakInterval = 5;
 
-/** Old or corrupted stored values fall back to the default; every old valid value (20/30/60) stays valid. */
+/** Any stored value is rounded and clamped to 1..60; garbage falls back to the default. */
 export function normalizeInterval(value: unknown): BreakInterval {
-  return (BREAK_INTERVALS as readonly unknown[]).includes(value) ? (value as BreakInterval) : DEFAULT_BREAK_INTERVAL;
+  const minutes = Math.round(Number(value));
+  if (!Number.isFinite(minutes) || value === null || value === '' || typeof value === 'boolean') return DEFAULT_BREAK_INTERVAL;
+  return Math.min(MAX_BREAK_INTERVAL, Math.max(MIN_BREAK_INTERVAL, minutes));
+}
+
+/** Human label: "Co minutę", "Co 3 minuty", "Co 5 minut", "Co godzinę". */
+export function intervalLabel(minutes: BreakInterval): string {
+  if (minutes === 60) return 'Co godzinę';
+  if (minutes === 1) return 'Co minutę';
+  const lastDigit = minutes % 10;
+  const lastTwo = minutes % 100;
+  const few = lastDigit >= 2 && lastDigit <= 4 && (lastTwo < 12 || lastTwo > 14);
+  return `Co ${minutes} ${few ? 'minuty' : 'minut'}`;
 }
 
 const MS_PER_MINUTE = 60_000;
@@ -54,7 +70,12 @@ export interface BreakSchedule {
   lastBreakAt: Date | null;
   interval: BreakInterval;
   firstBreakDelayMs?: number;
+  /** When the previous break finished speaking; music always gets MIN_MUSIC_BETWEEN_MS after it. */
+  lastBreakEndedAt?: Date | null;
 }
+
+/** Even at "co minutę" the listener hears at least this much music between two breaks. */
+export const MIN_MUSIC_BETWEEN_MS = 45 * 1000;
 
 /**
  * Listener-relative schedule: first break at start + delay, every later break `interval`
@@ -63,7 +84,9 @@ export interface BreakSchedule {
 export function nextScheduledBreak(schedule: BreakSchedule): Date {
   const { startedAt, lastBreakAt, interval, firstBreakDelayMs = FIRST_BREAK_DELAY_MS } = schedule;
   if (!lastBreakAt) return new Date(startedAt.getTime() + firstBreakDelayMs);
-  return new Date(lastBreakAt.getTime() + interval * MS_PER_MINUTE);
+  const byInterval = lastBreakAt.getTime() + interval * MS_PER_MINUTE;
+  const afterMusic = schedule.lastBreakEndedAt ? schedule.lastBreakEndedAt.getTime() + MIN_MUSIC_BETWEEN_MS : 0;
+  return new Date(Math.max(byInterval, afterMusic));
 }
 
 /** Random pause before the next host clip: 6-12 minutes. `random` is injectable for tests. */

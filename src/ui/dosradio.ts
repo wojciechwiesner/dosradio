@@ -3,7 +3,7 @@ import { PublicRadioEngine, type HostMode } from '../radio/publicRadioEngine';
 import { airedRemote, radioApi, type AccessState } from '../radio/radioApi';
 import { availableCategories, categoryLabel, sanitizeCategories, type NewsCategory, type QueuedStory } from '../radio/newsQueue';
 import { STATIONS, stationById, type Station } from '../radio/stations';
-import type { BreakInterval } from '../radio/radioClock';
+import { intervalLabel, normalizeInterval } from '../radio/radioClock';
 import { initBackgroundAudio } from '../audio/backgroundAudio';
 import { applyOnboardingChoice, isOnboarded, loadPrefs, markOnboarded, programmeOptions, sanitizeDayTopic, savePrefs as persistPrefs, type OnboardingChoice } from './prefs';
 import { initUpcoming } from './upcoming';
@@ -236,7 +236,7 @@ function showOnboarding(): void {
 function applyChoice(choice: OnboardingChoice): void {
   prefs = applyOnboardingChoice(prefs, choice);
   savePrefs();
-  intervalSelect.value = String(prefs.interval);
+  showInterval();
   engine.interval = prefs.interval;
   engine.setNewsEnabled(prefs.newsEnabled);
   engine.setProgramme(programmeOptions(prefs));
@@ -378,7 +378,12 @@ $('authBtn').addEventListener('click', async () => {
   }
 });
 
-const intervalSelect = $<HTMLSelectElement>('interval');
+const intervalSelect = $<HTMLInputElement>('interval');
+const intervalValue = $<HTMLOutputElement>('intervalValue');
+function showInterval(): void {
+  intervalSelect.value = String(prefs.interval);
+  intervalValue.textContent = intervalLabel(prefs.interval);
+}
 
 // --- wiring ----------------------------------------------------------------------
 playButton.addEventListener('click', () => void togglePlay());
@@ -393,10 +398,13 @@ newsButton.addEventListener('click', async () => {
     newsButton.disabled = false;
   }
 });
-intervalSelect.value = String(prefs.interval);
+showInterval();
+// Label follows the thumb while dragging; the schedule changes once the listener lets go.
+intervalSelect.addEventListener('input', () => { intervalValue.textContent = intervalLabel(normalizeInterval(intervalSelect.value)); });
 intervalSelect.addEventListener('change', () => {
-  prefs.interval = Number(intervalSelect.value) as BreakInterval;
+  prefs.interval = normalizeInterval(intervalSelect.value);
   savePrefs();
+  showInterval();
   engine.setInterval(prefs.interval);
 });
 const volume = $<HTMLInputElement>('volume');

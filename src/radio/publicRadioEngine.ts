@@ -68,6 +68,7 @@ export class PublicRadioEngine {
 
   private startedAt = new Date();
   private lastBreakAt: Date | null = null;
+  private lastBreakEndedAt: Date | null = null;
   private readonly clipPlayer = new HostClipPlayer({
     stationId: () => hostStationId(this.station),
     canPlay: () => this.playing && this.hostMode === 'with-host' && !this.speaking,
@@ -395,6 +396,7 @@ export class PublicRadioEngine {
     const slot = nextScheduledBreak({
       startedAt: this.startedAt,
       lastBreakAt: this.lastBreakAt,
+      lastBreakEndedAt: this.lastBreakEndedAt,
       interval: this.interval,
       firstBreakDelayMs: this.firstBreakDelayMs,
     });
@@ -413,6 +415,7 @@ export class PublicRadioEngine {
   private resetBreakSchedule(): void {
     this.startedAt = new Date();
     this.lastBreakAt = null;
+    this.lastBreakEndedAt = null;
   }
 
   /** Random jingle/chatter between songs: ducks the music like a news break. */
@@ -498,6 +501,7 @@ export class PublicRadioEngine {
       if (error instanceof TrialEndedError) return this.endTrial();
     } finally {
       this.programme.record(plan, played, new Date());
+      this.lastBreakEndedAt = new Date();
       this.events.onQueue(this.queue, null); // re-render: just-aired stories turn grey
       if (this.playing) this.duck(1.0, 2.0);
       this.speaking = false;

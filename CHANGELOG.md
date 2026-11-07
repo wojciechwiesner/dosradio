@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **News frequency: any minute from 1 to 60** — settings slider with a live label
+  ("Co minutę", "Co 3 minuty", "Co 25 minut", "Co godzinę"); onboarding quick picks 1/3/5/10/15/30/60.
+  Stored values are rounded and clamped, old ones stay valid.
+- Breaks always leave at least 45 s of music after the previous break ends, so "co minutę"
+  never turns the radio into non-stop talking.
+
 ### Fixed
 - **RSS feeds as a news source**: a feed saved in the Plus panel can now be picked as the
   "Moje źródła" news topic (chip in settings and onboarding, Plus only) and the radio reads it

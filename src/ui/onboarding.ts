@@ -3,7 +3,7 @@
  * Pure persistence lives in prefs.ts; this file only builds and wires the DOM.
  */
 import { availableCategories, type NewsCategory } from '../radio/newsQueue';
-import { BREAK_INTERVALS, type BreakInterval } from '../radio/radioClock';
+import { BREAK_INTERVALS, intervalLabel, type BreakInterval } from '../radio/radioClock';
 import type { HostMode } from '../radio/publicRadioEngine';
 import type { OnboardingChoice, Prefs } from './prefs';
 
@@ -21,7 +21,6 @@ const HOST_CARDS: { mode: HostMode; title: string; text: string; icon: string }[
   { mode: 'music-only', title: 'Sama muzyka', text: 'Cisza w eterze, gra tylko muzyka.', icon: NOTE_SVG },
 ];
 
-const intervalLabel = (minutes: BreakInterval): string => (minutes === 60 ? 'Co godzinę' : `Co ${minutes} min`);
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);
