@@ -52,6 +52,13 @@ DOS Radio v1.0.0 — publiczne radio AI (Lyria RealTime, 14 stacji z prowadzący
   - [x] 56 dżingli + 112 gadek prowadzących (TTS przy pierwszym użyciu, cache)
   - [x] Orkiestracja cmux: W1 Sonnet 5.5 (frontend), W2 Haiku 5.5 (backend)
 
+- [x] **Phase 9: v1.4 bg/loudness/stream (2026-11-07, przejęte przez Hermes)**
+  - [x] U1 loudness: głos -8 dB pod muzyką, duck 0.34, loudnorm -19 LUFS na TTS (merge ad650e6)
+  - [x] U2 stream: ciągły ogg/opus przez prawdziwy <audio> (granie w tle), /radio-api/station/{id}/stream.ogg (merge b86c54e)
+  - [ ] U3a beatgrid: zrewertowany przez autora (0e1095d), brak numpy/librosa na prod — NIE wdrożone
+  - [ ] U3b beat-aligned mix: commit 5da230e niekompletny (usuwa _feed/_drain/_publish, test_stream nie zbiera się) — ODRZUCONY, wymaga przepisania
+- [x] Moje pigułki: user_pills + GET /radio-api/plus/pills; pigułka Dr. K przypisana do user 13
+
 ## Next Steps (Backlog / v1.3)
 - [ ] Podpięcie produkcyjnych kluczy Stripe (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) na serwerze
 - [ ] B2B Audio Streamer dla lokali i kawiarni (dedykowany profil licencyjny)
