@@ -64,5 +64,5 @@ def test_session_temperature_varies_between_sessions() -> None:
     values = [session_temperature() for _ in range(50)]
     assert len(set(values)) > 1
     assert all(
-        abs(value - recorder.BASE_TEMPERATURE) <= recorder.TEMPERATURE_JITTER for value in values
-    )
+        abs(value - recorder.BASE_TEMPERATURE) <= recorder.TEMPERATURE_JITTER + 1e-9 for value in values
+    )  # 1.0 + 0.05 - 1.0 is 0.05000000000000004 in floating point
