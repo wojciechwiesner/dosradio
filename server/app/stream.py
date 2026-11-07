@@ -10,9 +10,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import random
 import shutil
 import signal
 from collections.abc import Callable
+from pathlib import Path
 from typing import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, Request
@@ -25,8 +27,31 @@ log = logging.getLogger("dosradio.stream")
 READ_CHUNK = 16 * 1024
 MAX_QUEUE_CHUNKS = 16  # ~256 KB; a listener falling behind is dropped
 SAMPLE_RATE = 48000
+SESSION_GAP_NS = 45 * 1_000_000_000  # same gap rule as scripts/scan_steady_tones.py
+SEGMENT_STAMP_PREFIX = len("seg-")
+SEGMENT_STAMP_SUFFIX = len(".opus")
+SEEK_FRESH = "fresh"
 
 AccessGuard = Callable[[Request], None]
+
+
+def _segment_stamp(path: Path) -> int:
+    return int(path.name[SEGMENT_STAMP_PREFIX:-SEGMENT_STAMP_SUFFIX])
+
+
+def session_starts(paths: list[Path]) -> list[Path]:
+    """Segments that open a Lyria session: the first one, or one after a gap over SESSION_GAP_NS.
+
+    Archive files carry no session marker, so the gap between timestamps is the only signal.
+    """
+    starts: list[Path] = []
+    previous: int | None = None
+    for path in paths:
+        stamp = _segment_stamp(path)
+        if previous is None or stamp - previous > SESSION_GAP_NS:
+            starts.append(path)
+        previous = stamp
+    return starts
 
 
 async def _kill(process: asyncio.subprocess.Process) -> None:
@@ -43,12 +68,13 @@ async def _kill(process: asyncio.subprocess.Process) -> None:
 class StationStream:
     """One shared encoder per station; each subscriber gets its own queue."""
 
-    def __init__(self, registry: ArchiveRegistry, station_id: str) -> None:
+    def __init__(self, registry: ArchiveRegistry, station_id: str, fresh_start: bool = False) -> None:
         self.registry = registry
         self.station_id = station_id
         self._subscribers: set[asyncio.Queue[bytes | None]] = set()
         self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
+        self._fresh_start_pending = fresh_start
 
     async def subscribe(self, max_bytes: int | None = None) -> AsyncIterator[bytes]:
         queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=MAX_QUEUE_CHUNKS)
@@ -100,6 +126,13 @@ class StationStream:
                 return
             await self._publish(chunk)
 
+    def _take_fresh_start(self, archive: StationArchive) -> Path | None:
+        if not self._fresh_start_pending:
+            return None
+        self._fresh_start_pending = False
+        starts = session_starts(archive.list_segments())
+        return random.choice(starts) if starts else None
+
     async def _feed(self, encoder: asyncio.subprocess.Process) -> None:
         """Decode archive segments to PCM in recording order, looping forever."""
         assert encoder.stdin is not None
@@ -107,7 +140,9 @@ class StationStream:
             after: str | None = None
             while self._subscribers:
                 archive = self.registry.get(self.station_id)
-                path, _live = archive.pick_next(live_probability=0.0, after=after)
+                path = self._take_fresh_start(archive)
+                if path is None:
+                    path, _live = archive.pick_next(live_probability=0.0, after=after)
                 if path is None:
                     await asyncio.sleep(2)
                     continue
@@ -151,11 +186,14 @@ def build_stream_router(registry: ArchiveRegistry, require_access: AccessGuard) 
     hub = StreamHub(registry)
 
     @router.get("/radio-api/station/{station_id}/stream.ogg")
-    async def station_stream(request: Request, station_id: str, seconds: int = 0) -> StreamingResponse:
+    async def station_stream(
+        request: Request, station_id: str, seconds: int = 0, seek: str = ""
+    ) -> StreamingResponse:
         """One continuous Ogg/Opus stream of the station's recorded music.
 
         `seconds` caps the length (16-bit stereo at SAMPLE_RATE); the player
-        omits it and listens indefinitely.
+        omits it and listens indefinitely. `seek=fresh` opens a private stream
+        that starts at a Lyria session start instead of the shared position.
         """
         if shutil.which("ffmpeg") is None:
             raise HTTPException(503, "ffmpeg niedostępny")
@@ -163,8 +201,12 @@ def build_stream_router(registry: ArchiveRegistry, require_access: AccessGuard) 
             raise HTTPException(404, f"Nieznana lub pusta stacja: {station_id}")
         require_access(request)
         max_bytes = seconds * SAMPLE_RATE * 2 * 2 if 0 < seconds <= 30 else None
+        if seek == SEEK_FRESH:
+            stream = StationStream(registry, station_id, fresh_start=True)
+        else:
+            stream = hub.stream_for(station_id)
         return StreamingResponse(
-            hub.stream_for(station_id).subscribe(max_bytes),
+            stream.subscribe(max_bytes),
             media_type="audio/ogg",
             headers={"cache-control": "no-store", "x-dosradio-stream": "continuous"},
         )
