@@ -81,6 +81,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`server/app/news.py`), a single-pass ffmpeg `loudnorm` filter targeting -19 LUFS before
   caching/returning the audio. Falls back to the original, unnormalized audio and logs a
   warning if ffmpeg is missing or fails, so a broken normalizer never blocks speech.
+### Added
+- **Continuous station stream**: `GET /radio-api/station/{id}/stream.ogg` serves one shared
+  Ogg/Opus stream per station, re-encoded from the archive so segment boundaries are
+  gapless. The player uses a real `<audio>` element on Android and desktop (iOS stays on
+  the chunk path), which keeps playback alive after the browser is closed. `?seconds=N`
+  caps the length for tests.
 
 ## [1.3.0] - 2026-11-06
 
