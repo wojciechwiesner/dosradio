@@ -10,6 +10,7 @@ const MAX_POLLS = 400; // 20 minutes
 const MAX_URL_LENGTH = 300;
 
 const PILL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)"/><path d="m9.5 7.5 7 9"/></svg>';
+const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 const STOP_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>';
 
 type PillStatus = 'queued' | 'working' | 'ready' | 'error';
@@ -47,6 +48,7 @@ let urlInput: HTMLInputElement;
 let button: HTMLButtonElement;
 let progress: HTMLElement;
 let source: HTMLElement;
+let savedList: HTMLElement;
 let busy = false;
 
 // --- own fetch helpers (radioApi.ts is owned by another module) ----------------------------------
@@ -68,6 +70,8 @@ const startPill = (url: string) => pillRequest<{ id: string; status: PillStatus 
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }),
 });
 const readPill = (id: string) => pillRequest<PillState>(`/radio-api/plus/pill/${encodeURIComponent(id)}`);
+type SavedPill = Pick<PillState, 'id' | 'title' | 'author' | 'source_url' | 'parts'>;
+const listMyPills = () => pillRequest<{ pills: SavedPill[] }>('/radio-api/plus/pills');
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 // --- UI -------------------------------------------------------------------------------------------
@@ -87,13 +91,56 @@ export function initPill(events: PillOptions): void {
     <p class="pill-hint">Wybieramy najważniejsze 20% odcinka i puszczamy je jako krótkie bloki, każdy z jednozdaniowym wstępem prowadzącej. Kanał oznacza jego najnowszy odcinek (do 3 godzin).</p>
     <button type="submit" class="btn" id="pillBtn">${PILL_SVG} Zrób pigułkę</button>
     <div class="pill-progress" id="pillProgress" role="status"></div>
-    <div class="pill-source" id="pillSource"></div>`;
+    <div class="pill-source" id="pillSource"></div>
+    <h4 class="pill-saved-head" hidden>Moje pigułki</h4>
+    <ul class="pill-saved" id="pillSaved"></ul>`;
   panel.append(form);
   urlInput = form.querySelector<HTMLInputElement>('#pillUrl')!;
   button = form.querySelector<HTMLButtonElement>('#pillBtn')!;
   progress = form.querySelector<HTMLElement>('#pillProgress')!;
   source = form.querySelector<HTMLElement>('#pillSource')!;
+  savedList = form.querySelector<HTMLElement>('#pillSaved')!;
   form.addEventListener('submit', (event) => { event.preventDefault(); void handleSubmit(); });
+  void refreshSavedPills();
+}
+
+/** "Moje pigułki": every pill made on this account, newest first, one tap to play again. */
+export async function refreshSavedPills(): Promise<void> {
+  if (!savedList) return;
+  let pills: SavedPill[] = [];
+  try {
+    pills = (await listMyPills()).pills;
+  } catch {
+    pills = []; // not Plus or offline: the list simply stays empty
+  }
+  savedList.previousElementSibling?.toggleAttribute('hidden', pills.length === 0);
+  savedList.replaceChildren(...pills.map((pill) => {
+    const item = document.createElement('li');
+    const play = document.createElement('button');
+    play.type = 'button';
+    play.className = 'pill-saved-play';
+    play.innerHTML = PLAY_SVG;
+    play.setAttribute('aria-label', `Odtwórz pigułkę: ${pill.title}`);
+    play.addEventListener('click', () => void playSaved(pill));
+    const label = document.createElement('span');
+    label.textContent = pill.author ? `${pill.title} — ${pill.author}` : pill.title;
+    item.append(play, label);
+    return item;
+  }));
+}
+
+async function playSaved(pill: SavedPill): Promise<void> {
+  if (busy) return;
+  busy = true;
+  showSource({ ...pill, status: 'ready', error: '' });
+  setProgress(`Gra: ${pill.title}`);
+  try {
+    await options.play(`Pigułka: ${pill.title}`, pill.parts);
+  } catch (error) {
+    setProgress((error as Error).message, true);
+  } finally {
+    busy = false;
+  }
 }
 
 function setProgress(text: string, isError = false): void {
@@ -135,6 +182,7 @@ async function handleSubmit(): Promise<void> {
   try {
     const finished = await runJob(url);
     showSource(finished);
+    void refreshSavedPills();
     setProgress(`Gotowe: ${finished.title}`);
     button.disabled = false;
     setButton(true);

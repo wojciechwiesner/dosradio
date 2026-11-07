@@ -37,6 +37,12 @@ CREATE TABLE IF NOT EXISTS trials (
     key TEXT PRIMARY KEY,          -- 'ip:<hash>' or 'anon:<id>'
     started_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS user_pills (
+    user_id INTEGER NOT NULL,
+    video_id TEXT NOT NULL,
+    added_at REAL NOT NULL,
+    PRIMARY KEY (user_id, video_id)
+);
 CREATE TABLE IF NOT EXISTS aired_items (
     user_id INTEGER NOT NULL REFERENCES users(id),
     day TEXT NOT NULL,
@@ -169,6 +175,24 @@ class Database:
             "rss_feeds": json.loads(row["rss_feeds"]),
             "updated_at": float(row["updated_at"]),
         }
+
+    # --- YouTube pills saved on the account (Plus) -----------------------------
+    def save_user_pill(self, user_id: int, video_id: str) -> None:
+        """Remember a finished pill on the listener's account (re-adding just refreshes the date)."""
+        with self.connect() as conn:
+            conn.execute(
+                "INSERT INTO user_pills (user_id, video_id, added_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(user_id, video_id) DO UPDATE SET added_at=excluded.added_at",
+                (user_id, video_id, time.time()),
+            )
+
+    def user_pill_ids(self, user_id: int, limit: int = 20) -> list[str]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT video_id FROM user_pills WHERE user_id = ? ORDER BY added_at DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+        return [row["video_id"] for row in rows]
 
     def all_news_preferences(self) -> list[tuple[int, dict]]:
         """Every stored preference row (for the hourly personalized digest cycle)."""

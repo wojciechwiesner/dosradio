@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Moje pigułki**: every YouTube pill a Plus listener makes is saved on the account
+  (`user_pills` table) and listed under the pill form with one-tap replay;
+  `GET /radio-api/plus/pills` returns them newest first.
+
 ### Changed
 - **News frequency: any minute from 1 to 60** — settings slider with a live label
   ("Co minutę", "Co 3 minuty", "Co 25 minut", "Co godzinę"); onboarding quick picks 1/3/5/10/15/30/60.

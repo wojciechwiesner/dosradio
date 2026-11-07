@@ -19,7 +19,7 @@ from .news import NewsService
 from .personal_news import PersonalNews, PreferenceError, validate_preferences
 from .pill_service import PillService
 from .podcast import PodcastService
-from .youtube_pill import PillError
+from .youtube_pill import PillError, extract_video_id
 
 log = logging.getLogger("dosradio.plus")
 PLUS_MESSAGE = "Ta funkcja jest częścią DOS Radio Plus."
@@ -92,23 +92,37 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
     def pill_view(job: dict) -> dict:
         return {key: job[key] for key in ("id", "status", "title", "author", "source_url", "parts", "error")}
 
+    @router.get("/pills")
+    def my_pills(request: Request) -> dict:
+        """Pills saved on the caller's account, newest first (only ones still on disk)."""
+        user_id = require_plus(request)
+        saved = (pills.load_manifest(video_id) for video_id in db.user_pill_ids(user_id))
+        return {"pills": [{key: m[key] for key in ("id", "title", "author", "source_url", "parts")}
+                          for m in saved if m]}
+
     @router.post("/pill")
     async def create_pill(body: PillRequest, request: Request, background: BackgroundTasks) -> dict:
-        require_plus(request)
+        user_id = require_plus(request)
         try:
             job = pills.submit(body.url)
         except PillError as error:
             raise HTTPException(422, str(error)) from error
+        video_id = extract_video_id(body.url)
+        if video_id:  # channel links resolve later; those are saved when the listener polls them
+            db.save_user_pill(user_id, video_id)
         if job["status"] == "queued":
             background.add_task(pills.process, job["id"])
         return {"id": job["id"], "status": job["status"]}
 
     @router.get("/pill/{pill_id}")
     def get_pill(pill_id: str, request: Request) -> dict:
-        require_plus(request)
+        user_id = require_plus(request)
         job = pills.get(pill_id)
         if job is None:
             raise HTTPException(404, "Nie ma takiej pigułki.")
+        video_id = extract_video_id(job["source_url"])  # channel jobs know their episode once metadata is in
+        if job["status"] == "ready" and video_id:
+            db.save_user_pill(user_id, video_id)
         return pill_view(job)
 
     @router.get("/pill/{video_id}/{file_name}")

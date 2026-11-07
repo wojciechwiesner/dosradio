@@ -235,3 +235,17 @@ def test_pill_survives_failed_bumpers(pill_env, monkeypatch):
     pill = client.get(f"/radio-api/plus/pill/{pill_id}").json()
     assert pill["status"] == "ready"
     assert [part["kind"] for part in pill["parts"]] == ["voice", "clip", "voice", "clip"]
+
+
+def test_finished_pill_is_saved_on_the_account(pill_env):
+    client, _, _ = pill_env
+    assert client.get("/radio-api/plus/pills").json() == {"pills": []}
+    pill_id = client.post("/radio-api/plus/pill", json={"url": WATCH_URL}).json()["id"]
+    assert client.get(f"/radio-api/plus/pill/{pill_id}").json()["status"] == "ready"
+    saved = client.get("/radio-api/plus/pills").json()["pills"]
+    assert [p["id"] for p in saved] == [VIDEO_ID]
+    assert saved[0]["title"] == "Sen i produktywność" and saved[0]["parts"]
+
+
+def test_my_pills_is_plus_only(client):
+    assert client.get("/radio-api/plus/pills").status_code in (401, 402)
