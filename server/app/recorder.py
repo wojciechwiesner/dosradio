@@ -10,18 +10,22 @@ import asyncio
 import base64
 import json
 import logging
+import random
 import subprocess
-import time
 from pathlib import Path
 
 import websockets
 
 from .archive import ArchiveRegistry, TARGET_SEGMENT_SECONDS
+from .tone_clean import tone_notch_chain
 
 log = logging.getLogger("dosradio.recorder")
 LYRIA_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic?key="
 BYTES_PER_SECOND = 48000 * 2 * 2  # 48kHz, 16-bit, stereo = 192,000 bytes/sec
 TARGET_CHUNK_BYTES = int(TARGET_SEGMENT_SECONDS * BYTES_PER_SECOND)
+SEGMENTS_PER_SESSION = 2  # Lyria drifts into a steady whine after roughly a minute
+BASE_TEMPERATURE = 1.0
+TEMPERATURE_JITTER = 0.05
 
 # Prompt dictionary matching src/radio/stations.ts (14 stations)
 STATION_SPECS: dict[str, dict] = {
@@ -85,12 +89,21 @@ STATION_SPECS: dict[str, dict] = {
 }
 
 
+def session_temperature() -> float:
+    return round(BASE_TEMPERATURE + random.uniform(-TEMPERATURE_JITTER, TEMPERATURE_JITTER), 3)
+
+
 def encode_pcm_to_opus(pcm_bytes: bytes, rate: int = 48000, channels: int = 2, bitrate: str = "96k") -> bytes:
-    """Encode raw interleaved PCM (s16le) to OGG/Opus using ffmpeg."""
+    """Encode raw interleaved PCM (s16le) to OGG/Opus using ffmpeg, notching steady tones first."""
+    notches = tone_notch_chain(pcm_bytes, channels, rate)
     cmd = [
         "ffmpeg", "-hide_banner", "-loglevel", "error",
         "-f", "s16le", "-ar", str(rate), "-ac", str(channels),
         "-i", "pipe:0",
+    ]
+    if notches:
+        cmd += ["-af", notches]
+    cmd += [
         "-c:a", "libopus", "-b:a", bitrate, "-vbr", "on",
         "-f", "ogg", "pipe:1",
     ]
@@ -127,14 +140,13 @@ class StationRecorder:
             spec = STATION_SPECS[station_id]
             log.info("Recording station %s (prompt: %s...)", station_id, spec["prompt"][:40])
             try:
-                # Record 10 segments (~5 minutes) per session, then rotate
-                await self.record_session(station_id, spec, num_segments=10)
+                await self.record_session(station_id, spec)
             except Exception as error:
                 log.warning("Recorder session for %s failed: %s; backing off 10s", station_id, error)
                 await asyncio.sleep(10)
             await asyncio.sleep(2)
 
-    async def record_session(self, station_id: str, spec: dict, num_segments: int = 10) -> None:
+    async def record_session(self, station_id: str, spec: dict, num_segments: int = SEGMENTS_PER_SESSION) -> None:
         arch = self.archives.get(station_id)
         url = LYRIA_URL + self.api_key
         async with websockets.connect(url, max_size=None, open_timeout=20) as ws:
@@ -148,7 +160,7 @@ class StationRecorder:
                 "density": spec["density"],
                 "brightness": spec["brightness"],
                 "guidance": 4.0,
-                "temperature": 1.0,
+                "temperature": session_temperature(),
             }}))
             await ws.send(json.dumps({"playbackControl": "PLAY"}))
 

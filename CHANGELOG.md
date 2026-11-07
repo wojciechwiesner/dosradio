@@ -8,11 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Archive cleanup**: `server/scripts/clean_archive.py --station <id> --dry-run|--apply|--purge-originals`
+  finds steady Lyria tones in archived segments and rewrites them with notch filters; originals stay in
+  `<station>/originals/` until purged.
+- **Fresh stream start**: `stream.ogg?seek=fresh` opens a private stream that starts at a Lyria session start.
 - **Moje pigułki**: every YouTube pill a Plus listener makes is saved on the account
   (`user_pills` table) and listed under the pill form with one-tap replay;
   `GET /radio-api/plus/pills` returns them newest first.
 
 ### Changed
+- **Lyria whine no longer baked into the archive**: recorder sessions capture 2 segments (~60 s) instead of 10,
+  with the temperature jittered per session; every segment is notched on steady tones
+  (up to 4 filters, -36 dB) before Opus encoding. Adds `numpy` to the server requirements.
 - **News frequency: any minute from 1 to 60** — settings slider with a live label
   ("Co minutę", "Co 3 minuty", "Co 25 minut", "Co godzinę"); onboarding quick picks 1/3/5/10/15/30/60.
   Stored values are rounded and clamped, old ones stay valid.
