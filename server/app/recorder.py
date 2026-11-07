@@ -90,7 +90,10 @@ STATION_SPECS: dict[str, dict] = {
 
 
 def session_temperature() -> float:
-    return round(BASE_TEMPERATURE + random.uniform(-TEMPERATURE_JITTER, TEMPERATURE_JITTER), 3)
+    """Slightly different temperature per Lyria session, so consecutive sessions do not sound cloned."""
+    jitter = round(random.uniform(-TEMPERATURE_JITTER, TEMPERATURE_JITTER), 3)
+    jitter = max(-TEMPERATURE_JITTER, min(TEMPERATURE_JITTER, jitter))  # rounding must not leave the band
+    return BASE_TEMPERATURE + jitter
 
 
 def encode_pcm_to_opus(pcm_bytes: bytes, rate: int = 48000, channels: int = 2, bitrate: str = "96k") -> bytes:
