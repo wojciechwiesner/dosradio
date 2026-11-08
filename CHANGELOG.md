@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Pigułki hurtem (Plus)**: "Wklej wiele linków naraz" under the YouTube pill form. `POST /radio-api/plus/pills/batch {"text"}`
+  takes up to 20 links in any pasted block (new lines, commas, or glued together), skips duplicates by video id,
+  reports each link as queued/ready/duplicate/error and saves every accepted episode to "Moje pigułki".
+  Triggered by Insight: 123 YouTube links were copied one by one on 2026-11-07.
 - **Archive cleanup**: `server/scripts/clean_archive.py --station <id> --dry-run|--apply|--purge-originals`
   finds steady Lyria tones in archived segments and rewrites them with notch filters; originals stay in
   `<station>/originals/` until purged.
@@ -39,6 +43,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   never turns the radio into non-stop talking.
 
 ### Fixed
+- **Pill form inputs**: the YouTube link input was unstyled (white system field on the dark theme).
 - **RSS feeds as a news source**: a feed saved in the Plus panel can now be picked as the
   "Moje źródła" news topic (chip in settings and onboarding, Plus only) and the radio reads it
   in regular breaks via `/radio-api/news?cats=mine`. Keywords now rank feed stories instead of

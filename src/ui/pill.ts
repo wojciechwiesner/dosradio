@@ -9,6 +9,7 @@ import type { PillQueue } from '../radio/pillQueue';
 const POLL_INTERVAL_MS = 3000;
 const MAX_POLLS = 400; // 20 minutes
 const MAX_URL_LENGTH = 300;
+const MAX_BATCH_LINKS = 20; // keep in sync with server/app/plus_api.py
 
 const PILL_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="8" rx="4" transform="rotate(-35 12 12)"/><path d="m9.5 7.5 7 9"/></svg>';
 const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
@@ -94,6 +95,16 @@ async function pillRequest<T>(path: string, init?: RequestInit): Promise<T> {
 const startPill = (url: string) => pillRequest<{ id: string; status: PillStatus }>('/radio-api/plus/pill', {
   method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ url }),
 });
+export interface BatchResult {
+  url: string;
+  video_id: string | null;
+  status: PillStatus | 'duplicate';
+  id?: string;
+  error?: string;
+}
+const startPillBatch = (text: string) => pillRequest<{ results: BatchResult[] }>('/radio-api/plus/pills/batch', {
+  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }),
+});
 const readPill = (id: string) => pillRequest<PillState>(`/radio-api/plus/pill/${encodeURIComponent(id)}`);
 type SavedPill = Pick<PillState, 'id' | 'title' | 'author' | 'source_url' | 'parts'>;
 const listMyPills = () => pillRequest<{ pills: SavedPill[] }>('/radio-api/plus/pills');
@@ -115,6 +126,14 @@ export function initPill(events: PillOptions): void {
     </label>
     <p class="pill-hint">Wybieramy najważniejsze 20% odcinka i puszczamy je jako krótkie bloki, każdy z jednozdaniowym wstępem prowadzącej. Kanał oznacza jego najnowszy odcinek (do 3 godzin).</p>
     <button type="submit" class="btn" id="pillBtn">${PILL_SVG} Zrób pigułkę</button>
+    <details class="pill-batch">
+      <summary>Wklej wiele linków naraz</summary>
+      <label class="plus-field" for="pillBatchText">Linki do odcinków, każdy w nowej linii (maksymalnie ${MAX_BATCH_LINKS})
+        <textarea id="pillBatchText" rows="5" maxlength="40000" placeholder="https://youtu.be/...&#10;https://youtu.be/..."></textarea>
+      </label>
+      <button type="button" class="btn pill-batch-btn" id="pillBatchBtn">${PILL_SVG} Zrób pigułki</button>
+      <p class="pill-hint" id="pillBatchSummary" role="status"></p>
+    </details>
     <div class="pill-progress" id="pillProgress" role="status"></div>
     <div class="pill-source" id="pillSource"></div>
     <h4 class="pill-saved-head" hidden>Moje pigułki</h4>
@@ -126,7 +145,56 @@ export function initPill(events: PillOptions): void {
   source = form.querySelector<HTMLElement>('#pillSource')!;
   savedList = form.querySelector<HTMLElement>('#pillSaved')!;
   form.addEventListener('submit', (event) => { event.preventDefault(); void handleSubmit(); });
+  const batchText = form.querySelector<HTMLTextAreaElement>('#pillBatchText')!;
+  const batchButton = form.querySelector<HTMLButtonElement>('#pillBatchBtn')!;
+  const batchSummary = form.querySelector<HTMLElement>('#pillBatchSummary')!;
+  batchButton.addEventListener('click', () => void handleBatch(batchText, batchButton, batchSummary));
   void refreshSavedPills();
+}
+
+/** One-line Polish summary of a batch, e.g. "Dodano 3, pominięto duplikaty: 1, błędy: 1 (...)". */
+export function summarizeBatch(results: BatchResult[]): string {
+  const accepted = results.filter((r) => r.status !== 'duplicate' && r.status !== 'error').length;
+  const duplicates = results.filter((r) => r.status === 'duplicate').length;
+  const failed = results.filter((r) => r.status === 'error');
+  const parts = [`Dodano ${accepted}`];
+  if (duplicates) parts.push(`pominięto duplikaty: ${duplicates}`);
+  if (failed.length) parts.push(`błędy: ${failed.length} (${failed.map((r) => r.url).join(', ')})`);
+  return `${parts.join(', ')}. Pigułki robią się po kolei i trafią do listy Moje pigułki.`;
+}
+
+async function handleBatch(text: HTMLTextAreaElement, trigger: HTMLButtonElement, summary: HTMLElement): Promise<void> {
+  if (!text.value.trim()) {
+    summary.textContent = 'Wklej przynajmniej jeden link.';
+    return;
+  }
+  trigger.disabled = true;
+  summary.textContent = 'Wysyłam linki...';
+  try {
+    const { results } = await startPillBatch(text.value);
+    summary.textContent = summarizeBatch(results);
+    text.value = '';
+    void watchBatch(results.filter((r) => r.id).map((r) => r.id!));
+  } catch (error) {
+    summary.textContent = (error as Error).message;
+  } finally {
+    trigger.disabled = false;
+  }
+}
+
+/** Refreshes "Moje pigułki" while the batch is being processed, without blocking the single-link form. */
+async function watchBatch(ids: string[]): Promise<void> {
+  const pending = new Set(ids);
+  for (let poll = 0; poll < MAX_POLLS && pending.size; poll++) {
+    await wait(POLL_INTERVAL_MS * 3);
+    for (const id of [...pending]) {
+      const state = await readPill(id).catch(() => null);
+      if (!state || state.status === 'ready' || state.status === 'error') {
+        pending.delete(id);
+        if (state?.status === 'ready') void refreshSavedPills();
+      }
+    }
+  }
 }
 
 /** "Moje pigułki": every pill made on this account, newest first, one tap to play again. */

@@ -23,3 +23,14 @@
   background: transparent; color: inherit; display: grid; place-items: center; cursor: pointer; }
 .in-programme-remove svg { width: 12px; height: 12px; }
 .in-programme-remove:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pill-batch { display: grid; gap: 10px; }
+.pill-batch[open] summary { margin-bottom: 4px; }
+.pill-batch summary { cursor: pointer; font-size: 13px; }
+.pill-box input[type='url'], .pill-box input[type='text'], .pill-batch textarea {
+  width: 100%; box-sizing: border-box; background: var(--bg); color: var(--text);
+  border: 1px solid var(--line); border-radius: 10px; padding: 11px 12px; font: inherit;
+}
+.pill-batch textarea { resize: vertical; }
+.pill-box input:focus, .pill-batch textarea:focus { outline: none; border-color: var(--accent); }
+.pill-batch .btn { width: 100%; justify-content: center; }
+.pill-batch label textarea { margin-top: 6px; }

@@ -249,3 +249,48 @@ def test_finished_pill_is_saved_on_the_account(pill_env):
 
 def test_my_pills_is_plus_only(client):
     assert client.get("/radio-api/plus/pills").status_code in (401, 402)
+
+
+# --- batch: paste many links at once (Insight 2026-11-07: 123 links copied one by one) ---
+def test_pill_batch_queues_many_links_skips_duplicates_and_reports_each(pill_env):
+    client, _, _ = pill_env
+    text = f"""
+    https://youtu.be/{VIDEO_ID}
+    https://www.youtube.com/watch?v={VIDEO_ID}&t=30
+    https://youtu.be/abcdefghijk  https://evil.example/x
+    nie-link
+    """
+    response = client.post("/radio-api/plus/pills/batch", json={"text": text})
+    assert response.status_code == 200, response.text
+    results = response.json()["results"]
+    statuses = [r["status"] if r["status"] in ("duplicate", "error") else "accepted" for r in results]
+    assert statuses == ["accepted", "duplicate", "accepted", "error"]
+    assert all(r["status"] in ("queued", "ready") for r in (results[0], results[2]))
+    assert results[1]["video_id"] == VIDEO_ID
+    assert results[3]["url"] == "https://evil.example/x" and results[3]["error"]
+    assert {r["video_id"] for r in results[:3]} == {VIDEO_ID, "abcdefghijk"}
+    # Every accepted direct link is saved on the account like a single pill.
+    from app.main import db
+    user = db.find_user_by_email("ola@example.com")
+    assert set(db.user_pill_ids(int(user["id"]))) == {VIDEO_ID, "abcdefghijk"}
+
+
+def test_pill_batch_limits_and_empty_input(pill_env):
+    client, _, _ = pill_env
+    assert client.post("/radio-api/plus/pills/batch", json={"text": "bez linkow"}).status_code == 422
+    too_many = "\n".join(f"https://youtu.be/{i:011d}" for i in range(21))
+    assert client.post("/radio-api/plus/pills/batch", json={"text": too_many}).status_code == 422
+
+
+def test_pill_batch_is_plus_only(client):
+    assert client.post("/radio-api/plus/pills/batch", json={"text": "https://youtu.be/dQw4w9WgXcQ"}).status_code == 402
+
+
+def test_split_links_handles_glued_and_punctuated_links():
+    from app.plus_api import split_links
+    glued = "https://youtu.be/aaaaaaaaaaahttps://www.youtube.com/watch?v=bbbbbbbbbbb,https://x.example/y."
+    assert split_links(glued) == [
+        "https://youtu.be/aaaaaaaaaaa",
+        "https://www.youtube.com/watch?v=bbbbbbbbbbb",
+        "https://x.example/y",
+    ]
