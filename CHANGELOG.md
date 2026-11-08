@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Odbiornik (gałąź feat/kasprzak-receiver)**: the player is a 60s-70s Polish table radio (Kasprzak/Diora): walnut
+  cabinet, cloth grille, black glass scale with UKF numbers, station names on four bands (Fokus, Energia, Chill, Noc) and a red
+  pointer, magic eye driven by the live signal level, ivory piano keys, bakelite volume and tuning knobs (native ranges,
+  keyboard and touch work). Mobile turns the scale into tappable chips. Replaces the level bars. CSS/SVG only, no images.
 - **Pigułki hurtem (Plus)**: "Wklej wiele linków naraz" under the YouTube pill form. `POST /radio-api/plus/pills/batch {"text"}`
   takes up to 20 links in any pasted block (new lines, commas, or glued together), skips duplicates by video id,
   reports each link as queued/ready/duplicate/error and saves every accepted episode to "Moje pigułki".

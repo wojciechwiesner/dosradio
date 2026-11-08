@@ -1,0 +1,302 @@
+/* Receiver: walnut cabinet, cloth grille, black glass scale with printed UKF numbers and station
+   names, one red pointer across all bands, magic eye, ivory piano keys, bakelite knobs.
+   Reference: Polish table radios of the 60s-70s (ZRK Kasprzak, Diora, Unitra). The one loud
+   element on the page; everything around it stays in the quiet dark theme. */
+.receiver {
+  min-width: 0;
+  --walnut-light: #7a4e30;
+  --walnut: #57361f;
+  --walnut-dark: #3a2414;
+  --brass: #b39257;
+  --brass-light: #dcc28c;
+  --ivory: #ece2c9;
+  --ivory-shade: #d3c5a3;
+  --glass: #14110d;
+  --print: #e8dcc0;
+  --print-dim: #a89a7f;
+  --scale-red: #d8382a;
+  --eye-green: #46dc87;
+  --name-w: 64px;
+  background: none;
+  border: 0;
+  padding: 0;
+  overflow: visible;
+}
+.receiver::after { content: none; } /* the old player's glow would spill outside without overflow: hidden */
+
+.cabinet {
+  display: grid;
+  grid-template-columns: 19% 1fr;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 10px;
+  background:
+    linear-gradient(97deg, rgba(0, 0, 0, 0.12), transparent 18%, rgba(255, 210, 160, 0.06) 46%, transparent 64%, rgba(0, 0, 0, 0.14)),
+    linear-gradient(180deg, var(--walnut-light), var(--walnut) 50%, var(--walnut-dark));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 220, 180, 0.25),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.35),
+    0 22px 44px rgba(0, 0, 0, 0.5);
+}
+
+/* speaker cloth: soft woven pattern, no frame, small brass maker's badge */
+.grille {
+  position: relative;
+  border-radius: 6px;
+  background:
+    repeating-linear-gradient(45deg, rgba(0, 0, 0, 0.16) 0 1px, transparent 1px 4px),
+    repeating-linear-gradient(-45deg, rgba(255, 240, 210, 0.07) 0 1px, transparent 1px 4px),
+    linear-gradient(180deg, #8f7a5b, #6c5b42);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.4), inset 0 0 22px rgba(0, 0, 0, 0.5);
+  min-height: 110px;
+}
+.grille .badge {
+  position: absolute;
+  left: 50%;
+  top: 16px;
+  transform: translateX(-50%);
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--brass-light);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.7);
+}
+
+.face {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 6px;
+  background: linear-gradient(180deg, #2a2119, #1c1610);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* black glass scale, lit warm from behind when the radio is on */
+.dial {
+  position: relative;
+  padding: 8px 12px 10px;
+  border-radius: 4px;
+  border: 2px solid var(--brass);
+  background: var(--glass);
+  color: var(--print);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.9);
+  transition: box-shadow 0.6s, background 0.6s;
+}
+.receiver.on .dial {
+  background: radial-gradient(120% 140% at 50% 50%, #2c2112, var(--glass) 75%);
+  box-shadow: inset 0 0 18px rgba(0, 0, 0, 0.6), 0 0 22px rgba(255, 170, 70, 0.18);
+}
+.dial-numbers {
+  position: relative;
+  overflow: hidden;
+  height: 17px;
+  margin-left: var(--name-w);
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  color: #c4b595;
+}
+.dial-numbers span { position: absolute; left: calc(var(--x) * 100%); transform: translateX(-50%); }
+.dial-numbers span:first-child { transform: none; }
+.dial-numbers span:last-child { transform: translateX(-100%); }
+
+.dial-scale { position: relative; isolation: isolate; }
+.band { display: flex; align-items: stretch; border-top: 1px solid rgba(232, 220, 192, 0.18); }
+.band-name {
+  flex: none;
+  width: var(--name-w);
+  padding-top: 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--scale-red);
+}
+.band-track {
+  position: relative;
+  flex: 1;
+  height: 36px;
+  background: repeating-linear-gradient(90deg, rgba(232, 220, 192, 0.35) 0 1px, transparent 1px 10%) top / 100% 4px no-repeat;
+}
+/* labels alternate between two lines, as on printed scales, so long names never collide */
+.dial-station {
+  position: absolute;
+  top: 5px;
+  left: calc(var(--x) * 100%);
+  transform: translateX(-50%);
+  padding: 0 3px;
+  border: 0;
+  border-radius: 2px;
+  z-index: 1;
+  background: var(--glass);
+  color: var(--print);
+  font-family: 'Arial Narrow', 'Roboto Condensed', 'Helvetica Neue', sans-serif;
+  font-stretch: condensed;
+  font-size: 12px;
+  line-height: 15px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dial-station:nth-child(even) { top: 19px; }
+.dial-station:hover { color: #fff; }
+.dial-station.active { color: #ffd27a; font-weight: 700; }
+.dial-station:focus-visible { outline: 1px solid var(--brass-light); }
+
+.needle {
+  position: absolute;
+  top: -20px;
+  bottom: 0;
+  left: calc(var(--name-w) + var(--x, 0.5) * (100% - var(--name-w)));
+  width: 2px;
+  margin-left: -1px;
+  background: var(--scale-red);
+  box-shadow: 0 0 5px rgba(216, 56, 42, 0.8);
+  pointer-events: none;
+  z-index: 0;
+  transition: left 0.7s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+.needle.parked { left: calc(100% - 2px); opacity: 0.4; }
+
+/* name plate under the glass: what is playing + magic eye */
+.plate { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 2px 4px; }
+.receiver .now-station { color: var(--ivory); font-size: 26px; margin: 0; line-height: 1.15; }
+.receiver .now-tagline { color: #c9b896; font-size: 13.5px; }
+.receiver .clock-row { color: #a8987a; margin-top: 6px; font-size: 13px; }
+.receiver .clock { color: var(--ivory); }
+
+/* magic eye (EM84-style tuning indicator): the dark wedge closes as the signal grows */
+.eye {
+  --gap: calc(10deg + (1 - var(--level, 0)) * 70deg);
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 4px solid #0d0a07;
+  box-shadow: 0 0 0 2px var(--brass);
+  background:
+    radial-gradient(circle, #050a06 0 22%, transparent 23%),
+    conic-gradient(from calc(var(--gap) * -1), #06110a 0deg calc(var(--gap) * 2), #2fbf6c calc(var(--gap) * 2), var(--eye-green) 40%, #b6ffd6 50%, var(--eye-green) 60%, #2fbf6c);
+  filter: brightness(0.55) saturate(0.6);
+  transition: filter 0.6s;
+}
+.receiver.on .eye { filter: none; box-shadow: 0 0 0 2px var(--brass), 0 0 14px rgba(70, 220, 135, 0.4); }
+
+/* deck: piano keys + knobs */
+.deck { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 0 4px; }
+.keys { display: flex; align-items: flex-start; }
+.key {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 92px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid #8a7a5f;
+  border-left-width: 0;
+  border-radius: 0 0 4px 4px;
+  background: linear-gradient(180deg, #f3ead5, var(--ivory-shade));
+  color: #3a2e22;
+  font-size: 12.5px;
+  font-weight: 650;
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.12), 0 4px 0 #5e4f39, 0 6px 8px rgba(0, 0, 0, 0.45);
+  transition: transform 0.08s, box-shadow 0.08s, background 0.08s;
+}
+.key:first-child { border-left-width: 1px; }
+.key[hidden] { display: none; }
+.key:active,
+.key.active {
+  transform: translateY(4px);
+  box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.28), 0 0 0 #5e4f39;
+  background: linear-gradient(180deg, #cdbd98, #e0d2b1);
+}
+.key:disabled { cursor: not-allowed; color: #94866d; }
+.key:focus-visible { outline: 2px solid var(--brass-light); outline-offset: 2px; position: relative; z-index: 1; }
+.receiver .key.play {
+  min-width: 64px;
+  width: 64px;
+  height: 44px;
+  border-radius: 0 0 4px 4px;
+  color: #a3271c;
+  background: linear-gradient(180deg, #f3ead5, var(--ivory-shade));
+}
+.receiver .key.play svg { width: 20px; height: 20px; }
+.receiver .key.play:hover { transform: none; }
+.receiver.on .key.play {
+  transform: translateY(4px);
+  box-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.28), 0 0 0 #5e4f39;
+  background: linear-gradient(180deg, #cdbd98, #e0d2b1);
+}
+
+.knobs { display: flex; gap: 20px; }
+.knob { position: relative; display: grid; justify-items: center; gap: 6px; }
+.knob-cap {
+  --turn: -135deg;
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, #4a3a2e 0, #241a13 55%, #140e0a 100%);
+  box-shadow:
+    0 0 0 2px #0d0906,
+    0 0 0 3px rgba(179, 146, 87, 0.7),
+    0 6px 10px rgba(0, 0, 0, 0.6),
+    inset 0 2px 2px rgba(255, 255, 255, 0.1);
+  transform: rotate(var(--turn));
+  transition: transform 0.2s;
+}
+.knob-cap::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: 50%;
+  width: 3px;
+  height: 12px;
+  margin-left: -1.5px;
+  border-radius: 2px;
+  background: var(--ivory);
+}
+/* the native range stays on top of the cap: drag, touch and keyboard work as usual */
+.knob input {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 72px;
+  height: 48px;
+  margin: 0 0 0 -36px;
+  opacity: 0;
+  cursor: ew-resize;
+}
+.knob:has(input:focus-visible) .knob-cap { outline: 2px solid var(--brass-light); outline-offset: 4px; }
+.knob-name { font-size: 11.5px; color: #c9b896; }
+
+.receiver .status { margin-top: 14px; }
+
+@media (max-width: 860px) {
+  .cabinet { grid-template-columns: 1fr; }
+  .grille { min-height: 30px; }
+  .grille .badge { top: 50%; transform: translate(-50%, -50%); }
+}
+@media (max-width: 560px) {
+  .receiver { --name-w: 0px; }
+  .cabinet { padding: 10px; }
+  .face { padding: 10px; }
+  .dial-numbers { display: none; }
+  .band { flex-direction: column; }
+  .band-name { width: auto; padding-top: 4px; }
+  .band-track { height: auto; display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 0 8px; background: none; }
+  .dial-station, .dial-station:nth-child(even) {
+    position: static; transform: none; font-size: 13px; line-height: 1.2;
+    min-height: 34px; padding: 6px 10px; border: 1px solid rgba(232, 220, 192, 0.22); border-radius: 4px;
+  }
+  .dial-station.active { border-color: #ffd27a; }
+  .needle { display: none; }
+  .receiver .now-station { font-size: 22px; }
+  .deck { justify-content: center; }
+  .key { min-width: 0; padding: 0 10px; font-size: 12px; }
+}
+
+/* the news card next to the radio stretches to the cabinet height instead of ending halfway */
+.hero:has(.receiver) { align-items: stretch; }
+.hero:has(.receiver) .onair { align-self: start; height: calc(100% - 64px); box-sizing: border-box; }
+@media (max-width: 860px) {
+  .hero:has(.receiver) .onair { height: auto; }
+}
