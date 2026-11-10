@@ -49,68 +49,39 @@
     </header>
 
     <section class="hero">
-      <div class="card player receiver" id="receiver">
-        <div class="cabinet">
-          <div class="grille" aria-hidden="true"><span class="badge">DOS</span></div>
-          <div class="face">
-            <div class="dial" role="group" aria-label="Skala stacji">
-              <div class="dial-numbers" aria-hidden="true"></div>
-              <div class="dial-scale">
-                <div class="dial-bands"></div>
-                <div class="needle" aria-hidden="true"></div>
-              </div>
-            </div>
-            <div class="plate">
-              <div class="plate-text">
-                <div class="now-station" id="nowStation">DOS Groove</div>
-                <div class="now-tagline" id="nowTagline">Minimal deep tech do pracy</div>
-                <div class="clock-row">
-                  <span class="clock" id="clock">--:--</span>
-                  <span>Następne wejście prowadzącego: <b id="nextBreak">-</b></span>
-                </div>
-              </div>
-              <div class="eye" title="Poziom sygnału" aria-hidden="true"></div>
-            </div>
-            <div class="deck">
-              <div class="keys">
-                <button class="key play" id="play" aria-label="Graj">
-                  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-                </button>
-                <button class="key mode-toggle" id="hostModeBtn" title="Przełącz: Z prowadzącym / Tylko muzyka">
-                  <span id="hostModeLabel">Z prowadzącym</span>
-                </button>
-                <button class="key" id="newsNow" disabled title="Dostępne, gdy radio gra">
-                  Wiadomości teraz
-                </button>
-              </div>
-              <div class="knobs">
-                <label class="knob knob-volume">
-                  <span class="knob-cap" aria-hidden="true"></span>
-                  <input type="range" id="volume" min="0" max="1" step="0.01" value="0.9" aria-label="Głośność muzyki" />
-                  <span class="knob-name">Muzyka</span>
-                </label>
-                <label class="knob knob-voice">
-                  <span class="knob-cap" aria-hidden="true"></span>
-                  <input type="range" id="voiceVolume" min="0" max="1" step="0.01" value="0.9" aria-label="Głośność prowadzącego i wiadomości" />
-                  <span class="knob-name">Prowadzący</span>
-                </label>
-                <label class="knob knob-duck">
-                  <span class="knob-cap" aria-hidden="true"></span>
-                  <input type="range" id="duckLevel" min="0" max="1" step="0.01" value="0.34" aria-label="Głośność muzyki pod wiadomościami" />
-                  <span class="knob-name">Muzyka pod wiadomościami</span>
-                </label>
-                <label class="knob knob-tune">
-                  <span class="knob-cap" aria-hidden="true"></span>
-                  <input type="range" id="tune" min="0" max="13" step="1" value="0" />
-                  <span class="knob-name">Strojenie</span>
-                </label>
-              </div>
-            </div>
+      <div class="card player">
+        <div>
+          <div class="eyebrow">Teraz gra</div>
+          <div class="now-station" id="nowStation">DOS Groove</div>
+          <div class="now-tagline" id="nowTagline">Minimal deep tech do pracy</div>
+          <div class="clock-row">
+            <span class="clock" id="clock">--:--</span>
+            <span>Następne wejście prowadzącego: <b id="nextBreak">-</b></span>
           </div>
         </div>
-        <div class="status" id="status">Kliknij Graj. Pierwsza godzina za darmo, bez konta.</div>
-        <div class="upcoming" id="upcoming" aria-live="off"></div>
-        <div class="in-programme" id="inProgramme" aria-live="polite" hidden></div>
+        <div class="bars" id="bars" aria-hidden="true"></div>
+        <div>
+          <div class="controls">
+            <button class="play" id="play" aria-label="Graj">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            </button>
+            <button class="btn mode-toggle" id="hostModeBtn" title="Przełącz: Z prowadzącym / Tylko muzyka">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+              <span id="hostModeLabel">Z prowadzącym</span>
+            </button>
+            <button class="btn" id="newsNow" disabled title="Dostępne, gdy radio gra">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+              Wiadomości teraz
+            </button>
+            <label class="volume" title="Głośność">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
+              <input type="range" id="volume" min="0" max="1" step="0.01" value="0.9" />
+            </label>
+          </div>
+          <div class="status" id="status">Kliknij Graj. Pierwsza godzina za darmo, bez konta.</div>
+          <div class="upcoming" id="upcoming" aria-live="off"></div>
+          <div class="in-programme" id="inProgramme" aria-live="polite" hidden></div>
+        </div>
       </div>
 
       <aside class="card onair">

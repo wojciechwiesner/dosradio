@@ -34,3 +34,8 @@
 .pill-box input:focus, .pill-batch textarea:focus { outline: none; border-color: var(--accent); }
 .pill-batch .btn { width: 100%; justify-content: center; }
 .pill-batch label textarea { margin-top: 6px; }
+
+.in-programme-jump { width: 58px; height: 28px; border-radius: 6px; border: 1px solid currentColor;
+  background: transparent; color: inherit; text-align: center; font: inherit; }
+.in-programme-jump-go { height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid currentColor;
+  background: transparent; color: inherit; font: inherit; cursor: pointer; white-space: nowrap; }

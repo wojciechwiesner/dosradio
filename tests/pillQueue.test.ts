@@ -77,6 +77,29 @@ describe('PillQueue', () => {
     expect(reloaded.peekUnit()?.map((p) => p.kind)).toEqual(['voice', 'clip']);
   });
 
+  it('jumps back to a part number the listener stopped at', () => {
+    const queue = new PillQueue(memoryStorage());
+    queue.enqueue({ id: 'a', title: 'A', parts: PARTS });
+    queue.commitUnit();
+    queue.commitUnit();
+    queue.commitUnit();
+    expect(queue.progress()[0].done).toBe(5);
+
+    expect(queue.jumpTo('a', 4)).toBe(true);
+    expect(queue.progress()[0]).toEqual({ pillId: 'a', title: 'A', done: 3, total: 6 });
+    expect(queue.peekUnit()?.map((p) => p.url.split('/').pop())).toEqual(['v2', 'c2']);
+  });
+
+  it('refuses a part number the pill does not have', () => {
+    const queue = new PillQueue(memoryStorage());
+    queue.enqueue({ id: 'a', title: 'A', parts: PARTS });
+    expect(queue.jumpTo('a', 0)).toBe(false);
+    expect(queue.jumpTo('a', 7)).toBe(false);
+    expect(queue.jumpTo('missing', 1)).toBe(false);
+    expect(queue.progress()[0].done).toBe(0);
+  });
+
+
   it('starts empty on corrupted storage', () => {
     expect(new PillQueue(memoryStorage({ [PILL_QUEUE_KEY]: '{not json' })).isEmpty).toBe(true);
     expect(new PillQueue(memoryStorage({ [PILL_QUEUE_KEY]: '[{"pillId":1}]' })).isEmpty).toBe(true);

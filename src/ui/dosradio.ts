@@ -11,7 +11,6 @@ import { initRamowkaSettings } from './ramowkaSettings';
 import { openOnboarding } from './onboarding';
 import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from './plus';
 import { initProgrammeLine } from './pill';
-import { initReceiver } from './receiver';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -69,7 +68,6 @@ function renderStations(): void {
     return button;
   }));
   const current = stationById(prefs.station);
-  receiver.setStation(current.id);
   $('nowStation').textContent = current.name;
   $('nowTagline').textContent = current.host ? `${current.tagline} (prowadzi: ${current.host})` : current.tagline;
 }
@@ -122,10 +120,16 @@ function renderQueue(queue: QueuedStory[], airingId: string | null): void {
 }
 
 const upcoming = initUpcoming($('upcoming'));
-const receiver = initReceiver({ root: $('receiver'), onTune: (station) => void chooseStation(station) });
+const bars = $('bars');
+const BAR_COUNT = 36;
+bars.replaceChildren(...Array.from({ length: BAR_COUNT }, () => document.createElement('span')));
 
 function renderLevel(level: number): void {
-  receiver.setLevel(level);
+  const t = performance.now() / 260;
+  Array.from(bars.children).forEach((bar, index) => {
+    const wave = 0.55 + 0.45 * Math.sin(t + index * 0.55) * Math.cos(t * 0.7 + index * 0.21);
+    (bar as HTMLElement).style.height = `${Math.max(6, Math.min(100, level * wave * 140))}%`;
+  });
 }
 
 function renderAccess(): void {
@@ -149,7 +153,6 @@ function renderAccess(): void {
 const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categories, {
   onState: (state) => {
     playButton.classList.toggle('loading', state === 'loading');
-    receiver.setPower(state === 'playing' || state === 'loading');
     playButton.innerHTML = state === 'playing' || state === 'loading' ? PAUSE_SVG : PLAY_SVG; // static SVG constants
     playButton.setAttribute('aria-label', state === 'playing' ? 'Pauza' : 'Graj');
     newsButton.disabled = hostModeBtn.dataset.mode === 'music-only';
@@ -191,8 +194,6 @@ engine.interval = prefs.interval;
 engine.newsEnabled = prefs.newsEnabled;
 engine.setProgramme(programmeOptions(prefs));
 engine.setVolume(prefs.volume);
-engine.setVoiceVolume(prefs.voiceVolume);
-engine.setDuckLevel(prefs.duckLevel);
 (window as unknown as { dosRadio: PublicRadioEngine }).dosRadio = engine; // debug handle for runtime probes
 
 async function refreshAccess(): Promise<AccessState> {
@@ -409,31 +410,7 @@ intervalSelect.addEventListener('change', () => {
 });
 const volume = $<HTMLInputElement>('volume');
 volume.value = String(prefs.volume);
-receiver.setVolume(prefs.volume);
-volume.addEventListener('input', () => {
-  prefs.volume = Number(volume.value);
-  engine.setVolume(prefs.volume);
-  receiver.setVolume(prefs.volume);
-  savePrefs();
-});
-const voiceVolume = $<HTMLInputElement>('voiceVolume');
-voiceVolume.value = String(prefs.voiceVolume);
-receiver.setVoiceVolume(prefs.voiceVolume);
-voiceVolume.addEventListener('input', () => {
-  prefs.voiceVolume = Number(voiceVolume.value);
-  engine.setVoiceVolume(prefs.voiceVolume);
-  receiver.setVoiceVolume(prefs.voiceVolume);
-  savePrefs();
-});
-const duckLevel = $<HTMLInputElement>('duckLevel');
-duckLevel.value = String(prefs.duckLevel);
-receiver.setDuckLevel(prefs.duckLevel);
-duckLevel.addEventListener('input', () => {
-  prefs.duckLevel = Number(duckLevel.value);
-  engine.setDuckLevel(prefs.duckLevel);
-  receiver.setDuckLevel(prefs.duckLevel);
-  savePrefs();
-});
+volume.addEventListener('input', () => { prefs.volume = Number(volume.value); engine.setVolume(prefs.volume); savePrefs(); });
 
 // --- host mode toggle ("Z prowadzącym" / "Tylko muzyka") ------------------------
 const hostModeBtn = $<HTMLButtonElement>('hostModeBtn');
@@ -497,7 +474,6 @@ async function handleMoodSubmit(description: string): Promise<void> {
     const custom = await radioApi.mood(clean);
     $('nowStation').textContent = custom.name;
     $('nowTagline').textContent = custom.tagline;
-    receiver.setStation(null);
     await engine.setStation(custom);
     bgAudio.updateMetadata(custom.name, 'DOS Radio', 'Twój nastrój');
     setStatus(`Gra nastrój: ${custom.name} · ${custom.tagline}`);

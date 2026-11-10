@@ -90,6 +90,19 @@ export class PillQueue {
     if (this.items.length !== before) this.save();
   }
 
+  /**
+   * Continues the pill from part number (1-based, as shown to the listener). False when the pill is
+   * not in the programme or the number is outside 1..total; the position stays where it was.
+   */
+  jumpTo(pillId: string, partNumber: number): boolean {
+    const item = this.items.find((candidate) => candidate.pillId === pillId);
+    if (!item || !Number.isInteger(partNumber) || partNumber < 1 || partNumber > item.parts.length) return false;
+    item.nextIndex = partNumber - 1;
+    this.save();
+    return true;
+  }
+
+
   /** The unit the next break airs (first pill, its next unit); null when the programme has no pill. */
   peekUnit(): PillPart[] | null {
     const head = this.items[0];
@@ -105,6 +118,10 @@ export class PillQueue {
     head.nextIndex += unit.length;
     if (head.nextIndex >= head.parts.length) this.items.shift();
     this.save();
+  }
+
+  get(pillId: string): QueuedPill | undefined {
+    return this.items.find((item) => item.pillId === pillId);
   }
 
   progress(): PillProgress[] {

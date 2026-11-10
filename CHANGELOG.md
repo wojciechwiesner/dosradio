@@ -19,6 +19,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   together, and the music level under the news was a fixed constant. The receiver now has three knobs —
   Muzyka, Prowadzący, Muzyka pod wiadomościami — each on its own gain, remembered in the listener's settings.
 
+### Changed
+- **Previous radio look restored.** The Kasprzak receiver (dial, piano keys, bakelite knobs) is gone;
+  the station list and the plain volume slider are back. The three separate volumes stay in the engine
+  and in the listener's saved settings, ready to return as plain controls.
+
+### Fixed
+- **Pills forgot where the listener stopped** (Feedby, 2026-11-10): the programme row now shows the
+  part number and an "Od numeru" field, so a pill left at 3/42 continues from the number the listener
+  types. The position was already remembered across reloads.
+
 ### Added
 - **Odbiornik (gałąź feat/kasprzak-receiver)**: the player is a 60s-70s Polish table radio (Kasprzak/Diora): walnut
   cabinet, cloth grille, black glass scale with UKF numbers, station names on four bands (Fokus, Energia, Chill, Noc) and a red
