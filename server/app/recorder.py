@@ -27,7 +27,7 @@ SEGMENTS_PER_SESSION = 6  # three minutes; a measured 3-minute session held its 
 BASE_TEMPERATURE = 1.0
 TEMPERATURE_JITTER = 0.05
 
-# Prompt dictionary matching src/radio/stations.ts (14 stations)
+# Prompt dictionary matching src/radio/stations.ts
 STATION_SPECS: dict[str, dict] = {
     "dos-groove": {
         "prompt": "minimal deep tech groove, soft dub chords, steady four-on-the-floor kick, focused work music, instrumental",
@@ -65,6 +65,50 @@ STATION_SPECS: dict[str, dict] = {
     "micro-house": {
         "prompt": "microhouse, intricate Romanian minimal groove, subtle clicking percussion, delicate warm dub chords, hypnotic low-end roll, instrumental",
         "bpm": 124, "density": 0.50, "brightness": 0.40,
+    },
+    "deep-tech": {
+        "prompt": "deep tech house, rolling deep bassline, steady four-on-the-floor kick, restrained percussion, dark warm groove, instrumental",
+        "bpm": 124, "density": 0.50, "brightness": 0.35,
+    },
+    "dub-techno": {
+        "prompt": "dub techno, deep echoing chords, washed out delay, soft kick, spacious hypnotic low end, instrumental",
+        "bpm": 122, "density": 0.40, "brightness": 0.30,
+    },
+    "detroit-techno": {
+        "prompt": "detroit techno, machine drum groove, string synth stabs, soulful minor chords, futurist club pulse, instrumental",
+        "bpm": 128, "density": 0.55, "brightness": 0.50,
+    },
+    "deep-house": {
+        "prompt": "deep house, warm rounded bass, soft soulful chords, gentle swing hats, late night groove, instrumental",
+        "bpm": 122, "density": 0.50, "brightness": 0.45,
+    },
+    "organic-house": {
+        "prompt": "organic house, hand percussion, warm wooden texture, soft tribal groove, earthy deep bass, instrumental",
+        "bpm": 120, "density": 0.50, "brightness": 0.45,
+    },
+    "tech-house": {
+        "prompt": "tech house, driving groovy bassline, crisp claps, steady kick, club floor energy, instrumental",
+        "bpm": 126, "density": 0.60, "brightness": 0.55,
+    },
+    "melodic-house": {
+        "prompt": "melodic house, long evolving melody, deep warm bass, wide atmospheric pads, uplifting but restrained, instrumental",
+        "bpm": 122, "density": 0.55, "brightness": 0.60,
+    },
+    "progressive-house": {
+        "prompt": "progressive house, gradual build, layered synths, rolling bass, wide euphoric peak, instrumental",
+        "bpm": 126, "density": 0.60, "brightness": 0.65,
+    },
+    "drum-and-bass": {
+        "prompt": "drum and bass, fast breakbeat, deep rolling sub bass, tight snare, dark energy, instrumental",
+        "bpm": 174, "density": 0.70, "brightness": 0.50,
+    },
+    "trance": {
+        "prompt": "trance, bright rolling bassline, supersaw melody, steady kick, euphoric lift, instrumental",
+        "bpm": 138, "density": 0.65, "brightness": 0.75,
+    },
+    "afro-house": {
+        "prompt": "afro house, syncopated percussion, warm marimba, deep groovy bass, sunny dancefloor, instrumental",
+        "bpm": 122, "density": 0.60, "brightness": 0.60,
     },
     "raw-techno": {
         "prompt": "heavy driving raw techno, dark industrial warehouse groove, thunderous kick, metallic percussion, hypnotic modular rumble, instrumental",
@@ -164,10 +208,11 @@ class StationRecorder:
         url = LYRIA_URL + self.api_key
         async with websockets.connect(url, max_size=None, open_timeout=20) as ws:
             await ws.send(json.dumps({"setup": {"model": "models/lyria-realtime-exp"}}))
-            await ws.send(json.dumps({"clientContent": {"weightedPrompts": [
-                {"text": spec["prompt"], "weight": 1.3},
-                {"text": "vocals, singing, harsh noise, distortion", "weight": 0.25},
-            ]}}))
+            prompts = [{"text": spec["prompt"], "weight": 1.3}]
+            if spec.get("blend"):
+                prompts.append({"text": spec["blend"], "weight": 0.9})
+            prompts.append({"text": "vocals, singing, harsh noise, distortion", "weight": 0.25})
+            await ws.send(json.dumps({"clientContent": {"weightedPrompts": prompts}}))
             await ws.send(json.dumps({"musicGenerationConfig": {
                 "bpm": spec["bpm"],
                 "density": spec["density"],
@@ -191,11 +236,11 @@ class StationRecorder:
                     if len(pcm_buffer) >= TARGET_CHUNK_BYTES:
                         slice_bytes = bytes(pcm_buffer[:TARGET_CHUNK_BYTES])
                         del pcm_buffer[:TARGET_CHUNK_BYTES]
-                        # Encode to Opus off the event loop
+                        # Encode to Opus off the event loop: no edge fades, the live mix engine handles transitions
                         opus_data = await asyncio.to_thread(
                             encode_pcm_to_opus, slice_bytes,
-                            fade_in=segments_saved == 0,
-                            fade_out=segments_saved == num_segments - 1,
+                            fade_in=False,
+                            fade_out=False,
                         )
                         arch.add_segment(opus_data, is_live=True)
                         segments_saved += 1

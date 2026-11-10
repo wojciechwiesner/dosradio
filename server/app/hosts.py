@@ -342,7 +342,28 @@ NEWSROOM_VOICES: dict[str, tuple[str, str]] = {
 DEFAULT_HOST_STATION = "dos-groove"
 
 
+# Genres added without their own host borrow the voice of an existing one.
+BORROWED_HOSTS: dict[str, tuple[str, str]] = {
+    "deep-tech": ("dos-groove", "Deep Tech"),
+    "dub-techno": ("micro-house", "Dub Techno"),
+    "detroit-techno": ("minimal-techno", "Detroit Techno"),
+    "deep-house": ("poranna-kawa", "Deep House"),
+    "organic-house": ("micro-house", "Organic House"),
+    "tech-house": ("club-dance", "Tech House"),
+    "melodic-house": ("liquid-dnb", "Melodic House"),
+    "progressive-house": ("club-dance", "Progressive House"),
+    "drum-and-bass": ("liquid-dnb", "Drum and Bass"),
+    "trance": ("poranna-kawa", "Trance"),
+    "afro-house": ("groove-funk", "Afro House"),
+}
+
+
 def host_for(station_id: str | None) -> Host:
+    borrowed = BORROWED_HOSTS.get(station_id or "")
+    if borrowed:
+        source, label = borrowed
+        from dataclasses import replace
+        return replace(HOSTS[source], station_label=label)
     return HOSTS.get(station_id or "", HOSTS[DEFAULT_HOST_STATION])
 
 

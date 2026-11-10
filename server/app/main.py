@@ -16,7 +16,7 @@ from pathlib import Path
 import websockets
 from dataclasses import asdict
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from .auth import AccessService, build_router, client_ip
@@ -26,6 +26,7 @@ from .news import CATEGORIES, GeminiClient, NewsService
 from .archive import ArchiveRegistry
 from .stream import build_stream_router
 from .recorder import StationRecorder, STATION_SPECS
+from .mood import MoodRecorder
 from .notifier import trigger_telegram_alert
 from .hosts import HOSTS, host_for
 from .personal_news import PersonalNews
@@ -46,6 +47,7 @@ gemini = GeminiClient(settings.gemini_api_key, settings.news_model, settings.tts
 news = NewsService(gemini, settings.data_dir / "audio", settings.news_refresh_seconds)
 archives = ArchiveRegistry(settings.data_dir / "archive")
 recorder = StationRecorder(settings.gemini_api_key, archives)
+mood_recorder = MoodRecorder(settings.gemini_api_key)
 podcasts = PodcastService(gemini, settings.data_dir / "podcasts", archives)
 personal = PersonalNews(db, news)
 news.on_personal_refresh = personal.refresh_all
@@ -159,10 +161,11 @@ def categories() -> list[dict]:
 class MoodRequest(BaseModel):
     mood: Optional[str] = None
     description: Optional[str] = None
+    prompt: Optional[str] = None
 
     @property
     def text(self) -> str:
-        return (self.mood or self.description or "").strip()
+        return (self.mood or self.description or self.prompt or "").strip()
 
 
 @app.post("/radio-api/mood")
@@ -172,6 +175,11 @@ async def generate_mood_station(body: MoodRequest, request: Request) -> dict:
     user_mood = body.text
     if not user_mood:
         raise HTTPException(400, "Podaj opis nastroju")
+    if body.prompt:
+        mood_id = mood_recorder.start(body.prompt.strip())
+        session = mood_recorder.session(mood_id)
+        session.task = asyncio.create_task(mood_recorder.record(mood_id))
+        return {"id": mood_id}
     prompt = (
         f"Użytkownik radia opisał swój nastrój: \"{user_mood}\".\n"
         "Przekształć ten opis w parametry dla generatora muzyki instrumentalnej (Lyria RealTime):\n"
@@ -205,6 +213,19 @@ async def generate_mood_station(body: MoodRequest, request: Request) -> dict:
     except Exception as err:
         log.warning("Mood generation failed: %s", err)
         raise HTTPException(502, "Nie udało się skomponować nastroju. Spróbuj innego opisu.")
+
+
+
+@app.get("/radio-api/station/{mood_id}/part/{number}.ogg")
+def mood_part(mood_id: str, number: int) -> Response:
+    session = mood_recorder.session(mood_id)
+    if session is None:
+        raise HTTPException(404, "Nie ma takiego nastroju")
+    audio = session.part_ogg(number)
+    if audio is None:
+        raise HTTPException(425, "Nagranie jeszcze nie ma 30 sekund")
+    return Response(content=audio, media_type="audio/ogg; codecs=opus")
+
 
 
 @app.get("/radio-api/hosts")

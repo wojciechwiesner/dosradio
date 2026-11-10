@@ -48,12 +48,13 @@ def fake_lyria(monkeypatch: pytest.MonkeyPatch) -> _FakeSocket:
 
 
 @pytest.mark.anyio
-async def test_only_the_first_segment_of_a_session_fades_in(tmp_path: Path, fake_lyria: _FakeSocket) -> None:
+async def test_session_records_without_edge_fades_for_the_mix_engine(tmp_path: Path, fake_lyria: _FakeSocket) -> None:
+    """Recordings must have no edge volume dips so the live mix engine gets intact kicks and audio."""
     archives = ArchiveRegistry(tmp_path)
     rec = StationRecorder("test-key", archives)
     rec.running = True
     await rec.record_session("dos-groove", STATION_SPECS["dos-groove"], num_segments=2)
-    assert fake_lyria.fades == [(True, False), (False, True)]
+    assert fake_lyria.fades == [(False, False), (False, False)]
 
 
 @pytest.mark.anyio
@@ -75,6 +76,19 @@ async def test_session_records_fixed_number_of_segments(tmp_path: Path, fake_lyr
     await station.record_session("dos-groove", STATION_SPECS["dos-groove"])
     segments = station.archives.get("dos-groove").list_segments()
     assert len(segments) == recorder.SEGMENTS_PER_SESSION
+
+
+@pytest.mark.anyio
+async def test_a_second_genre_goes_out_as_its_own_weighted_prompt(tmp_path: Path, fake_lyria: _FakeSocket) -> None:
+    """Lyria blends two genres only when each is its own weighted prompt."""
+    rec = StationRecorder("test-key", ArchiveRegistry(tmp_path))
+    rec.running = True
+    spec = {**STATION_SPECS["dos-groove"], "blend": "dub techno, deep echoing chords, instrumental"}
+    await rec.record_session("dos-groove", spec, num_segments=1)
+    prompts = next(msg["clientContent"]["weightedPrompts"] for msg in fake_lyria.sent if "clientContent" in msg)
+    texts = [item["text"] for item in prompts]
+    assert spec["blend"] in texts
+    assert spec["prompt"] in texts
 
 
 @pytest.mark.anyio

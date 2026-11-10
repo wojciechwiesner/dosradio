@@ -102,3 +102,11 @@ def test_speaker_failure_returns_502_and_writes_nothing(tmp_path):
     response = TestClient(make_app(broken_speak, tmp_path)).get(f"/radio-api/host-clip/{STATION}/jingle/0.wav")
     assert response.status_code == 502
     assert list(tmp_path.iterdir()) == []
+
+
+def test_a_new_genre_borrows_an_existing_hosts_voice() -> None:
+    """A genre added without its own host still gets a voice, borrowed from one that exists."""
+    from app.hosts import host_for
+    host = host_for("deep-tech")
+    assert host.name == "Kuba"
+    assert host.station_label == "Deep Tech"

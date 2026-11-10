@@ -5,7 +5,7 @@ import { availableCategories, categoryLabel, sanitizeCategories, type NewsCatego
 import { STATIONS, stationById, type Station } from '../radio/stations';
 import { intervalLabel, normalizeInterval } from '../radio/radioClock';
 import { initBackgroundAudio } from '../audio/backgroundAudio';
-import { applyOnboardingChoice, isOnboarded, loadPrefs, markOnboarded, programmeOptions, sanitizeDayTopic, savePrefs as persistPrefs, type OnboardingChoice } from './prefs';
+import { applyOnboardingChoice, isOnboarded, loadPrefs, markOnboarded, nextGenreChoice, programmeOptions, sanitizeDayTopic, savePrefs as persistPrefs, type OnboardingChoice } from './prefs';
 import { initUpcoming } from './upcoming';
 import { initRamowkaSettings } from './ramowkaSettings';
 import { openOnboarding } from './onboarding';
@@ -55,20 +55,21 @@ function setStatus(text: string, isError = false): void {
 function renderStations(): void {
   $('stations').replaceChildren(...STATIONS.map((station) => {
     const button = document.createElement('button');
-    button.className = `station${station.id === prefs.station ? ' active' : ''}`;
+    const isBlend = station.id === prefs.blend;
+    button.className = `station${station.id === prefs.station ? ' active' : ''}${isBlend ? ' blend' : ''}`;
     button.dataset.id = station.id;
+    button.title = station.tagline;
     const name = document.createElement('b');
     name.textContent = station.name;
-    const tagline = document.createElement('small');
-    tagline.textContent = station.tagline;
     const bpm = document.createElement('em');
-    bpm.textContent = station.host ? `${station.host} · ${station.bpm} BPM` : `${station.bpm} BPM`;
-    button.append(name, tagline, bpm);
+    bpm.textContent = `${station.bpm}`;
+    button.append(name, bpm);
     button.addEventListener('click', () => void chooseStation(station));
     return button;
   }));
   const current = stationById(prefs.station);
-  $('nowStation').textContent = current.name;
+  const blended = prefs.blend ? stationById(prefs.blend) : null;
+  $('nowStation').textContent = blended ? `${current.name} + ${blended.name}` : current.name;
   $('nowTagline').textContent = current.host ? `${current.tagline} (prowadzi: ${current.host})` : current.tagline;
 }
 
@@ -262,8 +263,10 @@ async function startPlayback(): Promise<void> {
   }
 }
 
-async function chooseStation(station: Station): Promise<void> {
-  prefs.station = station.id;
+async function chooseStation(station: Station, shift = false): Promise<void> {
+  const next = nextGenreChoice(prefs.station, prefs.blend, station.id, shift);
+  prefs.station = next.station;
+  prefs.blend = next.blend;
   savePrefs();
   renderStations();
   try { await engine.setStation(station); } catch (error) { setStatus((error as Error).message, true); }

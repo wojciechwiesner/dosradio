@@ -19,14 +19,18 @@ from typing import AsyncIterator
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
+import numpy as np
 
 from .archive import ArchiveRegistry
+from .mixer import float_to_pcm, join_recordings, pcm_to_float
 
 log = logging.getLogger("dosradio.stream")
 
 READ_CHUNK = 16 * 1024
 MAX_QUEUE_CHUNKS = 16  # ~256 KB; a listener falling behind is dropped
 SAMPLE_RATE = 48000
+MIX_RESERVE_SECONDS = 15.0
+CHUNK_FRAMES = 24000  # 0.5s of audio per write to encoder.stdin
 SESSION_GAP_NS = 45 * 1_000_000_000  # same gap rule as scripts/scan_steady_tones.py
 SEGMENT_STAMP_PREFIX = len("seg-")
 SEGMENT_STAMP_SUFFIX = len(".opus")
@@ -63,6 +67,27 @@ async def _kill(process: asyncio.subprocess.Process) -> None:
     except (ProcessLookupError, PermissionError):
         process.kill()
     await process.wait()
+
+
+async def _decode_to_pcm(path: Path) -> np.ndarray | None:
+    """Decode an audio segment to float32 stereo PCM at SAMPLE_RATE."""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-hide_banner", "-loglevel", "error",
+            "-i", str(path), "-f", "s16le", "-ar", str(SAMPLE_RATE), "-ac", "2", "pipe:1",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        assert proc.stdout is not None
+        raw = await proc.stdout.read()
+        await _kill(proc)
+        if not raw:
+            return None
+        return pcm_to_float(raw)
+    except Exception as err:
+        log.warning("Failed to decode %s: %s", path, err)
+        return None
 
 
 class StationStream:
@@ -134,34 +159,39 @@ class StationStream:
         return random.choice(starts) if starts else None
 
     async def _feed(self, encoder: asyncio.subprocess.Process) -> None:
-        """Decode archive segments to PCM in recording order, looping forever."""
+        """Decode and mix archive segments to PCM, streaming seamlessly forever."""
         assert encoder.stdin is not None
         try:
             after: str | None = None
+            buffer: np.ndarray | None = None
+            reserve_frames = int(MIX_RESERVE_SECONDS * SAMPLE_RATE)
+
             while self._subscribers:
                 archive = self.registry.get(self.station_id)
-                path = self._take_fresh_start(archive)
-                if path is None:
-                    path, _live = archive.pick_next(live_probability=0.0, after=after)
-                if path is None:
-                    await asyncio.sleep(2)
+
+                # Keep buffer filled with at least reserve_frames ahead
+                if buffer is None or len(buffer) <= reserve_frames:
+                    path = self._take_fresh_start(archive) if buffer is None else None
+                    if path is None:
+                        path, _live = archive.pick_next(live_probability=0.0, after=after)
+                    if path is not None:
+                        after = None if path.name == after else path.name
+                        new_pcm = await _decode_to_pcm(path)
+                        if new_pcm is not None and len(new_pcm) > 0:
+                            if buffer is None or len(buffer) == 0:
+                                buffer = new_pcm
+                            else:
+                                buffer = await asyncio.to_thread(join_recordings, buffer, new_pcm)
+
+                if buffer is None or len(buffer) == 0:
+                    await asyncio.sleep(1)
                     continue
-                after = None if path.name == after else path.name
-                decoder = await asyncio.create_subprocess_exec(
-                    "ffmpeg", "-hide_banner", "-loglevel", "error",
-                    "-i", str(path), "-f", "s16le", "-ar", str(SAMPLE_RATE), "-ac", "2", "pipe:1",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.DEVNULL,
-                    start_new_session=True,
-                )
-                assert decoder.stdout is not None
-                while self._subscribers:
-                    pcm = await decoder.stdout.read(READ_CHUNK)
-                    if not pcm:
-                        break
-                    encoder.stdin.write(pcm)
-                    await encoder.stdin.drain()
-                await _kill(decoder)
+
+                chunk_size = min(CHUNK_FRAMES, len(buffer))
+                chunk = buffer[:chunk_size]
+                buffer = buffer[chunk_size:]
+                encoder.stdin.write(float_to_pcm(chunk))
+                await encoder.stdin.drain()
         except (BrokenPipeError, ConnectionResetError):
             pass
         finally:

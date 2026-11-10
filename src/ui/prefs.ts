@@ -15,6 +15,8 @@ const DEFAULT_CATEGORIES: NewsCategory[] = ['ai'];
 
 export interface Prefs {
   station: string;
+  /** Second genre blended into the station, or null when the listener picked only one. */
+  blend: string | null;
   categories: NewsCategory[];
   interval: BreakInterval;
   volume: number;
@@ -47,6 +49,7 @@ export type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 export function defaultPrefs(): Prefs {
   return {
     station: DEFAULT_STATION_ID,
+    blend: null,
     categories: [...DEFAULT_CATEGORIES],
     interval: DEFAULT_BREAK_INTERVAL,
     volume: DEFAULT_VOLUME,
@@ -72,6 +75,14 @@ export function sanitizeDayTopic(topic: unknown, categories: NewsCategory[]): Ne
   return categories.find((category) => category === topic) ?? null;
 }
 
+
+/** A second genre counts only when it names a real station and not the one already playing. */
+function blendStation(blend: unknown, station: string): string | null {
+  if (typeof blend !== 'string' || blend === station) return null;
+  const resolved = stationById(blend);
+  return resolved.id === blend ? resolved.id : null;
+}
+
 /** Tolerant parser: old stored prefs (no newsEnabled, intervals 20/30/60) stay valid. */
 export function parsePrefs(raw: Partial<Prefs> | null | undefined): Prefs {
   const source = raw ?? {};
@@ -81,6 +92,7 @@ export function parsePrefs(raw: Partial<Prefs> | null | undefined): Prefs {
   const hasCoords = lat !== null && lon !== null;
   return {
     station: stationById(source.station).id,
+    blend: blendStation(source.blend, stationById(source.station).id),
     categories,
     interval: normalizeInterval(source.interval),
     volume: typeof source.volume === 'number' ? source.volume : DEFAULT_VOLUME,
@@ -94,6 +106,14 @@ export function parsePrefs(raw: Partial<Prefs> | null | undefined): Prefs {
     weatherLat: hasCoords ? lat : null,
     weatherLon: hasCoords ? lon : null,
   };
+}
+
+
+/** Plain click changes the station. A shifted click adds a second genre, or clears it when it is the same one again. */
+export function nextGenreChoice(station: string, blend: string | null, clicked: string, shift: boolean): { station: string; blend: string | null } {
+  if (!shift) return { station: clicked, blend: clicked === station ? blend : null };
+  if (clicked === station) return { station, blend };
+  return { station, blend: blend === clicked ? null : clicked };
 }
 
 export function loadPrefs(storage: StorageLike): Prefs {

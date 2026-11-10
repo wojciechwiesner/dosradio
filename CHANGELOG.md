@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **DJ mix engine with zero-phase kick onset detection and bass-swap crossfade** (`server/app/mixer.py`):
+  built from proven blocks (`synthapse/kkik` beat grid and `AI_DJ` bass swap). Aligns the first kick of incoming recordings with outgoing kicks, crossfades highs over 4 beats, and swaps the low-pass sub-bass cleanly to prevent volume drops, flamming, and clipping.
+- **Continuous buffer stream feeder** (`server/app/stream.py`): `StationStream._feed` now chains archive audio through `join_recordings` in memory before writing to `libopus`, guaranteeing a mathematically gapless `stream.ogg` for web and mobile listeners.
+- **On-demand "Twój nastrój" (Mood) station** (`server/app/mood.py`): streaming personal radio generated from user prompt with a 30-second live delay buffer and 10-minute part rollover.
+- **25 electronic station presets** (`src/radio/stations.ts`, `server/app/recorder.py`, `server/app/hosts.py`): expanded library with Deep Tech, Dub Techno, Detroit Techno, Microhouse, Tech House, Trance, Drum and Bass, and borrowed host voices for all new genres.
+
+### Changed
+- **Removed destructive edge fades in recorder**: `encode_pcm_to_opus` in `server/app/recorder.py` no longer silences the first and last 0.5s of sessions, preventing the 1-second volume dip that listeners heard every 3 minutes. Clean audio is now passed to the live mix engine.
+
 ### Fixed
 - **Station switch left the previous music playing** (Feedby, 6 reports 2026-11-10): changing a preset station
   created the new stream element and destroyed the old one before the new one had started, so both played at once
