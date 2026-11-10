@@ -118,3 +118,13 @@ async def test_seek_fresh_serves_ogg(tmp_path: Path) -> None:
         response = await client.get("/radio-api/station/dos-groove/stream.ogg?seconds=1&seek=fresh&t=1")
     assert response.status_code == 200
     assert response.content[:4] == b"OggS"
+
+
+@pytest.mark.anyio
+async def test_empty_borrowed_station_falls_back_to_parent_station(tmp_path: Path) -> None:
+    """A new station whose archive has not been recorded yet seamlessly borrows from its parent station."""
+    app = _app(tmp_path, allow=True)
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://radio", timeout=30) as client:
+        response = await client.get("/radio-api/station/deep-tech/stream.ogg?seconds=1&t=1")
+    assert response.status_code == 200
+    assert response.content[:4] == b"OggS"

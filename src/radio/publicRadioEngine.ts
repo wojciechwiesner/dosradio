@@ -344,6 +344,9 @@ export class PublicRadioEngine {
       await this.helper.play();
     }
     this.events.onStatus(`Gra ${station.name}`);
+    if (this.hostMode === 'with-host' && prev.id !== station.id) {
+      void this.playWelcomeIntro();
+    }
   }
 
   async setCategories(categories: NewsCategory[]): Promise<void> {

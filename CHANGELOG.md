@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Host voices, greetings, and jingles for all 25 stations** (`server/app/hosts.py`, `server/app/host_clips.py`, `server/app/main.py`):
+  every station now has a personalized host greeting and jingle matching its genre (e.g. Kuba on Deep Tech, Ola on Trance). Unlocked `/radio-api/welcome/{sid}.wav`, `/radio-api/jingle/{sid}.wav`, and `/radio-api/host-clips/{sid}` for all 25 stations (previously returning 404 for borrowed genres).
+- **Instant host greeting on station switch** (`src/radio/publicRadioEngine.ts`):
+  switching station now immediately triggers the host's welcome line (`playWelcomeIntro`) while music ducks and loads, providing instant audio confirmation that the host is active and the station changed.
+- **Archive fallback for new stations** (`server/app/stream.py`, `server/app/main.py`):
+  new stations without recorded segments yet seamlessly stream audio from their parent genre, eliminating the 404 / 50-byte silent stall.
 - **DJ mix engine with zero-phase kick onset detection and bass-swap crossfade** (`server/app/mixer.py`):
   built from proven blocks (`synthapse/kkik` beat grid and `AI_DJ` bass swap). Aligns the first kick of incoming recordings with outgoing kicks, crossfades highs over 4 beats, and swaps the low-pass sub-bass cleanly to prevent volume drops, flamming, and clipping.
 - **Continuous buffer stream feeder** (`server/app/stream.py`): `StationStream._feed` now chains archive audio through `join_recordings` in memory before writing to `libopus`, guaranteeing a mathematically gapless `stream.ogg` for web and mobile listeners.

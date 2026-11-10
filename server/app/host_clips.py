@@ -7,7 +7,7 @@ from typing import Awaitable, Callable
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 
-from .hosts import HOSTS, Host
+from .hosts import BORROWED_HOSTS, HOSTS, Host, host_for
 
 SpeakFn = Callable[[str, str, str], Awaitable[bytes]]
 
@@ -15,10 +15,9 @@ CLIP_CACHE_CONTROL = "public, max-age=604800"
 
 
 def _host_or_404(station_id: str) -> Host:
-    host = HOSTS.get(station_id)
-    if host is None:
-        raise HTTPException(404, "no such station")
-    return host
+    if station_id in HOSTS or station_id in BORROWED_HOSTS:
+        return host_for(station_id)
+    raise HTTPException(404, "no such station")
 
 
 def _lines_or_404(host: Host, kind: str) -> tuple[str, ...]:

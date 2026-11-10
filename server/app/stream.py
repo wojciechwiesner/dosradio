@@ -22,6 +22,7 @@ from fastapi.responses import StreamingResponse
 import numpy as np
 
 from .archive import ArchiveRegistry
+from .hosts import BORROWED_HOSTS
 from .mixer import float_to_pcm, join_recordings, pcm_to_float
 
 log = logging.getLogger("dosradio.stream")
@@ -174,6 +175,13 @@ class StationStream:
                     path = self._take_fresh_start(archive) if buffer is None else None
                     if path is None:
                         path, _live = archive.pick_next(live_probability=0.0, after=after)
+                    if path is None:
+                        fallback_sid = BORROWED_HOSTS.get(self.station_id, (None, None))[0]
+                        if fallback_sid:
+                            fb_archive = self.registry.get(fallback_sid)
+                            path = self._take_fresh_start(fb_archive) if buffer is None else None
+                            if path is None:
+                                path, _live = fb_archive.pick_next(live_probability=0.0, after=after)
                     if path is not None:
                         after = None if path.name == after else path.name
                         new_pcm = await _decode_to_pcm(path)
@@ -227,8 +235,11 @@ def build_stream_router(registry: ArchiveRegistry, require_access: AccessGuard) 
         """
         if shutil.which("ffmpeg") is None:
             raise HTTPException(503, "ffmpeg niedostępny")
-        if registry.get(station_id).list_segments() == []:
-            raise HTTPException(404, f"Nieznana lub pusta stacja: {station_id}")
+        archive = registry.get(station_id)
+        if not archive.list_segments():
+            fallback_sid = BORROWED_HOSTS.get(station_id, (None, None))[0]
+            if not fallback_sid or not registry.get(fallback_sid).list_segments():
+                raise HTTPException(404, f"Nieznana lub pusta stacja: {station_id}")
         require_access(request)
         max_bytes = seconds * SAMPLE_RATE * 2 * 2 if 0 < seconds <= 30 else None
         if seek == SEEK_FRESH:

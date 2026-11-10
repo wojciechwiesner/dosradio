@@ -28,7 +28,7 @@ from .stream import build_stream_router
 from .recorder import StationRecorder, STATION_SPECS
 from .mood import MoodRecorder
 from .notifier import trigger_telegram_alert
-from .hosts import HOSTS, host_for
+from .hosts import BORROWED_HOSTS, HOSTS, host_for
 from .personal_news import PersonalNews
 from .podcast import PodcastService
 from .plus_api import build_plus_router
@@ -81,7 +81,7 @@ async def render_host_audio(station_id: str, kind: str) -> Path:
 
 async def prewarm_hosts() -> None:
     """Voice every host's greeting and jingle in the background (2 files x stations)."""
-    for station_id in HOSTS:
+    for station_id in list(HOSTS) + list(BORROWED_HOSTS):
         for kind in ("welcome", "jingle"):
             try:
                 await render_host_audio(station_id, kind)
@@ -230,12 +230,13 @@ def mood_part(mood_id: str, number: int) -> Response:
 
 @app.get("/radio-api/hosts")
 def list_hosts() -> dict:
-    return {station_id: {"name": host.name} for station_id, host in HOSTS.items()}
+    all_stations = list(HOSTS.keys()) + list(BORROWED_HOSTS.keys())
+    return {sid: {"name": host_for(sid).name} for sid in all_stations}
 
 
 @app.api_route("/radio-api/welcome/{station_id}.wav", methods=["GET", "HEAD"])
 async def welcome_audio(station_id: str) -> FileResponse:
-    if station_id not in HOSTS:
+    if station_id not in HOSTS and station_id not in BORROWED_HOSTS:
         raise HTTPException(404, "no such station")
     try:
         path = await render_host_audio(station_id, "welcome")
@@ -246,7 +247,7 @@ async def welcome_audio(station_id: str) -> FileResponse:
 
 @app.api_route("/radio-api/jingle/{station_id}.wav", methods=["GET", "HEAD"])
 async def jingle_audio(station_id: str) -> FileResponse:
-    if station_id not in HOSTS:
+    if station_id not in HOSTS and station_id not in BORROWED_HOSTS:
         raise HTTPException(404, "no such station")
     try:
         path = await render_host_audio(station_id, "jingle")
@@ -270,6 +271,11 @@ async def next_station_chunk(
         raise HTTPException(404, f"Nieznana stacja: {station_id}")
     arch = archives.get(station_id)
     path, is_live = arch.pick_next(live_probability=live_prob, after=after)
+    if not path or not path.exists():
+        fallback_sid = BORROWED_HOSTS.get(station_id, (None, None))[0]
+        if fallback_sid:
+            arch = archives.get(fallback_sid)
+            path, is_live = arch.pick_next(live_probability=live_prob, after=after)
     if not path or not path.exists():
         raise HTTPException(503, "Stacja nagrywa pierwsze segmenty, spróbuj za chwilę.")
     return FileResponse(

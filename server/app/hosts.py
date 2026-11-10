@@ -363,7 +363,17 @@ def host_for(station_id: str | None) -> Host:
     if borrowed:
         source, label = borrowed
         from dataclasses import replace
-        return replace(HOSTS[source], station_label=label)
+        base = HOSTS[source]
+        custom_jingle = base.jingle.replace(base.station_label, label)
+        custom_greeting = f"Cześć, tu {base.name}. Wkraczamy w {label}, DOS Radio. Zaczynamy."
+        custom_jingles = tuple(j.replace(base.station_label, label) for j in base.jingles)
+        return replace(
+            base,
+            station_label=label,
+            jingle=custom_jingle,
+            greeting=custom_greeting,
+            jingles=custom_jingles,
+        )
     return HOSTS.get(station_id or "", HOSTS[DEFAULT_HOST_STATION])
 
 
