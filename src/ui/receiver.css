@@ -226,7 +226,7 @@
   background: linear-gradient(180deg, #cdbd98, #e0d2b1);
 }
 
-.knobs { display: flex; gap: 20px; }
+.knobs { display: flex; gap: 20px; flex-wrap: wrap; }
 .knob { position: relative; display: grid; justify-items: center; gap: 6px; }
 .knob-cap {
   --turn: -135deg;
@@ -266,7 +266,7 @@
   cursor: ew-resize;
 }
 .knob:has(input:focus-visible) .knob-cap { outline: 2px solid var(--brass-light); outline-offset: 4px; }
-.knob-name { font-size: 11.5px; color: #c9b896; }
+.knob-name { font-size: 11.5px; color: #c9b896; max-width: 96px; text-align: center; line-height: 1.25; }
 
 .receiver .status { margin-top: 14px; }
 

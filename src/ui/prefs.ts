@@ -18,6 +18,10 @@ export interface Prefs {
   categories: NewsCategory[];
   interval: BreakInterval;
   volume: number;
+  /** Host/news voice loudness, 0..1, independent of the music. */
+  voiceVolume: number;
+  /** How loud the music stays while the host or the news speaks, 0..1. */
+  duckLevel: number;
   hostMode: HostMode;
   newsEnabled: boolean;
   /** Category the listener starred as "topic of the day"; always one of `categories` or null. */
@@ -46,6 +50,8 @@ export function defaultPrefs(): Prefs {
     categories: [...DEFAULT_CATEGORIES],
     interval: DEFAULT_BREAK_INTERVAL,
     volume: DEFAULT_VOLUME,
+    voiceVolume: DEFAULT_VOLUME,
+    duckLevel: 0.34,
     hostMode: 'with-host',
     newsEnabled: true,
     dayTopic: null,
@@ -78,6 +84,8 @@ export function parsePrefs(raw: Partial<Prefs> | null | undefined): Prefs {
     categories,
     interval: normalizeInterval(source.interval),
     volume: typeof source.volume === 'number' ? source.volume : DEFAULT_VOLUME,
+    voiceVolume: typeof source.voiceVolume === 'number' ? source.voiceVolume : DEFAULT_VOLUME,
+    duckLevel: typeof source.duckLevel === 'number' ? source.duckLevel : 0.34,
     hostMode: source.hostMode === 'music-only' ? 'music-only' : 'with-host',
     newsEnabled: source.newsEnabled !== false,
     dayTopic: sanitizeDayTopic(source.dayTopic, categories),

@@ -59,6 +59,11 @@ export class PublicRadioEngine {
   /** Notches steady tones (the Lyria whine) on the music only; voice never passes through it. */
   private readonly toneKiller = new ToneKiller(this.ctx);
   private readonly voiceGain = this.ctx.createGain();
+  /** Listener's voice level (0..1); the fixed VOICE_GAIN offset sits on top of it. */
+  private voiceLevel = 1;
+  /** Listener's ducked-music level (0..1 of the music); applied only while the voice speaks. */
+  private duckLevel = DUCK_LEVEL;
+  private ducked = false;
   private readonly analyser = this.ctx.createAnalyser();
 
   private helper: LiveMusicHelper | null = null;
@@ -130,8 +135,25 @@ export class PublicRadioEngine {
     return this.station;
   }
 
+  private clamp01(value: number): number {
+    return Math.max(0, Math.min(1, value));
+  }
+
+  /** Overall music loudness. Independent of the voice and of the ducked level. */
   setVolume(value: number): void {
-    this.master.gain.setTargetAtTime(Math.max(0, Math.min(1, value)), this.ctx.currentTime, 0.05);
+    this.master.gain.setTargetAtTime(this.clamp01(value), this.ctx.currentTime, 0.05);
+  }
+
+  /** Host and news loudness, independent of the music. */
+  setVoiceVolume(value: number): void {
+    this.voiceLevel = this.clamp01(value);
+    this.voiceGain.gain.setTargetAtTime(this.voiceLevel * VOICE_GAIN, this.ctx.currentTime, 0.05);
+  }
+
+  /** How loud the music stays under the host and the news. Takes effect on the next duck. */
+  setDuckLevel(value: number): void {
+    this.duckLevel = this.clamp01(value);
+    if (this.ducked) this.duck(this.duckLevel, 0.4);
   }
 
   setHostMode(mode: HostMode): void {
@@ -221,6 +243,7 @@ export class PublicRadioEngine {
     } catch {
       handle.destroy();
       this.streamHandle = previous;
+      if (previous && navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
       return false;
     }
     if (previous) {
@@ -228,16 +251,6 @@ export class PublicRadioEngine {
       if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing'; // destroy() reset it
     }
     return true;
-  }
-
-  /**
-   * Break reset on the stream path: the archive stream cannot be reloaded like a live session, so the
-   * listener is moved to a fresh point (the server honours `seek=fresh`); the music is ducked meanwhile.
-   */
-  private async restartStreamElement(): Promise<void> {
-    const previous = this.streamHandle;
-    if (!previous || !this.playing || this.chunkStreamer) return;
-    await this.openStream(`${this.streamUrl()}?seek=fresh&t=${Date.now()}`, previous);
   }
 
   /** The chunk path, used on iOS and whenever the stream element fails. */
@@ -310,9 +323,12 @@ export class PublicRadioEngine {
     if (!this.playing) return;
 
     if (isPresetStation(station)) {
-      // Preset stations play from the recorded archive.
+      // Preset stations play from the recorded archive. Swap the stream only once the new one plays,
+      // so a failed switch never leaves two stations audible (or silence).
       this.helper?.stop();
-      if (!this.chunkStreamer) {
+      if (this.streamHandle) {
+        await this.openStream(this.streamUrl(), this.streamHandle);
+      } else if (!this.chunkStreamer) {
         await this.startMusic();
       } else if (!(await this.chunkStreamer.setStation(station.id))) {
         void this.triggerDeadAirRecovery();
@@ -324,7 +340,7 @@ export class PublicRadioEngine {
       this.stopStreamElement();
       if (!this.helper) this.helper = this.createHelper();
       await this.applyStation();
-      if (station.bpm !== prev.bpm) await this.helper.resetContext();
+      // The live model keeps its context across a prompt change; resetting it mid-bar is a hard cut.
       await this.helper.play();
     }
     this.events.onStatus(`Gra ${station.name}`);
@@ -535,7 +551,7 @@ export class PublicRadioEngine {
     this.speaking = true;
     try {
       this.events.onHostState?.(true, 'host');
-      this.duck(DUCK_LEVEL, 1.0);
+      this.duck(this.duckLevel, 1.0);
       await new Promise((r) => setTimeout(r, 500));
       await this.playVoice(buffer);
     } finally {
@@ -546,6 +562,7 @@ export class PublicRadioEngine {
   }
 
   private duck(level: number, seconds: number): void {
+    this.ducked = level < 1;
     const gain = this.musicBus.gain;
     const now = this.ctx.currentTime;
     gain.cancelScheduledValues(now);
@@ -560,18 +577,6 @@ export class PublicRadioEngine {
   private emitUpcoming(): void {
     const at = this.nextSlot ?? new Date();
     this.events.onUpcoming?.(upcomingStory(this.programme.context(this.queue, at)));
-  }
-
-  /** Reload the live Lyria session while the voice plays, so the music comes back fresh after the break. */
-  private async reloadLiveSession(): Promise<void> {
-    if (!this.helper || this.chunkStreamer || !this.playing) return;
-    try {
-      this.helper.stop();
-      await this.applyStation();
-      await this.helper.play();
-    } catch {
-      void this.triggerDeadAirRecovery();
-    }
   }
 
   /** Nothing new to report today: say so briefly and let the host chat instead of repeating a story. */
@@ -594,28 +599,21 @@ export class PublicRadioEngine {
     const hhmm = `${String(slot.getHours()).padStart(2, '0')}:${String(slot.getMinutes()).padStart(2, '0')}`;
     const clips = breakClips(plan, { hhmm, stationId: hostStationId(this.station), place: this.programme.place, pillUnit });
     let played: typeof clips = [];
-    let streamRestarted = false;
 
     try {
       this.events.onHostState?.(true, 'news');
       this.events.onOnAir(plan.full[0] ?? null);
       if (plan.full[0]) this.events.onQueue(this.queue, plan.full[0].id);
       if (this.playing) {
-        this.duck(DUCK_LEVEL, 1.2);
-        void this.reloadLiveSession();
+        // Duck only. Restarting the live model or the stream here cuts the mix under the voice.
+        this.duck(this.duckLevel, 1.2);
         await new Promise((r) => setTimeout(r, 600));
       }
       played = await runClips(
         clips,
         {
           decode: (path) => this.decode(path).catch(() => null),
-          play: (buffer) => {
-            if (!streamRestarted) { // the voice has started: bring the music back from a fresh point
-              streamRestarted = true;
-              void this.restartStreamElement();
-            }
-            return this.playVoice(buffer);
-          },
+          play: (buffer) => this.playVoice(buffer),
           now: Date.now,
         },
         plan.kind === 'hourly' ? HOURLY_MAX_MS : undefined,

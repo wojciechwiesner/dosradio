@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Station switch left the previous music playing** (Feedby, 6 reports 2026-11-10): changing a preset station
+  created the new stream element and destroyed the old one before the new one had started, so both played at once
+  (or the old one died and the new one never came up). The swap now waits until the new stream is actually playing,
+  and a failed switch keeps the station that was already on air.
+- **Host break cut the mix** (same reports: the model reset and a new piece started under the voice): a break no
+  longer restarts the live Lyria session, resets its context, or reloads the archive stream. The music stays and is
+  only ducked under the voice.
+- **One knob controlled everything** (Feedby, 2026-11-10): the single Głośność knob scaled music and voice
+  together, and the music level under the news was a fixed constant. The receiver now has three knobs —
+  Muzyka, Prowadzący, Muzyka pod wiadomościami — each on its own gain, remembered in the listener's settings.
+
 ### Added
 - **Odbiornik (gałąź feat/kasprzak-receiver)**: the player is a 60s-70s Polish table radio (Kasprzak/Diora): walnut
   cabinet, cloth grille, black glass scale with UKF numbers, station names on four bands (Fokus, Energia, Chill, Noc) and a red

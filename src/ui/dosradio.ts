@@ -191,6 +191,8 @@ engine.interval = prefs.interval;
 engine.newsEnabled = prefs.newsEnabled;
 engine.setProgramme(programmeOptions(prefs));
 engine.setVolume(prefs.volume);
+engine.setVoiceVolume(prefs.voiceVolume);
+engine.setDuckLevel(prefs.duckLevel);
 (window as unknown as { dosRadio: PublicRadioEngine }).dosRadio = engine; // debug handle for runtime probes
 
 async function refreshAccess(): Promise<AccessState> {
@@ -412,6 +414,24 @@ volume.addEventListener('input', () => {
   prefs.volume = Number(volume.value);
   engine.setVolume(prefs.volume);
   receiver.setVolume(prefs.volume);
+  savePrefs();
+});
+const voiceVolume = $<HTMLInputElement>('voiceVolume');
+voiceVolume.value = String(prefs.voiceVolume);
+receiver.setVoiceVolume(prefs.voiceVolume);
+voiceVolume.addEventListener('input', () => {
+  prefs.voiceVolume = Number(voiceVolume.value);
+  engine.setVoiceVolume(prefs.voiceVolume);
+  receiver.setVoiceVolume(prefs.voiceVolume);
+  savePrefs();
+});
+const duckLevel = $<HTMLInputElement>('duckLevel');
+duckLevel.value = String(prefs.duckLevel);
+receiver.setDuckLevel(prefs.duckLevel);
+duckLevel.addEventListener('input', () => {
+  prefs.duckLevel = Number(duckLevel.value);
+  engine.setDuckLevel(prefs.duckLevel);
+  receiver.setDuckLevel(prefs.duckLevel);
   savePrefs();
 });
 

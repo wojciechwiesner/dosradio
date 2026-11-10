@@ -86,8 +86,18 @@
               <div class="knobs">
                 <label class="knob knob-volume">
                   <span class="knob-cap" aria-hidden="true"></span>
-                  <input type="range" id="volume" min="0" max="1" step="0.01" value="0.9" />
-                  <span class="knob-name">Głośność</span>
+                  <input type="range" id="volume" min="0" max="1" step="0.01" value="0.9" aria-label="Głośność muzyki" />
+                  <span class="knob-name">Muzyka</span>
+                </label>
+                <label class="knob knob-voice">
+                  <span class="knob-cap" aria-hidden="true"></span>
+                  <input type="range" id="voiceVolume" min="0" max="1" step="0.01" value="0.9" aria-label="Głośność prowadzącego i wiadomości" />
+                  <span class="knob-name">Prowadzący</span>
+                </label>
+                <label class="knob knob-duck">
+                  <span class="knob-cap" aria-hidden="true"></span>
+                  <input type="range" id="duckLevel" min="0" max="1" step="0.01" value="0.34" aria-label="Głośność muzyki pod wiadomościami" />
+                  <span class="knob-name">Muzyka pod wiadomościami</span>
                 </label>
                 <label class="knob knob-tune">
                   <span class="knob-cap" aria-hidden="true"></span>

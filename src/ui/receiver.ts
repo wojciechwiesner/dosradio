@@ -28,6 +28,10 @@ export interface ReceiverView {
   setLevel(level: number): void;
   /** Volume 0..1, turns the volume knob cap. */
   setVolume(volume: number): void;
+  /** Turns the host-voice knob cap. */
+  setVoiceVolume(volume: number): void;
+  /** Turns the ducked-music knob cap. */
+  setDuckLevel(level: number): void;
 }
 
 interface ReceiverOptions {
@@ -67,6 +71,8 @@ export function initReceiver({ root, onTune }: ReceiverOptions): ReceiverView {
   const eye = find('.eye');
   const tune = find<HTMLInputElement>('#tune');
   const volumeCap = find('.knob-volume .knob-cap');
+  const voiceCap = find('.knob-voice .knob-cap');
+  const duckCap = find('.knob-duck .knob-cap');
   const tuneCap = find('.knob-tune .knob-cap');
   const positions = dialPositions();
 
@@ -118,6 +124,12 @@ export function initReceiver({ root, onTune }: ReceiverOptions): ReceiverView {
     },
     setVolume(volume) {
       volumeCap.style.setProperty('--turn', `${knobAngle(volume)}deg`);
+    },
+    setVoiceVolume(volume) {
+      voiceCap.style.setProperty('--turn', `${knobAngle(volume)}deg`);
+    },
+    setDuckLevel(level) {
+      duckCap.style.setProperty('--turn', `${knobAngle(level)}deg`);
     },
   };
 }
