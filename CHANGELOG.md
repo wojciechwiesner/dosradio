@@ -20,6 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Muzyka, Prowadzący, Muzyka pod wiadomościami — each on its own gain, remembered in the listener's settings.
 
 ### Changed
+- **Longer recordings, mixed only where two of them meet.** A Lyria session now records three minutes (six 30-second parts) instead of one. A measured three-minute session kept its tone, so the old one-minute cut was wasting seams. The first part of a session fades in and the last fades out over half a second, so the join between two recordings does not jump. Parts inside one recording stay untouched, because that audio is already continuous.
+
 - **Previous radio look restored.** The Kasprzak receiver (dial, piano keys, bakelite knobs) is gone;
   the station list and the plain volume slider are back. The three separate volumes stay in the engine
   and in the listener's saved settings, ready to return as plain controls.

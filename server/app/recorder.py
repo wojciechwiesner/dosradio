@@ -23,7 +23,7 @@ log = logging.getLogger("dosradio.recorder")
 LYRIA_URL = "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateMusic?key="
 BYTES_PER_SECOND = 48000 * 2 * 2  # 48kHz, 16-bit, stereo = 192,000 bytes/sec
 TARGET_CHUNK_BYTES = int(TARGET_SEGMENT_SECONDS * BYTES_PER_SECOND)
-SEGMENTS_PER_SESSION = 2  # Lyria drifts into a steady whine after roughly a minute
+SEGMENTS_PER_SESSION = 6  # three minutes; a measured 3-minute session held its tone
 BASE_TEMPERATURE = 1.0
 TEMPERATURE_JITTER = 0.05
 
@@ -96,7 +96,10 @@ def session_temperature() -> float:
     return BASE_TEMPERATURE + jitter
 
 
-def encode_pcm_to_opus(pcm_bytes: bytes, rate: int = 48000, channels: int = 2, bitrate: str = "96k") -> bytes:
+FADE_SECONDS = 0.5  # only at a session boundary, where two recordings meet
+
+
+def encode_pcm_to_opus(pcm_bytes: bytes, rate: int = 48000, channels: int = 2, bitrate: str = "96k", fade_in: bool = False, fade_out: bool = False) -> bytes:
     """Encode raw interleaved PCM (s16le) to OGG/Opus using ffmpeg, notching steady tones first."""
     notches = tone_notch_chain(pcm_bytes, channels, rate)
     cmd = [
@@ -104,8 +107,15 @@ def encode_pcm_to_opus(pcm_bytes: bytes, rate: int = 48000, channels: int = 2, b
         "-f", "s16le", "-ar", str(rate), "-ac", str(channels),
         "-i", "pipe:0",
     ]
+    filters = []
+    if fade_in:
+        filters.append(f"afade=t=in:d={FADE_SECONDS}")
+    if fade_out:
+        filters.append(f"afade=t=out:d={FADE_SECONDS}")
     if notches:
-        cmd += ["-af", notches]
+        filters.append(notches)
+    if filters:
+        cmd += ["-af", ",".join(filters)]
     cmd += [
         "-c:a", "libopus", "-b:a", bitrate, "-vbr", "on",
         "-f", "ogg", "pipe:1",
@@ -182,7 +192,11 @@ class StationRecorder:
                         slice_bytes = bytes(pcm_buffer[:TARGET_CHUNK_BYTES])
                         del pcm_buffer[:TARGET_CHUNK_BYTES]
                         # Encode to Opus off the event loop
-                        opus_data = await asyncio.to_thread(encode_pcm_to_opus, slice_bytes)
+                        opus_data = await asyncio.to_thread(
+                            encode_pcm_to_opus, slice_bytes,
+                            fade_in=segments_saved == 0,
+                            fade_out=segments_saved == num_segments - 1,
+                        )
                         arch.add_segment(opus_data, is_live=True)
                         segments_saved += 1
                         self.total_recorded_segments += 1
