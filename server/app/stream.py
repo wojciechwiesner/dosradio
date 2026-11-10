@@ -13,6 +13,7 @@ import os
 import random
 import shutil
 import signal
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import AsyncIterator
@@ -94,13 +95,14 @@ async def _decode_to_pcm(path: Path) -> np.ndarray | None:
 class StationStream:
     """One shared encoder per station; each subscriber gets its own queue."""
 
-    def __init__(self, registry: ArchiveRegistry, station_id: str, fresh_start: bool = False) -> None:
+    def __init__(self, registry: ArchiveRegistry, station_id: str, fresh_start: bool = False, pace: bool = True) -> None:
         self.registry = registry
         self.station_id = station_id
         self._subscribers: set[asyncio.Queue[bytes | None]] = set()
         self._task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
         self._fresh_start_pending = fresh_start
+        self.pace = pace
 
     async def subscribe(self, max_bytes: int | None = None) -> AsyncIterator[bytes]:
         queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=MAX_QUEUE_CHUNKS)
@@ -167,6 +169,7 @@ class StationStream:
             buffer: np.ndarray | None = None
             reserve_frames = int(MIX_RESERVE_SECONDS * SAMPLE_RATE)
 
+            next_deadline = time.monotonic()
             while self._subscribers:
                 archive = self.registry.get(self.station_id)
 
@@ -193,6 +196,7 @@ class StationStream:
 
                 if buffer is None or len(buffer) == 0:
                     await asyncio.sleep(1)
+                    next_deadline = time.monotonic()
                     continue
 
                 chunk_size = min(CHUNK_FRAMES, len(buffer))
@@ -200,6 +204,15 @@ class StationStream:
                 buffer = buffer[chunk_size:]
                 encoder.stdin.write(float_to_pcm(chunk))
                 await encoder.stdin.drain()
+
+                if self.pace:
+                    chunk_dur = len(chunk) / SAMPLE_RATE
+                    next_deadline += chunk_dur
+                    delay = next_deadline - time.monotonic()
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                    elif delay < -1.0:
+                        next_deadline = time.monotonic()
         except (BrokenPipeError, ConnectionResetError):
             pass
         finally:
@@ -207,21 +220,22 @@ class StationStream:
 
 
 class StreamHub:
-    def __init__(self, registry: ArchiveRegistry) -> None:
+    def __init__(self, registry: ArchiveRegistry, pace: bool = True) -> None:
         self.registry = registry
+        self.pace = pace
         self._streams: dict[str, StationStream] = {}
 
     def stream_for(self, station_id: str) -> StationStream:
         stream = self._streams.get(station_id)
         if stream is None:
-            stream = StationStream(self.registry, station_id)
+            stream = StationStream(self.registry, station_id, pace=self.pace)
             self._streams[station_id] = stream
         return stream
 
 
-def build_stream_router(registry: ArchiveRegistry, require_access: AccessGuard) -> APIRouter:
+def build_stream_router(registry: ArchiveRegistry, require_access: AccessGuard, pace: bool = True) -> APIRouter:
     router = APIRouter()
-    hub = StreamHub(registry)
+    hub = StreamHub(registry, pace=pace)
 
     @router.get("/radio-api/station/{station_id}/stream.ogg")
     async def station_stream(
@@ -243,7 +257,7 @@ def build_stream_router(registry: ArchiveRegistry, require_access: AccessGuard) 
         require_access(request)
         max_bytes = seconds * SAMPLE_RATE * 2 * 2 if 0 < seconds <= 30 else None
         if seek == SEEK_FRESH:
-            stream = StationStream(registry, station_id, fresh_start=True)
+            stream = StationStream(registry, station_id, fresh_start=True, pace=pace)
         else:
             stream = hub.stream_for(station_id)
         return StreamingResponse(

@@ -82,6 +82,9 @@ export class PublicRadioEngine {
   private recovering = false;
   private speaking = false;
   private playing = false;
+  private currentVoiceSource: AudioBufferSourceNode | null = null;
+  private welcomeGeneration = 0;
+  private switchCount = 0;
 
   private startedAt = new Date();
   private lastBreakAt: Date | null = null;
@@ -225,10 +228,16 @@ export class PublicRadioEngine {
    * keeps playing until the new one runs, then it is torn down; on failure the old one stays.
    */
   private async openStream(url: string, previous: StreamHandle | null = null): Promise<boolean> {
+    const switchId = ++this.switchCount;
+    // Mute previous stream immediately so two stations NEVER play or overlap simultaneously
+    if (previous) {
+      previous.el.muted = true;
+    }
     let handle: StreamHandle;
     try {
       handle = createStreamElement(this.ctx, url, this.musicBus);
     } catch {
+      if (previous) previous.el.muted = false;
       return false;
     }
     this.streamHandle = handle;
@@ -242,13 +251,23 @@ export class PublicRadioEngine {
       await handle.el.play();
     } catch {
       handle.destroy();
-      this.streamHandle = previous;
-      if (previous && navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
+      if (switchId === this.switchCount) {
+        this.streamHandle = previous;
+        if (previous) {
+          previous.el.muted = false;
+          if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing';
+        }
+      }
       return false;
     }
     if (previous) {
       previous.destroy();
       if (navigator.mediaSession) navigator.mediaSession.playbackState = 'playing'; // destroy() reset it
+    }
+    // If another station switch started while this handle was loading, discard it
+    if (switchId !== this.switchCount) {
+      handle.destroy();
+      return false;
     }
     return true;
   }
@@ -322,10 +341,13 @@ export class PublicRadioEngine {
     this.station = station;
     if (!this.playing) return;
 
+    // Stop competing engines and any in-flight voice clip
+    this.chunkStreamer?.stop();
+    this.chunkStreamer = null;
+    this.helper?.stop();
+    this.stopVoice();
+
     if (isPresetStation(station)) {
-      // Preset stations play from the recorded archive. Swap the stream only once the new one plays,
-      // so a failed switch never leaves two stations audible (or silence).
-      this.helper?.stop();
       if (this.streamHandle) {
         await this.openStream(this.streamUrl(), this.streamHandle);
       } else if (!this.chunkStreamer) {
@@ -335,8 +357,6 @@ export class PublicRadioEngine {
       }
     } else {
       // A mood station has no archive: generate it live with Lyria.
-      this.chunkStreamer?.stop();
-      this.chunkStreamer = null;
       this.stopStreamElement();
       if (!this.helper) this.helper = this.createHelper();
       await this.applyStation();
@@ -344,9 +364,6 @@ export class PublicRadioEngine {
       await this.helper.play();
     }
     this.events.onStatus(`Gra ${station.name}`);
-    if (this.hostMode === 'with-host' && prev.id !== station.id) {
-      void this.playWelcomeIntro();
-    }
   }
 
   async setCategories(categories: NewsCategory[]): Promise<void> {
@@ -424,21 +441,35 @@ export class PublicRadioEngine {
     if (this.helper) await applyStationToHelper(this.helper, this.station);
   }
 
+  private stopVoice(): void {
+    if (this.currentVoiceSource) {
+      try { this.currentVoiceSource.stop(); } catch {}
+      try { this.currentVoiceSource.disconnect(); } catch {}
+      this.currentVoiceSource = null;
+    }
+    this.speaking = false;
+    this.events.onHostState?.(false, null);
+  }
+
   private async playWelcomeIntro(): Promise<void> {
+    const gen = ++this.welcomeGeneration;
     const sid = hostStationId(this.station);
     try {
-      this.duck(0.15, 0.2);
       const buf = await this.decode(`/radio-api/welcome/${sid}.wav`);
-      if (!this.playing) return;
+      if (!this.playing || gen !== this.welcomeGeneration) return;
+      this.stopVoice();
+      this.duck(0.15, 0.2);
       this.speaking = true;
       this.events.onHostState?.(true, 'host');
       await this.playVoice(buf);
     } catch {
       // Ignored if greeting is missing
     } finally {
-      this.speaking = false;
-      this.events.onHostState?.(false, null);
-      this.duck(1.0, 1.8);
+      if (gen === this.welcomeGeneration) {
+        this.speaking = false;
+        this.events.onHostState?.(false, null);
+        this.duck(1.0, 1.8);
+      }
     }
   }
 
@@ -637,11 +668,18 @@ export class PublicRadioEngine {
   }
 
   private playVoice(buffer: AudioBuffer): Promise<void> {
+    this.stopVoice();
     const source = this.ctx.createBufferSource();
+    this.currentVoiceSource = source;
     source.buffer = buffer;
     source.connect(this.voiceGain);
     return new Promise<void>((resolve) => {
-      source.onended = () => resolve();
+      source.onended = () => {
+        if (this.currentVoiceSource === source) {
+          this.currentVoiceSource = null;
+        }
+        resolve();
+      };
       source.start();
     });
   }

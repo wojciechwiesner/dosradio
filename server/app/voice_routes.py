@@ -10,7 +10,7 @@ from typing import Any, Callable, Optional
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 
-from .hosts import DEFAULT_HOST_STATION, HOSTS, host_for, intro_line
+from .hosts import BORROWED_HOSTS, DEFAULT_HOST_STATION, HOSTS, host_for, intro_line
 from .news import NewsService, Story, story_headline
 from .radio_script import OUTRO_PHRASES, intro_script, outro_script, teaser_script
 from .spoken_time import spoken_time_pl
@@ -32,7 +32,7 @@ def _known_story(news: NewsService, story_id: str) -> Story:
 
 
 def _known_station(station: str) -> None:
-    if station not in HOSTS:
+    if station not in HOSTS and station not in BORROWED_HOSTS:
         raise HTTPException(400, "Nieznana stacja.")
 
 

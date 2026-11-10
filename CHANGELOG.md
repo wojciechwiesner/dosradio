@@ -7,7 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added
+### Fixed
+- **Prevent station stream overlap and clash on switch** (`src/radio/publicRadioEngine.ts`):
+  the previous station's `<audio>` element is now muted immediately when a new station is clicked, eliminating the dissonant overlap where both stations played simultaneously at full volume. Added switch generation tracking (`switchCount`) to discard slow/orphaned stream requests on rapid clicking, and single-voice exclusivity (`stopVoice`) so presenters never talk over each other.
+- **Removed intrusive speech on station change**:
+  station switches now transition music directly without forcing a 15-second welcome speech on every button click (full welcome intro is reserved for initial radio playback start).
+- **Wall-clock pacing for Ogg stream** (`server/app/stream.py`):
+  `StationStream._feed` now paces PCM output against `time.monotonic()` to match real-time playback, preventing the encoder from running at 60x CPU speed and over-mixing segments in rapid bursts.
+- **Unlock news flash voice routes for all genres** (`server/app/voice_routes.py`):
+  unlocked `/radio-api/intro.wav`, `/teaser.wav`, `/outro.wav` for borrowed stations (previously throwing 400 Bad Request).
 - **Host voices, greetings, and jingles for all 25 stations** (`server/app/hosts.py`, `server/app/host_clips.py`, `server/app/main.py`):
   every station now has a personalized host greeting and jingle matching its genre (e.g. Kuba on Deep Tech, Ola on Trance). Unlocked `/radio-api/welcome/{sid}.wav`, `/radio-api/jingle/{sid}.wav`, and `/radio-api/host-clips/{sid}` for all 25 stations (previously returning 404 for borrowed genres).
 - **Instant host greeting on station switch** (`src/radio/publicRadioEngine.ts`):

@@ -44,7 +44,7 @@ def _app(tmp_path: Path, allow: bool) -> FastAPI:
             raise HTTPException(402, "Trial ended")
 
     app = FastAPI()
-    app.include_router(build_stream_router(registry, require_access))
+    app.include_router(build_stream_router(registry, require_access, pace=False))
     return app
 
 
@@ -66,7 +66,7 @@ async def test_stream_rejects_expired_trial(tmp_path: Path) -> None:
 
 async def test_stream_unknown_station_is_404(tmp_path: Path) -> None:
     app = FastAPI()
-    app.include_router(build_stream_router(ArchiveRegistry(tmp_path), lambda request: None))
+    app.include_router(build_stream_router(ArchiveRegistry(tmp_path), lambda request: None, pace=False))
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://radio") as client:
         response = await client.get("/radio-api/station/nie-ma/stream.ogg")
     assert response.status_code == 404
