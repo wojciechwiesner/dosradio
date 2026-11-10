@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Calendar and AP feeds for the personal news digest** (`server/app/agenda_feed.py`, `scripts/publish_feeds.py`):
+  three RSS topics (`calendar`, `ap`, `all`) served from `/feeds/<token>/<topic>.xml`. Calendar comes from Google's "Daily Agenda" mail read over Himalaya (IMAP), AP signals from ap_improve `/api/ops` (counts only, nothing from stale data). The radio consumes them through the existing personal-RSS path, no radio code changes. Published by launchd (`io.theones.dosradio.feeds`) every 30 minutes. The token lives in `~/.config/dosradio-feeds/token`; nginx serves `/feeds/` with `autoindex off`, `no-store` and `noindex`.
+
 ### Fixed
 - **Prevent station stream overlap and clash on switch** (`src/radio/publicRadioEngine.ts`):
   the previous station's `<audio>` element is now muted immediately when a new station is clicked, eliminating the dissonant overlap where both stations played simultaneously at full volume. Added switch generation tracking (`switchCount`) to discard slow/orphaned stream requests on rapid clicking, and single-voice exclusivity (`stopVoice`) so presenters never talk over each other.
