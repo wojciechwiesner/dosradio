@@ -7,7 +7,7 @@ import type { BreakClip } from './programme';
 export interface RunnerIo<Buffer> {
   /** Resolves null (or rejects) when the clip is missing, e.g. an older server without the endpoint. */
   decode: (path: string) => Promise<Buffer | null>;
-  play: (buffer: Buffer) => Promise<void>;
+  play: (buffer: Buffer, clip: BreakClip) => Promise<void>;
   now: () => number;
 }
 
@@ -20,7 +20,7 @@ export async function runClips<Buffer>(clips: BreakClip[], io: RunnerIo<Buffer>,
     if (maxMs !== undefined && played.length && io.now() - startedAt >= maxMs) break;
     const buffer = await loading[index];
     if (!buffer) continue;
-    await io.play(buffer);
+    await io.play(buffer, clips[index]);
     played.push(clips[index]);
   }
   return played;

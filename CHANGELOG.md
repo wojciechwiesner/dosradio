@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Synchronized live news on-air state and headline updates** (`src/radio/publicRadioEngine.ts`, `src/radio/breakRunner.ts`, `src/ui/dosradio.ts`):
+  isolated voice source termination (`stopVoiceSource`) from session-level speaking state so `playVoice()` no longer resets `speaking` to false mid-break. The on-air banner and status pill now reliably stay in "Wiadomości na żywo" mode throughout the bulletin. Forwarded clip descriptors in `runClips()` to dynamically display the active headline, full story text, or weather forecast in the player card as the presenter speaks them. Ensured "Wiadomości teraz" can replay top daily stories on explicit request, and caught `TrialEndedError` in audio clip decoding.
+- **Synced personal RSS feeds across account profiles**:
+  ensured active user profile receives the calendar and AP operations personal digest feed.
+
 ### Added
 - **Calendar and AP feeds for the personal news digest** (`server/app/agenda_feed.py`, `scripts/publish_feeds.py`):
   three RSS topics (`calendar`, `ap`, `all`) served from `/feeds/<token>/<topic>.xml`. Calendar comes from Google's "Daily Agenda" mail read over Himalaya (IMAP), AP signals from ap_improve `/api/ops` (counts only, nothing from stale data). The radio consumes them through the existing personal-RSS path, no radio code changes. Published by launchd (`io.theones.dosradio.feeds`) every 30 minutes. The token lives in `~/.config/dosradio-feeds/token`; nginx serves `/feeds/` with `autoindex off`, `no-store` and `noindex`.

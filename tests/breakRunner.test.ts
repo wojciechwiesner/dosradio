@@ -34,6 +34,19 @@ describe('runClips', () => {
     );
     expect(played.map((item) => item.path)).toEqual(['a', 'b']);
   });
+
+  it('forwards each clip descriptor to io.play for on-air synchronization', async () => {
+    const roles: string[] = [];
+    await runClips(
+      [clip('intro', 'i'), clip('headline', 'h', 'story-1'), clip('story', 's', 'story-2')],
+      {
+        decode: async (path) => path,
+        play: async (_buf, clip) => { roles.push(`${clip.role}:${clip.storyId ?? ''}`); },
+        now: () => 0,
+      },
+    );
+    expect(roles).toEqual(['intro:', 'headline:story-1', 'story:story-2']);
+  });
 });
 
 describe('ProgrammeState.record', () => {

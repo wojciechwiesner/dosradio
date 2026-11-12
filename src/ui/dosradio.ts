@@ -164,15 +164,26 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
   onQueue: (queue, airingId) => renderQueue(queue, airingId),
   onUpcoming: (story) => upcoming.setStory(story),
   onOnAir: (story) => {
-    $('onAir').classList.toggle('live', story !== null || false);
-    $('onAirText').textContent = story ? 'Na antenie' : (engine.isPlaying ? 'Muzyka' : 'Poza anteną');
+    const isLive = story !== null;
+    $('onAir').classList.toggle('live', isLive);
     if (story) {
-      $('onAirLabel').textContent = `Na antenie · ${categoryLabel(story.category)}`;
-      $('storyTitle').textContent = story.title;
+      const isWeather = story.id === 'weather';
+      $('onAirLabel').textContent = isWeather ? 'Na antenie · Pogoda' : `Na antenie · ${categoryLabel(story.category)}`;
+      $('onAirText').textContent = 'Wiadomości na żywo';
+      $('storyTitle').textContent = story.headline || story.title;
       $('storyText').textContent = story.radio_text;
       const src = $<HTMLAnchorElement>('storySrc');
-      src.href = story.source_url;
-      src.hidden = false;
+      if (story.source_url) {
+        src.href = story.source_url;
+        src.hidden = false;
+      } else {
+        src.hidden = true;
+      }
+    } else {
+      $('storySrc').hidden = true;
+      if (!engine.isPlaying) {
+        $('onAirText').textContent = 'Poza anteną';
+      }
     }
   },
   onNextBreak: (at) => {
@@ -183,10 +194,14 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
   onTrialEnded: () => { void refreshAccess(); openAuth('register', true); },
   onHostState: (speaking, role) => {
     const label = $('onAirLabel');
+    const airText = $('onAirText');
+    const isMusicOnly = hostModeBtn.dataset.mode === 'music-only';
     if (speaking) {
       label.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'DOS Radio' : 'Prowadzący na żywo';
+      airText.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'DOS Radio' : 'Prowadzący na żywo';
     } else {
       label.textContent = 'Wiadomości';
+      airText.textContent = isMusicOnly ? 'Tylko muzyka' : (engine.isPlaying ? 'Muzyka' : 'Poza anteną');
     }
   },
   onLevel: renderLevel,

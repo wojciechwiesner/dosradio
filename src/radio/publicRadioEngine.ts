@@ -441,12 +441,16 @@ export class PublicRadioEngine {
     if (this.helper) await applyStationToHelper(this.helper, this.station);
   }
 
-  private stopVoice(): void {
+  private stopVoiceSource(): void {
     if (this.currentVoiceSource) {
       try { this.currentVoiceSource.stop(); } catch {}
       try { this.currentVoiceSource.disconnect(); } catch {}
       this.currentVoiceSource = null;
     }
+  }
+
+  private stopVoice(): void {
+    this.stopVoiceSource();
     this.speaking = false;
     this.events.onHostState?.(false, null);
   }
@@ -625,7 +629,20 @@ export class PublicRadioEngine {
     if (this.speaking || (!this.playing && !standalone) || this.hostMode === 'music-only') return;
     this.lastBreakAt = new Date();
     const newsAllowed = this.newsEnabled || standalone; // "Bez wiadomości" still airs queued pills
-    const plan = newsAllowed ? planBreak(this.programme.context(this.queue, this.lastBreakAt)) : NO_NEWS_PLAN;
+    let plan = newsAllowed ? planBreak(this.programme.context(this.queue, this.lastBreakAt)) : NO_NEWS_PLAN;
+    if (standalone && plan.empty && this.queue.length > 0) {
+      // Listener explicitly asked for news now: air top stories even if already heard earlier today
+      const lead = this.queue[0];
+      const others = this.queue.slice(1, 4).filter((s) => Boolean(s.headline));
+      plan = {
+        kind: 'flash',
+        headlines: others,
+        full: [lead],
+        teaser: null,
+        weather: false,
+        empty: false,
+      };
+    }
     const pillUnit = this.pillQueue.peekUnit();
     if (plan.empty && !pillUnit) return this.airFiller();
 
@@ -636,8 +653,12 @@ export class PublicRadioEngine {
 
     try {
       this.events.onHostState?.(true, 'news');
-      this.events.onOnAir(plan.full[0] ?? null);
-      if (plan.full[0]) this.events.onQueue(this.queue, plan.full[0].id);
+      if (plan.full[0]) {
+        this.events.onOnAir(plan.full[0]);
+        this.events.onQueue(this.queue, plan.full[0].id);
+      } else {
+        this.events.onOnAir(null);
+      }
       if (this.playing) {
         // Duck only. Restarting the live model or the stream here cuts the mix under the voice.
         this.duck(this.duckLevel, 1.2);
@@ -646,12 +667,42 @@ export class PublicRadioEngine {
       played = await runClips(
         clips,
         {
-          decode: (path) => this.decode(path).catch(() => null),
-          play: (buffer) => this.playVoice(buffer),
+          decode: (path) =>
+            this.decode(path).catch((err) => {
+              if (err instanceof TrialEndedError) this.endTrial();
+              return null;
+            }),
+          play: async (buffer, clip) => {
+            this.events.onHostState?.(true, 'news');
+            if (clip.storyId) {
+              const story = this.queue.find((s) => s.id === clip.storyId);
+              if (story) {
+                this.events.onOnAir(story);
+                this.events.onQueue(this.queue, story.id);
+              }
+            } else if (clip.role === 'weather') {
+              this.events.onOnAir({
+                id: 'weather',
+                category: 'ai',
+                title: 'Prognoza pogody',
+                radio_text: 'Aktualna prognoza pogody.',
+                headline: 'Pogoda',
+                confirmed: true,
+                source_url: '',
+                audio_ready: true,
+              } as unknown as QueuedStory);
+            } else if (clip.role === 'intro') {
+              this.events.onOnAir(null);
+            }
+            await this.playVoice(buffer);
+          },
           now: Date.now,
         },
         plan.kind === 'hourly' ? HOURLY_MAX_MS : undefined,
       );
+      if (clips.length > 0 && played.length === 0) {
+        this.events.onStatus('Nie udało się załadować nagrań serwisu informacyjnego.');
+      }
       if (pillUnit) this.pillQueue.commitUnit(); // an unloadable unit is skipped, never retried forever
     } catch (error) {
       if (error instanceof TrialEndedError) return this.endTrial();
@@ -660,15 +711,15 @@ export class PublicRadioEngine {
       this.lastBreakEndedAt = new Date();
       this.events.onQueue(this.queue, null); // re-render: just-aired stories turn grey
       if (this.playing) this.duck(1.0, 2.0);
-      this.speaking = false;
-      this.events.onHostState?.(false, null);
+      this.stopVoice();
       this.events.onOnAir(null);
       this.emitUpcoming();
     }
   }
 
   private playVoice(buffer: AudioBuffer): Promise<void> {
-    this.stopVoice();
+    this.stopVoiceSource();
+    this.speaking = true;
     const source = this.ctx.createBufferSource();
     this.currentVoiceSource = source;
     source.buffer = buffer;
