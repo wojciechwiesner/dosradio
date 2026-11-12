@@ -95,4 +95,16 @@ describe('Radio Clock & Intervals', () => {
     const d = new Date(2026, 10, 5, 14, 20, 0);
     expect(spokenTimePl(d)).toBe('czternasta dwadzieścia');
   });
+
+  it('allows standalone news breaks to preempt speaking without getting dropped', () => {
+    // REGRESSION INVARIANT: standalone breaks (e.g. newsNow) must not be rejected when speaking is true
+    const shouldAir = (speaking: boolean, standalone: boolean, playing: boolean, hostMode: string) => {
+      if ((speaking && !standalone) || (!playing && !standalone) || hostMode === 'music-only') return false;
+      return true;
+    };
+    expect(shouldAir(true, false, true, 'with-host')).toBe(false); // scheduled break deferred
+    expect(shouldAir(true, true, true, 'with-host')).toBe(true);   // manual newsNow preempts speaking
+    expect(shouldAir(false, false, true, 'with-host')).toBe(true);
+    expect(shouldAir(false, false, true, 'music-only')).toBe(false);
+  });
 });

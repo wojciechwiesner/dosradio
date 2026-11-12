@@ -450,6 +450,7 @@ export class PublicRadioEngine {
   }
 
   private stopVoice(): void {
+    this.welcomeGeneration++;
     this.stopVoiceSource();
     this.speaking = false;
     this.events.onHostState?.(false, null);
@@ -626,7 +627,10 @@ export class PublicRadioEngine {
   }
 
   private async airBreak(slot: Date, standalone = false): Promise<void> {
-    if (this.speaking || (!this.playing && !standalone) || this.hostMode === 'music-only') return;
+    if ((this.speaking && !standalone) || (!this.playing && !standalone) || this.hostMode === 'music-only') return;
+    if (standalone && this.speaking) {
+      this.stopVoiceSource();
+    }
     this.lastBreakAt = new Date();
     const newsAllowed = this.newsEnabled || standalone; // "Bez wiadomości" still airs queued pills
     let plan = newsAllowed ? planBreak(this.programme.context(this.queue, this.lastBreakAt)) : NO_NEWS_PLAN;
@@ -646,6 +650,7 @@ export class PublicRadioEngine {
     const pillUnit = this.pillQueue.peekUnit();
     if (plan.empty && !pillUnit) return this.airFiller();
 
+    this.welcomeGeneration++;
     this.speaking = true;
     const hhmm = `${String(slot.getHours()).padStart(2, '0')}:${String(slot.getMinutes()).padStart(2, '0')}`;
     const clips = breakClips(plan, { hhmm, stationId: hostStationId(this.station), place: this.programme.place, pillUnit });
