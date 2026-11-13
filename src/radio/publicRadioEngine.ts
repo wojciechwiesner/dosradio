@@ -176,6 +176,8 @@ export class PublicRadioEngine {
   }
 
   async start(): Promise<void> {
+    // A second start() while playing would open another stream on top of the running one.
+    if (this.playing) return;
     await this.ctx.resume();
     this.events.onState('loading');
     this.playing = true; // set first: greeting, watchdog and breaks all check it
@@ -229,6 +231,8 @@ export class PublicRadioEngine {
    */
   private async openStream(url: string, previous: StreamHandle | null = null): Promise<boolean> {
     const switchId = ++this.switchCount;
+    // A stream that is not the explicit `previous` must never survive next to the new one.
+    if (this.streamHandle && this.streamHandle !== previous) this.stopStreamElement();
     // Mute previous stream immediately so two stations NEVER play or overlap simultaneously
     if (previous) {
       previous.el.muted = true;

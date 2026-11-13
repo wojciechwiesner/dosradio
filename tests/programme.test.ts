@@ -175,3 +175,15 @@ describe('breakClips', () => {
     expect(weatherQuery({ city: '', lat: 51.107883, lon: 17.038538 }, 's')).toBe('station=s&lat=51.108&lon=17.039');
   });
 });
+
+describe('rankUnaired: own sources (feedby 2026-11-12: own messages never played)', () => {
+  it('airs the listener\'s own stories before rendered stories of other topics', () => {
+    const queue = [
+      story('x1', 'ai', { audio_ready: true }),
+      story('x2', 'ai', { audio_ready: true }),
+      story('own', 'personal' as QueuedStory['category']),
+    ];
+    const ranked = rankUnaired(queue, new Set(), null);
+    expect(ranked[0].id).toBe('own');
+  });
+});

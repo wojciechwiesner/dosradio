@@ -173,3 +173,33 @@ describe('host break (feedby: model reset cut the mix)', () => {
     expect(sources.length).toBeGreaterThan(0);
   });
 });
+
+describe('restart (feedby 2026-11-12: radio switched off, pressing play layered stations)', () => {
+  it('ignores a second start() while the radio is already playing', async () => {
+    const radio = await engine();
+    expect(elements.filter((el) => !el.paused)).toHaveLength(1);
+
+    await radio.start();
+
+    expect(elements.filter((el) => !el.paused)).toHaveLength(1);
+    expect(mediaSources.filter((node) => node.connected)).toHaveLength(1);
+  });
+
+  it('does not keep a stale dead-air recovery loop alive across stop() and start()', async () => {
+    const radio = await engine();
+    const guts = radio as unknown as { startMusic: () => Promise<boolean>; triggerDeadAirRecovery: () => Promise<void> };
+    const startMusic = vi.fn(async () => false);
+    guts.startMusic = startMusic;
+
+    void guts.triggerDeadAirRecovery();
+    await vi.advanceTimersByTimeAsync(100); // first attempt done, loop now sleeping
+    radio.stop();
+    await radio.start(); // new run; its own recovery loop takes over
+    startMusic.mockClear();
+
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    // One loop backs off 2s, 4s, 6s... (about 5 attempts in 30s); two loops would be about double.
+    expect(startMusic.mock.calls.length).toBeLessThanOrEqual(6);
+  });
+});

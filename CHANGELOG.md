@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- **Pressing play while the radio already runs no longer layers a second stream** (`src/radio/publicRadioEngine.ts`; Feedby 2026-11-12 "radio sie wylacza, ponowne nacisniecie play powoduje nakladanie sie stacji"):
+  `start()` is now a no-op while `playing`, and `openStream()` tears down any live stream that is not the explicit `previous` before opening a new one, so two stations can no longer sound at once. Covered by two new tests in `tests/stationSwitch.test.ts`.
+- **Own-source ("Moje źródła") stories are aired first in a break** (`src/radio/programme.ts`; Feedby 2026-11-12 "Nie odtwarzaja sie wlasne wiadomosci"):
+  the server tags them `personal` while the client only knew `mine`, so they got no priority and were crowded out by rendered stories of other topics. `rankUnaired` now ranks own stories first. Covered by a new test in `tests/programme.test.ts`.
 - **Synchronized live news on-air state and headline updates** (`src/radio/publicRadioEngine.ts`, `src/radio/breakRunner.ts`, `src/ui/dosradio.ts`):
   isolated voice source termination (`stopVoiceSource`) from session-level speaking state so `playVoice()` no longer resets `speaking` to false mid-break. The on-air banner and status pill now reliably stay in "Wiadomości na żywo" mode throughout the bulletin. Forwarded clip descriptors in `runClips()` to dynamically display the active headline, full story text, or weather forecast in the player card as the presenter speaks them. Ensured "Wiadomości teraz" can replay top daily stories on explicit request, and caught `TrialEndedError` in audio clip decoding.
 - **Synced personal RSS feeds across account profiles**:

@@ -65,9 +65,13 @@ export function hourKey(date: Date): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}`;
 }
 
-/** Unaired stories, topic of the day first, then rendered audio first, then queue order. */
+/** The server tags the listener's own-source stories `personal` (the topic picker calls it `mine`). */
+const isOwnStory = (story: QueuedStory): boolean => (story.category as string) === 'personal' || story.category === 'mine';
+
+/** Unaired stories: own sources first, then topic of the day, then rendered audio, then queue order. */
 export function rankUnaired(queue: QueuedStory[], aired: ReadonlySet<string>, topic: NewsCategory | null): QueuedStory[] {
-  const score = (story: QueuedStory): number => (story.category === topic ? 2 : 0) + (story.audio_ready ? 1 : 0);
+  const score = (story: QueuedStory): number =>
+    (isOwnStory(story) ? 4 : 0) + (story.category === topic ? 2 : 0) + (story.audio_ready ? 1 : 0);
   return queue
     .map((story, index) => ({ story, index }))
     .filter(({ story }) => !aired.has(story.id))
