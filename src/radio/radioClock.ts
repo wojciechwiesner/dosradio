@@ -74,8 +74,21 @@ export interface BreakSchedule {
   lastBreakEndedAt?: Date | null;
 }
 
-/** Even at "co minutę" the listener hears at least this much music between two breaks. */
-export const MIN_MUSIC_BETWEEN_MS = 45 * 1000;
+/** Whatever speaks (news, pill, jingle, chatter) is followed and preceded by at least this much music. */
+export const MIN_MUSIC_BETWEEN_MS = 2 * MS_PER_MINUTE;
+
+/** Rough length of a host clip, so a clip is not started right before a break would be due. */
+export const CLIP_ALLOWANCE_MS = 30 * 1000;
+
+/**
+ * May a host clip start now? Needs MIN_MUSIC_BETWEEN_MS of music since the last spoken item and
+ * enough room before the next break (music gap + the clip itself).
+ */
+export function canSpeakNow(now: Date, lastSpokeEndedAt: Date | null, nextBreakAt: Date | null): boolean {
+  if (lastSpokeEndedAt && now.getTime() - lastSpokeEndedAt.getTime() < MIN_MUSIC_BETWEEN_MS) return false;
+  if (nextBreakAt && nextBreakAt.getTime() - now.getTime() < MIN_MUSIC_BETWEEN_MS + CLIP_ALLOWANCE_MS) return false;
+  return true;
+}
 
 /**
  * Listener-relative schedule: first break at start + delay, every later break `interval`
@@ -83,9 +96,8 @@ export const MIN_MUSIC_BETWEEN_MS = 45 * 1000;
  */
 export function nextScheduledBreak(schedule: BreakSchedule): Date {
   const { startedAt, lastBreakAt, interval, firstBreakDelayMs = FIRST_BREAK_DELAY_MS } = schedule;
-  if (!lastBreakAt) return new Date(startedAt.getTime() + firstBreakDelayMs);
-  const byInterval = lastBreakAt.getTime() + interval * MS_PER_MINUTE;
   const afterMusic = schedule.lastBreakEndedAt ? schedule.lastBreakEndedAt.getTime() + MIN_MUSIC_BETWEEN_MS : 0;
+  const byInterval = lastBreakAt ? lastBreakAt.getTime() + interval * MS_PER_MINUTE : startedAt.getTime() + firstBreakDelayMs;
   return new Date(Math.max(byInterval, afterMusic));
 }
 

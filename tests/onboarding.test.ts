@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   FIRST_BREAK_DELAY_MS, nextScheduledBreak, nextHostClipDelayMs, normalizeInterval, intervalLabel,
-  HOST_CLIP_MIN_MS, HOST_CLIP_MAX_MS,
+  HOST_CLIP_MIN_MS, HOST_CLIP_MAX_MS, MIN_MUSIC_BETWEEN_MS, CLIP_ALLOWANCE_MS, canSpeakNow,
 } from '../src/radio/radioClock';
 import {
   ONBOARDED_KEY, PREFS_KEY, applyOnboardingChoice, defaultPrefs, isOnboarded, loadPrefs, markOnboarded, savePrefs,
@@ -59,11 +59,36 @@ describe('Intervals and host clip delay', () => {
     ]);
   });
 
-  it('keeps 45 s of music after a long break even at one break per minute', () => {
+  it('keeps at least 2 minutes of music between any two spoken items', () => {
+    expect(MIN_MUSIC_BETWEEN_MS).toBe(2 * MINUTE);
+    const lastBreakAt = new Date('2026-11-13T10:00:00');
+    const lastBreakEndedAt = new Date('2026-11-13T10:00:40');
+    const next = nextScheduledBreak({ startedAt: lastBreakAt, lastBreakAt, lastBreakEndedAt, interval: 1 });
+    expect(next.getTime() - lastBreakEndedAt.getTime()).toBe(2 * MINUTE);
+  });
+
+  it('pushes the first break back when a host clip has just spoken', () => {
+    const startedAt = new Date('2026-11-13T10:00:00');
+    const clipEnded = new Date(startedAt.getTime() + FIRST_BREAK_DELAY_MS - 20_000); // 20 s before the slot
+    const next = nextScheduledBreak({ startedAt, lastBreakAt: null, lastBreakEndedAt: clipEnded, interval: 5 });
+    expect(next.getTime()).toBe(clipEnded.getTime() + MIN_MUSIC_BETWEEN_MS);
+  });
+
+  it('allows a host clip only with 2 minutes of music on both sides', () => {
+    const now = new Date('2026-11-13T10:10:00');
+    const at = (s: number) => new Date(now.getTime() + s * 1000);
+    expect(canSpeakNow(now, at(-60), at(900))).toBe(false); // spoke 1 min ago
+    expect(canSpeakNow(now, at(-121), at(900))).toBe(true);
+    expect(canSpeakNow(now, null, at(100))).toBe(false); // a break is due in < 2 min
+    expect(canSpeakNow(now, null, at(MIN_MUSIC_BETWEEN_MS / 1000 + CLIP_ALLOWANCE_MS / 1000 + 1))).toBe(true);
+    expect(canSpeakNow(now, null, null)).toBe(true);
+  });
+
+  it('keeps 2 min of music after a long break even at one break per minute', () => {
     const lastBreakAt = new Date('2026-11-07T10:00:00');
     const lastBreakEndedAt = new Date('2026-11-07T10:00:40'); // 40 s of talking
     const next = nextScheduledBreak({ startedAt: lastBreakAt, lastBreakAt, lastBreakEndedAt, interval: 1 });
-    expect(next.getTime() - lastBreakEndedAt.getTime()).toBe(45_000);
+    expect(next.getTime() - lastBreakEndedAt.getTime()).toBe(2 * 60_000);
     const relaxed = nextScheduledBreak({ startedAt: lastBreakAt, lastBreakAt, lastBreakEndedAt, interval: 7 });
     expect(relaxed.getTime() - lastBreakAt.getTime()).toBe(7 * 60_000);
   });

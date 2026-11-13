@@ -14,7 +14,7 @@ import { applyStationToHelper, createLyriaHelper } from './liveLyria';
 import { radioApi, TrialEndedError } from './radioApi';
 import { interleaveStories, type NewsCategory, type QueuedStory } from './newsQueue';
 import { hostStationId, isPresetStation, type Station } from './stations';
-import { DEFAULT_BREAK_INTERVAL, FIRST_BREAK_DELAY_MS, nextScheduledBreak, type BreakInterval } from './radioClock';
+import { DEFAULT_BREAK_INTERVAL, FIRST_BREAK_DELAY_MS, canSpeakNow, nextScheduledBreak, type BreakInterval } from './radioClock';
 import { HostClipPlayer } from './hostClipPlayer';
 import { ChunkStreamer } from './chunkStreamer';
 import { AiredStore } from './airedStore';
@@ -91,7 +91,9 @@ export class PublicRadioEngine {
   private lastBreakEndedAt: Date | null = null;
   private readonly clipPlayer = new HostClipPlayer({
     stationId: () => hostStationId(this.station),
-    canPlay: () => this.playing && this.hostMode === 'with-host' && !this.speaking,
+    canPlay: () =>
+      this.playing && this.hostMode === 'with-host' && !this.speaking
+      && canSpeakNow(new Date(), this.lastBreakEndedAt, this.nextSlot),
     play: (url) => this.airHostClip(url),
   });
 
@@ -558,7 +560,9 @@ export class PublicRadioEngine {
   }
 
   private scheduleNextBreak(): void {
+    this.clearSchedule(); // idempotent: never two pending break timers
     if (this.hostMode === 'music-only' || (!this.newsEnabled && this.pillQueue.isEmpty)) {
+      this.nextSlot = null;
       this.events.onNextBreak(null);
       return;
     }
@@ -600,7 +604,9 @@ export class PublicRadioEngine {
     } finally {
       if (this.playing) this.duck(1.0, 1.8);
       this.speaking = false;
+      this.lastBreakEndedAt = new Date(); // a clip counts as speech: keep the music gap before the next break
       this.events.onHostState?.(false, null);
+      if (this.playing && this.hostMode === 'with-host') this.scheduleNextBreak();
     }
   }
 
