@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Orbita: a parallel 3D front end at `/orbita.html`** (`orbita/`, built into `public/orbita.html` with `npm run build:orbita`):
+  the station list becomes a tuner dial in space (drag, wheel, hold to seek, static between stations), news topics are moons around a dithered speaker, and when a host talks the speaker gives way to dithered host silhouettes with lip sync and captions. The palette follows the music. It reuses the existing API and shares `dosradio.prefs.v1`, `dosradio.pillQueue.v1` and `dosradio.aired.v1` with the classic app, so both run side by side. Ports the break scheduler, programme planner, pill queue, host clips and ducking; adds an opening intro by the host, a default duo podcast ("Twoja muzyka. Twoje tematy. Twoje życie."), a stoic pill, a free-hour checklist with nudges and an end-of-trial recap, a Gmail sample, one free podcast, and PL/EN/RU. Backend work it expects (lang, showcase audio, free podcast credit, Gmail connector) is listed in `orbita/README.md`.
+
 ### Fixed
 - **Pressing play while the radio already runs no longer layers a second stream** (`src/radio/publicRadioEngine.ts`; Feedby 2026-11-12 "radio sie wylacza, ponowne nacisniecie play powoduje nakladanie sie stacji"):
   `start()` is now a no-op while `playing`, and `openStream()` tears down any live stream that is not the explicit `previous` before opening a new one, so two stations can no longer sound at once. Covered by two new tests in `tests/stationSwitch.test.ts`.

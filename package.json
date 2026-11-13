@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "build:orbita": "node orbita/build.mjs",
     "preview": "vite preview",
     "test": "vitest run"
   },
