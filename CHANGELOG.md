@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **Station stream: a second listener got silence** (`server/app/stream.py`): the shared Ogg/Opus encoder writes its Opus headers
+  only once, when it starts. Anyone who joined a station that already had a listener received audio pages with no header, so
+  the browser's audio element waited forever (a couple of seconds of the welcome intro, then silence). New listeners now get
+  the two header pages replayed and the stream continues on a page boundary. Covered by
+  `server/tests/test_stream_late_join.py`, which fails on the old code and passes now.
+
 ### Changed
 - **Orbita: no synthetic speech, a quieter and more artistic stage** (`orbita/src/`): the browser speech-synthesis fallback is gone;
   a part without a recording is shown as a caption at reading pace while the host form moves with it, and silent captions no

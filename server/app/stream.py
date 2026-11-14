@@ -37,8 +37,39 @@ SESSION_GAP_NS = 45 * 1_000_000_000  # same gap rule as scripts/scan_steady_tone
 SEGMENT_STAMP_PREFIX = len("seg-")
 SEGMENT_STAMP_SUFFIX = len(".opus")
 SEEK_FRESH = "fresh"
+OGG_CAPTURE = b"OggS"
+OGG_PAGE_HEADER_BYTES = 27
+OGG_SEGMENT_COUNT_OFFSET = 26
+OGG_HEADER_PAGES = 2  # OpusHead + OpusTags: a decoder cannot start without both
 
 AccessGuard = Callable[[Request], None]
+
+
+def split_ogg_pages(data: bytes) -> tuple[list[bytes], bytes]:
+    """Split a byte stream into complete Ogg pages plus the trailing partial page (kept for the next call)."""
+    pages: list[bytes] = []
+    pos = 0
+    while True:
+        if len(data) - pos < OGG_PAGE_HEADER_BYTES:
+            break
+        if data[pos:pos + 4] != OGG_CAPTURE:
+            # lost sync: skip to the next capture pattern rather than corrupting every later page
+            nxt = data.find(OGG_CAPTURE, pos + 1)
+            if nxt < 0:
+                return pages, b""
+            pos = nxt
+            continue
+        segments = data[pos + OGG_SEGMENT_COUNT_OFFSET]
+        header_len = OGG_PAGE_HEADER_BYTES + segments
+        if len(data) - pos < header_len:
+            break
+        body_len = sum(data[pos + OGG_PAGE_HEADER_BYTES:pos + header_len])
+        end = pos + header_len + body_len
+        if len(data) < end:
+            break
+        pages.append(data[pos:end])
+        pos = end
+    return pages, data[pos:]
 
 
 def _segment_stamp(path: Path) -> int:
@@ -103,10 +134,15 @@ class StationStream:
         self._lock = asyncio.Lock()
         self._fresh_start_pending = fresh_start
         self.pace = pace
+        self._header_pages: list[bytes] = []
+        self._page_tail = b""
 
     async def subscribe(self, max_bytes: int | None = None) -> AsyncIterator[bytes]:
         queue: asyncio.Queue[bytes | None] = asyncio.Queue(maxsize=MAX_QUEUE_CHUNKS)
         async with self._lock:
+            if self._task is not None and not self._task.done() and len(self._header_pages) >= OGG_HEADER_PAGES:
+                # joined a running stream: replay the Opus headers, then continue on a page boundary
+                queue.put_nowait(b"".join(self._header_pages))
             self._subscribers.add(queue)
             if self._task is None or self._task.done():
                 self._task = asyncio.create_task(self._run())
@@ -124,12 +160,27 @@ class StationStream:
             self._subscribers.discard(queue)
 
     async def _publish(self, chunk: bytes | None) -> None:
+        if chunk is None:
+            self._header_pages = []
+            self._page_tail = b""
+            for queue in list(self._subscribers):
+                self._offer(queue, None)
+            return
+        pages, self._page_tail = split_ogg_pages(self._page_tail + chunk)
+        if not pages:
+            return
+        if len(self._header_pages) < OGG_HEADER_PAGES:
+            self._header_pages.extend(pages[:OGG_HEADER_PAGES - len(self._header_pages)])
+        whole = b"".join(pages)
         for queue in list(self._subscribers):
-            try:
-                queue.put_nowait(chunk)
-            except asyncio.QueueFull:
-                self._subscribers.discard(queue)
-                queue.put_nowait(None)
+            self._offer(queue, whole)
+
+    def _offer(self, queue: asyncio.Queue[bytes | None], chunk: bytes | None) -> None:
+        try:
+            queue.put_nowait(chunk)
+        except asyncio.QueueFull:
+            self._subscribers.discard(queue)
+            queue.put_nowait(None)
 
     async def _run(self) -> None:
         encoder = await asyncio.create_subprocess_exec(
