@@ -2,7 +2,10 @@
  * Pure news helpers for the public DOS Radio client. Fetching, validation and TTS happen on the server.
  */
 
-export type NewsCategory = 'ai' | 'beauty' | 'sport' | 'funny' | 'stoic';
+export type NewsCategory = 'ai' | 'beauty' | 'sport' | 'funny' | 'stoic' | 'mine';
+
+/** The listener's own RSS feeds and keywords (Plus); served as one more topic by /radio-api/news. */
+export const PERSONAL_CATEGORY: NewsCategory = 'mine';
 
 export const NEWS_CATEGORIES: { id: NewsCategory; label: string }[] = [
   { id: 'ai', label: 'AI' },
@@ -10,11 +13,19 @@ export const NEWS_CATEGORIES: { id: NewsCategory; label: string }[] = [
   { id: 'sport', label: 'Sport' },
   { id: 'funny', label: 'Głupie' },
   { id: 'stoic', label: 'Stoicka myśl' },
+  { id: 'mine', label: 'Moje źródła' },
 ];
+
+/** Topics a listener can pick; "Moje źródła" only exists for Plus listeners with their own feeds. */
+export function availableCategories(plus: boolean): { id: NewsCategory; label: string }[] {
+  return NEWS_CATEGORIES.filter((category) => plus || category.id !== PERSONAL_CATEGORY);
+}
 
 export interface QueuedStory {
   id: string;
   title: string;
+  /** One sentence, <= 18 words; older servers omit it. */
+  headline?: string;
   radio_text: string;
   source_url: string;
   confirmed: boolean;
@@ -42,13 +53,13 @@ export function interleaveStories(groups: CategoryNews[]): QueuedStory[] {
   return result;
 }
 
-/** Next story not aired yet, preferring ones whose audio is already rendered; when everything was aired, start again. */
-export function pickNextStory(queue: QueuedStory[], aired: Set<string>): QueuedStory | null {
-  if (queue.length === 0) return null;
+/**
+ * Next story not aired yet, preferring ones whose audio is already rendered.
+ * Never restarts the cycle: when everything was aired today it returns null and the caller fills the time.
+ */
+export function pickNextStory(queue: QueuedStory[], aired: ReadonlySet<string>): QueuedStory | null {
   const unaired = queue.filter((story) => !aired.has(story.id));
-  if (unaired.length) return unaired.find((story) => story.audio_ready) ?? unaired[0];
-  aired.clear();
-  return queue.find((story) => story.audio_ready) ?? queue[0];
+  return unaired.find((story) => story.audio_ready) ?? unaired[0] ?? null;
 }
 
 export function categoryLabel(id: NewsCategory): string {

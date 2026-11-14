@@ -1,0 +1,218 @@
+"""DOS Radio Plus endpoints: duet podcasts, YouTube pills and personalized news sources.
+
+Every route requires a registered listener with an active Plus subscription
+(HTTP 402 otherwise). Mounted by app.main through build_plus_router.
+"""
+from __future__ import annotations
+
+import logging
+import re
+from dataclasses import asdict
+from typing import Optional
+
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+
+from .auth import AccessService, client_ip
+from .db import Database
+from .news import NewsService
+from .personal_news import PersonalNews, PreferenceError, validate_preferences
+from .pill_service import PillService
+from .podcast import PodcastService
+from .youtube_pill import PillError, extract_video_id
+
+# Pills run one at a time and the service remembers 50 jobs / keeps 30 pills on disk:
+# a batch must stay well below both, or early jobs are forgotten before they run.
+MAX_BATCH_LINKS = 20
+# A link ends at whitespace, a comma/semicolon, or where the next "http(s)://" starts
+# (pasting from some apps glues links together without any separator).
+LINK_RE = re.compile(r"https?://(?:(?!https?://)[^\s,;])+")
+
+
+def split_links(text: str) -> list[str]:
+    """Every http(s) link in a pasted block, in order (trailing punctuation trimmed)."""
+    return [match.rstrip(".)]>\"'") for match in LINK_RE.findall(text)]
+
+log = logging.getLogger("dosradio.plus")
+PLUS_MESSAGE = "Ta funkcja jest częścią DOS Radio Plus."
+
+
+class PodcastRequest(BaseModel):
+    topic: Optional[str] = Field(None, max_length=200)
+
+
+class PillRequest(BaseModel):
+    url: str = Field(..., min_length=1, max_length=300)
+
+
+class PillBatchRequest(BaseModel):
+    text: str = Field(..., min_length=1, max_length=40_000)  # pasted block: links separated by anything
+
+
+class PreferencesBody(BaseModel):
+    keywords: list[str] = Field(default_factory=list)
+    rss_feeds: list[str] = Field(default_factory=list)
+
+
+def build_plus_router(access: AccessService, db: Database, news: NewsService,
+                      podcasts: PodcastService, personal: PersonalNews,
+                      pills: PillService | None = None) -> APIRouter:
+    if pills is None:  # shares the podcast client, archive and (late-bound) process runner
+        pills = PillService(podcasts.client, podcasts.dir.parent / "pills", podcasts.archives,
+                            podcasts.station_id, run=lambda args, timeout: podcasts.run(args, timeout))
+    router = APIRouter(prefix="/radio-api/plus")
+
+    def require_plus(request: Request) -> int:
+        """Active Plus subscription required; returns the caller's user id."""
+        ip = client_ip({k.lower(): v for k, v in request.headers.items()},
+                       request.client.host if request.client else None)
+        current = access.resolve(request.cookies, ip)
+        if not current.registered or not current.plus:
+            raise HTTPException(402, PLUS_MESSAGE)
+        user = db.find_user_by_email(current.email or "")
+        if user is None:
+            raise HTTPException(401, "Sesja nieprawidłowa. Zaloguj się ponownie.")
+        return int(user["id"])
+
+    # --- podcasts ---------------------------------------------------------------
+    @router.post("/podcast")
+    async def create_podcast(body: PodcastRequest, request: Request) -> dict:
+        require_plus(request)
+        topic = (body.topic or "").strip() or None
+        headlines = [story.title for story in news.cache["ai"].stories[:1]]
+        try:
+            return await podcasts.episode(topic, headlines=headlines)
+        except Exception as error:
+            log.warning("podcast generation failed: %s: %s", type(error).__name__, error)
+            raise HTTPException(502, "Nie udało się wygenerować podcastu. Spróbuj ponownie za chwilę.") from error
+
+    @router.get("/podcast/{episode_id}")
+    def get_podcast(episode_id: str, request: Request) -> dict:
+        require_plus(request)
+        manifest = podcasts.load_manifest(episode_id)
+        if manifest is None:
+            raise HTTPException(404, "Nie ma takiego podcastu.")
+        return manifest
+
+    @router.get("/podcast/{episode_id}/{file_name}")
+    def podcast_part(episode_id: str, file_name: str, request: Request) -> FileResponse:
+        require_plus(request)
+        try:
+            path = podcasts.part_path(episode_id, file_name)
+        except FileNotFoundError:
+            raise HTTPException(404, "Nie ma takiego fragmentu.")
+        media = "audio/wav" if file_name.endswith(".wav") else "audio/ogg; codecs=opus"
+        return FileResponse(path, media_type=media, headers={"cache-control": "private, max-age=86400"})
+
+    # --- YouTube pill ---------------------------------------------------------------------
+    def pill_view(job: dict) -> dict:
+        return {key: job[key] for key in ("id", "status", "title", "author", "source_url", "parts", "error")}
+
+    @router.get("/pills")
+    def my_pills(request: Request) -> dict:
+        """Pills saved on the caller's account, newest first (only ones still on disk)."""
+        user_id = require_plus(request)
+        saved = (pills.load_manifest(video_id) for video_id in db.user_pill_ids(user_id))
+        return {"pills": [{key: m[key] for key in ("id", "title", "author", "source_url", "parts")}
+                          for m in saved if m]}
+
+    @router.post("/pill")
+    async def create_pill(body: PillRequest, request: Request, background: BackgroundTasks) -> dict:
+        user_id = require_plus(request)
+        try:
+            job = pills.submit(body.url)
+        except PillError as error:
+            raise HTTPException(422, str(error)) from error
+        video_id = extract_video_id(body.url)
+        if video_id:  # channel links resolve later; those are saved when the listener polls them
+            db.save_user_pill(user_id, video_id)
+        if job["status"] == "queued":
+            background.add_task(pills.process, job["id"])
+        return {"id": job["id"], "status": job["status"]}
+
+    @router.post("/pills/batch")
+    async def create_pills_batch(body: PillBatchRequest, request: Request, background: BackgroundTasks) -> dict:
+        """Paste many links at once; each gets its own pill, duplicates are skipped."""
+        user_id = require_plus(request)
+        links = split_links(body.text)
+        if not links:
+            raise HTTPException(422, "Nie znalazłem żadnych linków. Wklej linki do YouTube, każdy osobno.")
+        if len(links) > MAX_BATCH_LINKS:
+            raise HTTPException(422, f"Za dużo linków naraz ({len(links)}). Maksymalnie {MAX_BATCH_LINKS}.")
+        results, seen = [], set()
+        for url in links:
+            video_id = extract_video_id(url)
+            key = video_id or url
+            if key in seen:
+                results.append({"url": url, "video_id": video_id, "status": "duplicate"})
+                continue
+            seen.add(key)
+            try:
+                job = pills.submit(url)
+            except PillError as error:
+                results.append({"url": url, "video_id": video_id, "status": "error", "error": str(error)})
+                continue
+            if video_id:
+                db.save_user_pill(user_id, video_id)
+            if job["status"] == "queued":
+                background.add_task(pills.process, job["id"])
+            results.append({"url": url, "video_id": video_id, "status": job["status"], "id": job["id"]})
+        return {"results": results}
+
+    @router.get("/pill/{pill_id}")
+    def get_pill(pill_id: str, request: Request) -> dict:
+        user_id = require_plus(request)
+        job = pills.get(pill_id)
+        if job is None:
+            raise HTTPException(404, "Nie ma takiej pigułki.")
+        video_id = extract_video_id(job["source_url"])  # channel jobs know their episode once metadata is in
+        if job["status"] == "ready" and video_id:
+            db.save_user_pill(user_id, video_id)
+        return pill_view(job)
+
+    @router.get("/pill/{video_id}/{file_name}")
+    def pill_part(video_id: str, file_name: str, request: Request) -> FileResponse:
+        require_plus(request)
+        try:
+            path = pills.part_path(video_id, file_name)
+        except FileNotFoundError:
+            raise HTTPException(404, "Nie ma takiego fragmentu.")
+        media = "audio/wav" if file_name.endswith(".wav") else "audio/ogg; codecs=opus"
+        return FileResponse(path, media_type=media, headers={"cache-control": "private, max-age=86400"})
+
+    # --- personalized news ---------------------------------------------------------
+    @router.put("/news-preferences")
+    def put_news_preferences(body: PreferencesBody, request: Request) -> dict:
+        user_id = require_plus(request)
+        try:
+            keywords, rss_feeds = validate_preferences(body.keywords, body.rss_feeds)
+        except PreferenceError as error:
+            raise HTTPException(422, str(error)) from error
+        updated_at = db.set_news_preferences(user_id, keywords, rss_feeds)
+        return {"keywords": keywords, "rss_feeds": rss_feeds, "updated_at": updated_at}
+
+    @router.get("/news-preferences")
+    def get_news_preferences(request: Request) -> dict:
+        user_id = require_plus(request)
+        stored = db.get_news_preferences(user_id)
+        return stored or {"keywords": [], "rss_feeds": [], "updated_at": 0.0}
+
+    @router.get("/news-digest")
+    async def news_digest(request: Request) -> dict:
+        user_id = require_plus(request)
+        prefs = db.get_news_preferences(user_id) or {"keywords": [], "rss_feeds": []}
+        if not prefs["keywords"] and not prefs["rss_feeds"]:
+            return {"personal": False, "fallback": False, "stories": []}
+        try:
+            is_personal, stories = await personal.digest(user_id, prefs)
+        except Exception as error:
+            log.warning("digest failed for user %s: %s", user_id, error)
+            raise HTTPException(502, "Nie udało się pobrać twoich źródeł. Spróbuj ponownie za chwilę.") from error
+        return {
+            "personal": is_personal,
+            "fallback": not is_personal,
+            "stories": [asdict(story) for story in stories],
+        }
+
+    return router

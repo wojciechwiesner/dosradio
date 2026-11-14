@@ -1,11 +1,14 @@
-"""SQLite storage: users, login sessions and anonymous trials."""
+"""SQLite storage: users, login sessions, anonymous trials and Plus news preferences."""
 from __future__ import annotations
 
+import json
 import sqlite3
 import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
+
+SECONDS_PER_DAY = 86400
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -15,7 +18,15 @@ CREATE TABLE IF NOT EXISTS users (
     created_at REAL NOT NULL,
     email_verified INTEGER NOT NULL DEFAULT 1,
     verify_token_hash TEXT,
-    verify_expires REAL
+    verify_expires REAL,
+    plan TEXT NOT NULL DEFAULT 'free',
+    plus_until REAL
+);
+CREATE TABLE IF NOT EXISTS news_preferences (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id),
+    keywords TEXT NOT NULL DEFAULT '[]',
+    rss_feeds TEXT NOT NULL DEFAULT '[]',
+    updated_at REAL NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS sessions (
     token_hash TEXT PRIMARY KEY,
@@ -25,6 +36,18 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE TABLE IF NOT EXISTS trials (
     key TEXT PRIMARY KEY,          -- 'ip:<hash>' or 'anon:<id>'
     started_at REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS user_pills (
+    user_id INTEGER NOT NULL,
+    video_id TEXT NOT NULL,
+    added_at REAL NOT NULL,
+    PRIMARY KEY (user_id, video_id)
+);
+CREATE TABLE IF NOT EXISTS aired_items (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    day TEXT NOT NULL,
+    item_id TEXT NOT NULL,
+    PRIMARY KEY (user_id, day, item_id)
 );
 """
 
@@ -46,6 +69,10 @@ class Database:
             conn.execute("ALTER TABLE users ADD COLUMN verify_token_hash TEXT")
         if "verify_expires" not in columns:
             conn.execute("ALTER TABLE users ADD COLUMN verify_expires REAL")
+        if "plan" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'free'")
+        if "plus_until" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN plus_until REAL")
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -97,6 +124,14 @@ class Database:
                 (user_id,),
             )
 
+    def grant_welcome_plus(self, user_id: int, days: int) -> None:
+        """Give a free account `days` of Plus; paid or unlimited plans are never touched."""
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE users SET plan = 'plus', plus_until = ? WHERE id = ? AND plan = 'free'",
+                (time.time() + days * SECONDS_PER_DAY, user_id),
+            )
+
     # --- sessions ----------------------------------------------------------
     def create_session(self, token_hash: str, user_id: int) -> None:
         with self.connect() as conn:
@@ -115,6 +150,74 @@ class Database:
     def delete_session(self, token_hash: str) -> None:
         with self.connect() as conn:
             conn.execute("DELETE FROM sessions WHERE token_hash = ?", (token_hash,))
+
+    # --- news preferences (Plus) ---------------------------------------------
+    def set_news_preferences(self, user_id: int, keywords: list[str], rss_feeds: list[str]) -> float:
+        updated_at = time.time()
+        with self.connect() as conn:
+            conn.execute(
+                "INSERT INTO news_preferences (user_id, keywords, rss_feeds, updated_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET keywords=excluded.keywords, "
+                "rss_feeds=excluded.rss_feeds, updated_at=excluded.updated_at",
+                (user_id, json.dumps(keywords, ensure_ascii=False), json.dumps(rss_feeds), updated_at),
+            )
+        return updated_at
+
+    def get_news_preferences(self, user_id: int) -> dict | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT keywords, rss_feeds, updated_at FROM news_preferences WHERE user_id = ?", (user_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        return {
+            "keywords": json.loads(row["keywords"]),
+            "rss_feeds": json.loads(row["rss_feeds"]),
+            "updated_at": float(row["updated_at"]),
+        }
+
+    # --- YouTube pills saved on the account (Plus) -----------------------------
+    def save_user_pill(self, user_id: int, video_id: str) -> None:
+        """Remember a finished pill on the listener's account (re-adding just refreshes the date)."""
+        with self.connect() as conn:
+            conn.execute(
+                "INSERT INTO user_pills (user_id, video_id, added_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(user_id, video_id) DO UPDATE SET added_at=excluded.added_at",
+                (user_id, video_id, time.time()),
+            )
+
+    def user_pill_ids(self, user_id: int, limit: int = 20) -> list[str]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT video_id FROM user_pills WHERE user_id = ? ORDER BY added_at DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+        return [row["video_id"] for row in rows]
+
+    def all_news_preferences(self) -> list[tuple[int, dict]]:
+        """Every stored preference row (for the hourly personalized digest cycle)."""
+        with self.connect() as conn:
+            rows = conn.execute("SELECT user_id, keywords, rss_feeds FROM news_preferences").fetchall()
+        return [
+            (int(row["user_id"]), {"keywords": json.loads(row["keywords"]), "rss_feeds": json.loads(row["rss_feeds"])})
+            for row in rows
+        ]
+
+    # --- ramówka aired items (nothing repeats within a day) -----------------
+    def aired_ids(self, user_id: int, day: str) -> list[str]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT item_id FROM aired_items WHERE user_id = ? AND day = ? ORDER BY item_id",
+                (user_id, day),
+            ).fetchall()
+        return [row["item_id"] for row in rows]
+
+    def add_aired_ids(self, user_id: int, day: str, item_ids: list[str]) -> None:
+        with self.connect() as conn:
+            conn.executemany(
+                "INSERT OR IGNORE INTO aired_items (user_id, day, item_id) VALUES (?, ?, ?)",
+                [(user_id, day, item_id) for item_id in item_ids],
+            )
 
     # --- trials ------------------------------------------------------------
     def trial_started_at(self, keys: list[str]) -> float | None:

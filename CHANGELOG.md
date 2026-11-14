@@ -5,6 +5,269 @@ All notable changes to DOS Radio are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **Orbita: no synthetic speech, a quieter and more artistic stage** (`orbita/src/`): the browser speech-synthesis fallback is gone;
+  a part without a recording is shown as a caption at reading pace while the host form moves with it, and silent captions no
+  longer duck the music. The opening text is shorter (4 lines, PL/EN/RU) and the start screen copy was rewritten. The streaks
+  background is now an interference field: a standing wave from 3-8 symmetric sources (a different symmetry per station,
+  morphing on tune), contours in the colour of the time of day (`tod.js`, `?hour=` overrides for testing), a ring on every
+  kick and the line weight following the level. The hosts are abstract forms (a breathing orb in gyroscope rings, a crystal
+  with orbiting rings) instead of head-and-jaw figures.
+
+### Fixed
+- **At least 2 minutes of music between anything that speaks** (`src/radio/radioClock.ts`, `publicRadioEngine.ts`): the gap
+  after a news break was 45 s and host jingles/chatter ignored breaks entirely, so a clip could land right before or on top
+  of the news. `MIN_MUSIC_BETWEEN_MS` is now 120 s, a host clip counts as speech for the next break, and clips only start
+  when the last spoken item ended 2+ minutes ago and the next break is more than 2.5 minutes away (`canSpeakNow`).
+  The break timer is rescheduled after every clip and can no longer be armed twice.
+
+### Added
+- **Orbita: a parallel 3D front end at `/orbita.html`** (`orbita/`, built into `public/orbita.html` with `npm run build:orbita`):
+  the station list becomes a tuner dial in space (drag, wheel, hold to seek, static between stations), news topics are moons around a dithered speaker, and when a host talks the speaker gives way to dithered host silhouettes with lip sync and captions. The palette follows the music. It reuses the existing API and shares `dosradio.prefs.v1`, `dosradio.pillQueue.v1` and `dosradio.aired.v1` with the classic app, so both run side by side. Ports the break scheduler, programme planner, pill queue, host clips and ducking; adds an opening intro by the host, a default duo podcast ("Twoja muzyka. Twoje tematy. Twoje życie."), a stoic pill, a free-hour checklist with nudges and an end-of-trial recap, a Gmail sample, one free podcast, and PL/EN/RU. Backend work it expects (lang, showcase audio, free podcast credit, Gmail connector) is listed in `orbita/README.md`.
+
+### Fixed
+- **Pressing play while the radio already runs no longer layers a second stream** (`src/radio/publicRadioEngine.ts`; Feedby 2026-11-12 "radio sie wylacza, ponowne nacisniecie play powoduje nakladanie sie stacji"):
+  `start()` is now a no-op while `playing`, and `openStream()` tears down any live stream that is not the explicit `previous` before opening a new one, so two stations can no longer sound at once. Covered by two new tests in `tests/stationSwitch.test.ts`.
+- **Own-source ("Moje źródła") stories are aired first in a break** (`src/radio/programme.ts`; Feedby 2026-11-12 "Nie odtwarzaja sie wlasne wiadomosci"):
+  the server tags them `personal` while the client only knew `mine`, so they got no priority and were crowded out by rendered stories of other topics. `rankUnaired` now ranks own stories first. Covered by a new test in `tests/programme.test.ts`.
+- **Synchronized live news on-air state and headline updates** (`src/radio/publicRadioEngine.ts`, `src/radio/breakRunner.ts`, `src/ui/dosradio.ts`):
+  isolated voice source termination (`stopVoiceSource`) from session-level speaking state so `playVoice()` no longer resets `speaking` to false mid-break. The on-air banner and status pill now reliably stay in "Wiadomości na żywo" mode throughout the bulletin. Forwarded clip descriptors in `runClips()` to dynamically display the active headline, full story text, or weather forecast in the player card as the presenter speaks them. Ensured "Wiadomości teraz" can replay top daily stories on explicit request, and caught `TrialEndedError` in audio clip decoding.
+- **Synced personal RSS feeds across account profiles**:
+  ensured active user profile receives the calendar and AP operations personal digest feed.
+
+### Added
+- **Calendar and AP feeds for the personal news digest** (`server/app/agenda_feed.py`, `scripts/publish_feeds.py`):
+  three RSS topics (`calendar`, `ap`, `all`) served from `/feeds/<token>/<topic>.xml`. Calendar comes from Google's "Daily Agenda" mail read over Himalaya (IMAP), AP signals from ap_improve `/api/ops` (counts only, nothing from stale data). The radio consumes them through the existing personal-RSS path, no radio code changes. Published by launchd (`io.theones.dosradio.feeds`) every 30 minutes. The token lives in `~/.config/dosradio-feeds/token`; nginx serves `/feeds/` with `autoindex off`, `no-store` and `noindex`.
+
+### Fixed
+- **Prevent station stream overlap and clash on switch** (`src/radio/publicRadioEngine.ts`):
+  the previous station's `<audio>` element is now muted immediately when a new station is clicked, eliminating the dissonant overlap where both stations played simultaneously at full volume. Added switch generation tracking (`switchCount`) to discard slow/orphaned stream requests on rapid clicking, and single-voice exclusivity (`stopVoice`) so presenters never talk over each other.
+- **Removed intrusive speech on station change**:
+  station switches now transition music directly without forcing a 15-second welcome speech on every button click (full welcome intro is reserved for initial radio playback start).
+- **Wall-clock pacing for Ogg stream** (`server/app/stream.py`):
+  `StationStream._feed` now paces PCM output against `time.monotonic()` to match real-time playback, preventing the encoder from running at 60x CPU speed and over-mixing segments in rapid bursts.
+- **Unlock news flash voice routes for all genres** (`server/app/voice_routes.py`):
+  unlocked `/radio-api/intro.wav`, `/teaser.wav`, `/outro.wav` for borrowed stations (previously throwing 400 Bad Request).
+- **Host voices, greetings, and jingles for all 25 stations** (`server/app/hosts.py`, `server/app/host_clips.py`, `server/app/main.py`):
+  every station now has a personalized host greeting and jingle matching its genre (e.g. Kuba on Deep Tech, Ola on Trance). Unlocked `/radio-api/welcome/{sid}.wav`, `/radio-api/jingle/{sid}.wav`, and `/radio-api/host-clips/{sid}` for all 25 stations (previously returning 404 for borrowed genres).
+- **Instant host greeting on station switch** (`src/radio/publicRadioEngine.ts`):
+  switching station now immediately triggers the host's welcome line (`playWelcomeIntro`) while music ducks and loads, providing instant audio confirmation that the host is active and the station changed.
+- **Archive fallback for new stations** (`server/app/stream.py`, `server/app/main.py`):
+  new stations without recorded segments yet seamlessly stream audio from their parent genre, eliminating the 404 / 50-byte silent stall.
+- **DJ mix engine with zero-phase kick onset detection and bass-swap crossfade** (`server/app/mixer.py`):
+  built from proven blocks (`synthapse/kkik` beat grid and `AI_DJ` bass swap). Aligns the first kick of incoming recordings with outgoing kicks, crossfades highs over 4 beats, and swaps the low-pass sub-bass cleanly to prevent volume drops, flamming, and clipping.
+- **Continuous buffer stream feeder** (`server/app/stream.py`): `StationStream._feed` now chains archive audio through `join_recordings` in memory before writing to `libopus`, guaranteeing a mathematically gapless `stream.ogg` for web and mobile listeners.
+- **On-demand "Twój nastrój" (Mood) station** (`server/app/mood.py`): streaming personal radio generated from user prompt with a 30-second live delay buffer and 10-minute part rollover.
+- **25 electronic station presets** (`src/radio/stations.ts`, `server/app/recorder.py`, `server/app/hosts.py`): expanded library with Deep Tech, Dub Techno, Detroit Techno, Microhouse, Tech House, Trance, Drum and Bass, and borrowed host voices for all new genres.
+
+### Changed
+- **Removed destructive edge fades in recorder**: `encode_pcm_to_opus` in `server/app/recorder.py` no longer silences the first and last 0.5s of sessions, preventing the 1-second volume dip that listeners heard every 3 minutes. Clean audio is now passed to the live mix engine.
+
+### Fixed
+- **Station switch left the previous music playing** (Feedby, 6 reports 2026-11-10): changing a preset station
+  created the new stream element and destroyed the old one before the new one had started, so both played at once
+  (or the old one died and the new one never came up). The swap now waits until the new stream is actually playing,
+  and a failed switch keeps the station that was already on air.
+- **Host break cut the mix** (same reports: the model reset and a new piece started under the voice): a break no
+  longer restarts the live Lyria session, resets its context, or reloads the archive stream. The music stays and is
+  only ducked under the voice.
+- **One knob controlled everything** (Feedby, 2026-11-10): the single Głośność knob scaled music and voice
+  together, and the music level under the news was a fixed constant. The receiver now has three knobs —
+  Muzyka, Prowadzący, Muzyka pod wiadomościami — each on its own gain, remembered in the listener's settings.
+
+### Changed
+- **Longer recordings, mixed only where two of them meet.** A Lyria session now records three minutes (six 30-second parts) instead of one. A measured three-minute session kept its tone, so the old one-minute cut was wasting seams. The first part of a session fades in and the last fades out over half a second, so the join between two recordings does not jump. Parts inside one recording stay untouched, because that audio is already continuous.
+
+- **Previous radio look restored.** The Kasprzak receiver (dial, piano keys, bakelite knobs) is gone;
+  the station list and the plain volume slider are back. The three separate volumes stay in the engine
+  and in the listener's saved settings, ready to return as plain controls.
+
+### Fixed
+- **Pills forgot where the listener stopped** (Feedby, 2026-11-10): the programme row now shows the
+  part number and an "Od numeru" field, so a pill left at 3/42 continues from the number the listener
+  types. The position was already remembered across reloads.
+
+### Added
+- **Odbiornik (gałąź feat/kasprzak-receiver)**: the player is a 60s-70s Polish table radio (Kasprzak/Diora): walnut
+  cabinet, cloth grille, black glass scale with UKF numbers, station names on four bands (Fokus, Energia, Chill, Noc) and a red
+  pointer, magic eye driven by the live signal level, ivory piano keys, bakelite volume and tuning knobs (native ranges,
+  keyboard and touch work). Mobile turns the scale into tappable chips. Replaces the level bars. CSS/SVG only, no images.
+- **Pigułki hurtem (Plus)**: "Wklej wiele linków naraz" under the YouTube pill form. `POST /radio-api/plus/pills/batch {"text"}`
+  takes up to 20 links in any pasted block (new lines, commas, or glued together), skips duplicates by video id,
+  reports each link as queued/ready/duplicate/error and saves every accepted episode to "Moje pigułki".
+  Triggered by Insight: 123 YouTube links were copied one by one on 2026-11-07.
+- **Archive cleanup**: `server/scripts/clean_archive.py --station <id> --dry-run|--apply|--purge-originals`
+  finds steady Lyria tones in archived segments and rewrites them with notch filters; originals stay in
+  `<station>/originals/` until purged.
+- **Fresh stream start**: `stream.ogg?seek=fresh` opens a private stream that starts at a Lyria session start.
+- **Whine removal on the client (ToneTracker + ToneKiller)**: steady tones (the Lyria whine, 300 Hz - 16 kHz,
+  >= 12 dB over the neighbourhood, same bin for 80% of 4 s) are notched on the music bus only
+  (peaking -36 dB, Q 30, max 4 notches, released 3 s after the tone ends), so the stream element,
+  the chunk fallback and the live helper are all covered. Voice never passes through it.
+- **Pills join the programme**: pressing play on a YouTube pill no longer stops the radio. The pill goes
+  into a persisted queue (`dosradio.pillQueue.v1`) and airs one unit per news break, after the news
+  (bumper, or voice summary + clip), with the music ducked under it. The player shows
+  "W programie: <title> (n/N)" with a remove button; a queued pill also makes a pill-only break when
+  no news is left, or when news is switched off.
+- **Moje pigułki**: every YouTube pill a Plus listener makes is saved on the account
+  (`user_pills` table) and listed under the pill form with one-tap replay;
+  `GET /radio-api/plus/pills` returns them newest first.
+
+### Changed
+- **Lyria whine no longer baked into the archive**: recorder sessions capture 2 segments (~60 s) instead of 10,
+  with the temperature jittered per session; every segment is notched on steady tones
+  (up to 4 filters, -36 dB) before Opus encoding. Adds `numpy` to the server requirements.
+- **Music reset during breaks (stream path)**: when the voice starts, the stream element is replaced by a
+  new one opened with `?seek=fresh&t=<ms>`, so the music comes back from a fresh point instead of the
+  drifted one (the live helper is still reloaded on the live path).
+- **News frequency: any minute from 1 to 60** — settings slider with a live label
+  ("Co minutę", "Co 3 minuty", "Co 25 minut", "Co godzinę"); onboarding quick picks 1/3/5/10/15/30/60.
+  Stored values are rounded and clamped, old ones stay valid.
+- Breaks always leave at least 45 s of music after the previous break ends, so "co minutę"
+  never turns the radio into non-stop talking.
+
+### Fixed
+- **Pill form inputs**: the YouTube link input was unstyled (white system field on the dark theme).
+- **RSS feeds as a news source**: a feed saved in the Plus panel can now be picked as the
+  "Moje źródła" news topic (chip in settings and onboarding, Plus only) and the radio reads it
+  in regular breaks via `/radio-api/news?cats=mine`. Keywords now rank feed stories instead of
+  dropping every story that did not match (a feed with no keyword hit used to yield nothing).
+- **YouTube pill**: subtitles are tried in order (human pl/en, original-language auto captions,
+  en) and one failing track (HTTP 429 on auto-translated captions) no longer aborts the pill;
+  yt-dlp is taken from the app venv (`yt-dlp[default]>=2026.10` in requirements) because the
+  distro build is blocked by YouTube (403/SABR).
+
+### Added
+- **YouTube pill (Plus)**: `POST /radio-api/plus/pill {"url"}` and `GET /radio-api/plus/pill/{id}`
+  turn a video or channel link (latest upload, up to 3 h) into a "pigulka": pl (else en) subtitles,
+  Gemini picks ordered segments covering ~20% of the episode (20-120 s, snapped to cue boundaries),
+  yt-dlp + ffmpeg cut those exact fragments, each introduced by a one-sentence host summary and
+  wrapped in intro/outro bumpers. One job at a time, cached per video id, 402 without Plus.
+  New modules `youtube_pill.py` (pipeline) and `pill_service.py` (queue and cache); UI in `pill.ts`.
+- **Podcast bumpers**: ffmpeg-built stings (6-9 s music bed from the station archive, faded, ducked
+  under the host voice) for intro, break-out, break-in and outro; manifest parts get kind `bumper`.
+- Client podcast player schedules parts gaplessly and fades music and bumper edges by 1.5 s.
+
+### Changed
+- Podcast manifests carry `version: 2`; episodes cached before bumpers regenerate on next request.
+- **Ramówka planner** (`programme.ts`): two short break formats alternate every break. FLASH reads 2-3
+  one-sentence headlines plus a teaser for the next story; MAIN tells one story (topic of the day first)
+  plus a teaser. The first break after every full hour is an extended bulletin: remaining headlines,
+  the top 2 stories in full and the weather, capped at 4 minutes. Opt-out toggle "Pełne wiadomości co godzinę".
+- **No repeats** (`airedStore.ts`): stories aired today are stored in `dosradio.aired.v1`, reset at local
+  midnight and merged with `GET|POST /radio-api/aired` for logged-in listeners (best effort, never blocks audio).
+  `pickNextStory` no longer restarts the cycle; with nothing new the host chats instead of replaying.
+- **Topic of the day**: star on a news chip in the onboarding; that topic leads the main stories.
+- **FOMO line** under the player: "Za 3:12: <headline of what comes next>", updated every second.
+- **Weather** in the hourly bulletin by city name or browser geolocation ("Użyj mojej lokalizacji").
+- **Live Lyria reload** during every news break when live generation is in use; music returns fresh after the voice.
+- Every new server call (`headline.wav`, `teaser.wav`, `weather.wav`, `intro.wav?kind=`, `/aired`) is fail-soft:
+  a missing endpoint falls back to the old behaviour.
+
+### Changed
+- Default break interval is now 5 minutes (stored choices are kept).
+- Live Lyria wiring moved from `publicRadioEngine.ts` to `liveLyria.ts`; break playback to `breakRunner.ts`.
+- **News headlines**: each story carries a one-sentence `headline` (max 18 words) next to its
+  `radio_text`, which is now 45-70 words. `GET|HEAD /radio-api/story/{id}/headline.wav` voices
+  the headline once and caches it.
+- **Ramówka voices**: `GET|HEAD /radio-api/teaser.wav?story=&station=` (teaser for a story,
+  404 for unknown ids), `GET|HEAD /radio-api/outro.wav?station=&variant=0..3` ("Gramy dalej."
+  family) and `GET /radio-api/intro.wav?time=&station=&kind=flash|main|hourly`.
+- **Weather**: `GET /radio-api/weather?lat=&lon=&city=` returns city, temperature, summary and
+  text from Open-Meteo; `GET|HEAD /radio-api/weather.wav` voices that text for a station.
+  Forecasts are cached 30 minutes per coordinates rounded to two decimals.
+- **Aired ledger**: `GET /radio-api/aired?day=` and `POST /radio-api/aired` keep the stories a
+  verified listener already heard per day, merged as a union, capped at 500 ids per day.
+  Anonymous and unverified listeners get 401.
+
+### Changed
+- News prompt asks for headlines and the 45-70 word radio text, and every model reply passes
+  through `strip_emoji` before it is stored or voiced.
+- Old `GET /radio-api/intro.wav?time=` endpoint is replaced by the kind-aware one above.
+- **Voice loudness (v1.4 U1)**: host and news voice now sit 8 dB below full-volume music
+  (`VOICE_GAIN = 0.4` on the voice bus in `publicRadioEngine.ts`), and the music duck level
+  while voice is speaking rose from 0.16 to 0.34 (-9.4 dB). Previously the voice played at
+  0 dB against music ducked to -15.9 dB; now the voice (-8 dB) sits ~1.4 dB above the ducked
+  bed and 8 dB below full music, so it no longer overpowers the music.
+- **Server-side loudness normalization**: `GeminiClient.speak()` now runs every synthesized
+  clip (news stories, host jingles/chatter, podcast turns) through `normalize_loudness()`
+  (`server/app/news.py`), a single-pass ffmpeg `loudnorm` filter targeting -19 LUFS before
+  caching/returning the audio. Falls back to the original, unnormalized audio and logs a
+  warning if ffmpeg is missing or fails, so a broken normalizer never blocks speech.
+### Added
+- **Continuous station stream**: `GET /radio-api/station/{id}/stream.ogg` serves one shared
+  Ogg/Opus stream per station, re-encoded from the archive so segment boundaries are
+  gapless. The player uses a real `<audio>` element on Android and desktop (iOS stays on
+  the chunk path), which keeps playback alive after the browser is closed. `?seconds=N`
+  caps the length for tests.
+
+## [1.3.0] - 2026-11-06
+
+### Added
+- **Host clips**: `GET /radio-api/host-clips/{station_id}` lists each host's 4 jingles and
+  8 chatter remarks as wav URLs; `GET|HEAD /radio-api/host-clip/{station_id}/{kind}/{index}.wav`
+  voices a clip on first request and caches it under `data/audio/static/`. Unknown station,
+  kind or index returns 404.
+- **Welcome Plus**: a verified free account gets 30 days of Plus; paid or unlimited plans
+  are never shortened. Existing verified free accounts received the same 30 days at release.
+- **Onboarding on first play**: modal with the motto, "Z prowadzącym / Sama muzyka" cards,
+  news-area chips (incl. "Bez wiadomości") and a news frequency picker. Stored in
+  `dosradio.onboarded` + prefs; re-openable via "Zmień, co chcesz słyszeć".
+- **Random host clips**: between songs (with host on) the engine plays a random jingle or
+  chatter from `GET /radio-api/host-clips/{station}` every 6-12 minutes, ducked like news;
+  silently skipped when the endpoint is missing.
+
+### Changed
+- Anonymous trial lasts one hour (`DOSRADIO_TRIAL_SECONDS` default 3600, was 600).
+- **News frequency**: every 5, 10, 15, 20, 30 or 60 minutes (old stored values stay valid).
+- First news break fires 5 minutes after play is pressed; later breaks follow the chosen
+  interval counted from the previous break (no longer the wall-clock grid).
+- Trial copy and countdown moved from 10 minutes to one hour; register CTA offers
+  "30 dni Plus za darmo".
+
+## [1.2.0] - 2026-11-05
+
+### Added
+- **Duet podcasts (DOS Radio Plus)**: `POST /radio-api/plus/podcast {topic?}` generates a
+  NotebookLM-style two-host Polish conversation (Ania i Michał) via `gemini-3.8-flash`,
+  voices each turn with two distinct Gemini TTS voices and interleaves 2-3 minute music
+  breaks copied from the station archive. One episode per topic per day is cached under
+  `data/podcasts/` (max 30 kept); parts are served Plus-gated from
+  `/radio-api/plus/podcast/{id}/{part}`.
+- **Personalized news sources (Plus)**: `PUT/GET /radio-api/plus/news-preferences` stores
+  per-user keywords (max 20) and RSS feeds (max 10, http/https only) with Polish
+  validation messages; `GET /radio-api/plus/news-digest` builds a per-user digest
+  (5 s timeout per feed, per-feed isolation, keyword filtering, RSS 2.0 + Atom) that
+  falls back to the global edition. The hourly news loop refreshes every stored
+  preference row without ever blocking the global cycle; digest stories are voiced
+  on demand through the shared `/radio-api/story/{id}.wav` pipeline.
+- All `/radio-api/plus/*` routes require a registered listener with an active Plus
+  subscription (HTTP 402 otherwise).
+- **DOS Radio Plus billing (Stripe Checkout, test mode)**: new `app/billing.py` router
+  mounted through the existing guarded hook in `main.py` — no changes to shared modules.
+  - `POST /radio-api/billing/checkout` (registered users) opens a Stripe Checkout session
+    for Plus (39 PLN/mo) or Plus+AI (59 PLN/mo); optional `b2b: true` switches the
+    subscription to invoice billing (`send_invoice`, 14 days due).
+  - `POST /radio-api/billing/webhook` verifies the Stripe signature and grants Plus
+    idempotently (`plan='plus'`, `plus_until=now+30d`) on `checkout.session.completed`.
+  - `GET /radio-api/billing/status` returns the caller's plan state and the plan catalogue.
+  - Missing `STRIPE_SECRET_KEY` makes checkout return a clear 503 JSON; the rest of the
+    app is unaffected. Env documented in `server/.env.example` (`STRIPE_SECRET_KEY`,
+    `STRIPE_WEBHOOK_SECRET`, `DOSRADIO_PLUS_PRICE_PLN` as optional Price ID override).
+  - `stripe>=8` added to `server/requirements.txt`; 12 offline tests in
+    `server/tests/test_billing.py` (faked SDK, locally computed webhook signatures).
+- **Frontend**:
+  - "Twoje źródła" panel (keywords + RSS feeds, live digest list with links and
+    a "Posłuchaj swoich wiadomości" player) and a "Wygeneruj podcast" button, visible for
+    Plus users only, playing episodes through the shared Web Audio graph.
+  - `src/ui/billing.ts` replaces the stub — floating "Plus" badge opens a
+    minimal Linear-style plan modal with live status, and handles the Stripe
+    `?billing=success|cancel` redirect back. Polish copy, SVG icons only, self-contained styles.
+- **Tests**: full test coverage for gating, podcasts, personal news and Stripe billing
+  (all tests run offline without network access).
+
 ## [1.1.1] - 2026-11-05
 
 ### Fixed

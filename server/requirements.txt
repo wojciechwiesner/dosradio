@@ -1,6 +1,9 @@
 fastapi==0.128.8
 uvicorn[standard]==0.39.0
 httpx>=0.27
+stripe>=8
 websockets==15.0.1
 pytest>=8
 psutil>=5.9.0
+yt-dlp[default]>=2026.10
+numpy>=2.0,<3

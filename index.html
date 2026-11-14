@@ -15,6 +15,23 @@
   <meta name="apple-mobile-web-app-title" content="DOS Radio" />
   <link rel="apple-touch-icon" href="/icon-192.png" />
   <link rel="stylesheet" href="/src/ui/dosradio.css" />
+  <style>
+    /* DOS Radio Plus panel ("Twoje źródła" + duet podcast) — scoped styles for the Plus section. */
+    .plus-box { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; background: var(--panel);
+      border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+    .plus-form { display: grid; gap: 12px; align-content: start; }
+    .plus-field { display: grid; gap: 6px; font-size: 13px; color: var(--dim); }
+    .plus-form input, .plus-form textarea, .plus-podcast input { background: var(--bg-2); color: var(--text);
+      border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font: inherit; font-size: 14px; resize: vertical; }
+    .plus-form input:focus, .plus-form textarea:focus, .plus-podcast input:focus { outline: none; border-color: var(--accent); }
+    .plus-info { min-height: 18px; font-size: 13px; color: var(--accent-2); }
+    .plus-digest { display: grid; gap: 10px; align-content: start; }
+    .plus-digest-head { font-size: 13px; color: var(--dim); }
+    .plus-digest .news { gap: 6px; }
+    .plus-podcast { margin-top: 14px; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: end;
+      background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
+    @media (max-width: 860px) { .plus-box { grid-template-columns: 1fr; } .plus-podcast { grid-template-columns: 1fr; } }
+  </style>
 </head>
 <body>
   <div class="shell">
@@ -61,26 +78,40 @@
               <input type="range" id="volume" min="0" max="1" step="0.01" value="0.9" />
             </label>
           </div>
-          <div class="status" id="status">Kliknij Graj. Pierwsze 10 minut za darmo, bez konta.</div>
+          <div class="status" id="status">Kliknij Graj. Pierwsza godzina za darmo, bez konta.</div>
+          <div class="upcoming" id="upcoming" aria-live="off"></div>
+          <div class="in-programme" id="inProgramme" aria-live="polite" hidden></div>
         </div>
       </div>
 
       <aside class="card onair">
         <div class="eyebrow" id="onAirLabel">Wiadomości</div>
-        <h3 id="storyTitle">Prowadzący wchodzi co 20 minut</h3>
-        <p id="storyText">Najpierw podaje godzinę, potem jedną krótką wiadomość z wybranych tematów. Muzyka cichnie pod głos i wraca.</p>
+        <h3 id="storyTitle">Pierwsze wiadomości po 5 minutach</h3>
+        <p id="storyText">Potem wchodzi tak często, jak chcesz. Najpierw podaje godzinę, potem krótkie wiadomości z wybranych tematów, a co godzinę pełny serwis z pogodą. Muzyka cichnie pod głos i wraca.</p>
         <a class="src" id="storySrc" href="#" target="_blank" rel="noopener" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>
           Źródło
         </a>
         <div class="settings">
-          <label class="field">Jak często prowadzący
-            <select id="interval">
-              <option value="20">Co 20 minut</option>
-              <option value="30">Co 30 minut</option>
-              <option value="60">Co godzinę</option>
-            </select>
+          <label class="field">Jak często wiadomości: <output id="intervalValue">Co 5 minut</output>
+            <input type="range" id="interval" min="1" max="60" step="1" value="5"
+                   aria-describedby="intervalValue" />
           </label>
+          <label class="check">
+            <input type="checkbox" id="hourlyBulletin" checked />
+            Pełne wiadomości co godzinę
+          </label>
+          <div class="field">Pogoda w wiadomościach godzinnych
+            <div class="place-row">
+              <input type="text" id="weatherCity" placeholder="Twoje miasto, np. Wrocław" maxlength="80" autocomplete="address-level2" />
+              <button class="btn" id="useLocation" type="button">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21s7-6.2 7-11.5a7 7 0 0 0-14 0C5 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+                Użyj mojej lokalizacji
+              </button>
+            </div>
+            <div class="place-info" id="placeInfo" role="status"></div>
+          </div>
+          <button class="btn" id="reopenOnboarding" type="button">Zmień, co chcesz słyszeć</button>
         </div>
       </aside>
     </section>
@@ -118,6 +149,43 @@
       <div class="chips" id="categories"></div>
     </section>
 
+    <!-- DOS Radio Plus: własne źródła wiadomości i podcasty w duecie -->
+    <section class="section" id="plusPanel" hidden>
+      <div class="section-head"><h2>Twoje źródła</h2><span>DOS Radio Plus · własne wiadomości i podcasty w duecie</span></div>
+      <div class="plus-box">
+        <form id="plusPrefsForm" class="plus-form" novalidate>
+          <label class="plus-field" for="plusKeywords">Słowa kluczowe (maks. 20, oddzielone przecinkiem)
+            <input type="text" id="plusKeywords" placeholder="np. AI, webdev, kosmos" />
+          </label>
+          <label class="plus-field" for="plusFeeds">Kanały RSS (maks. 10, jeden na linię)
+            <textarea id="plusFeeds" rows="3" placeholder="https://przyklad.pl/rss"></textarea>
+          </label>
+          <div class="plus-info" id="plusPrefsInfo" role="status"></div>
+          <button type="submit" class="btn primary" id="plusPrefsSave">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>
+            Zapisz źródła
+          </button>
+        </form>
+        <div class="plus-digest">
+          <div class="plus-digest-head" id="plusDigestHead">Dodaj słowa kluczowe albo kanały RSS, żeby słuchać własnych wiadomości</div>
+          <ul class="news" id="plusDigest"></ul>
+          <button type="button" class="btn" id="plusDigestPlay" hidden>
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            Posłuchaj swoich wiadomości
+          </button>
+        </div>
+      </div>
+      <form id="podcastForm" class="plus-podcast" novalidate>
+        <label class="plus-field" for="podcastTopic">Podcast w duecie o wybranym temacie, przeplatany muzyką z archiwum stacji
+          <input type="text" id="podcastTopic" maxlength="200" placeholder="Temat rozmowy (opcjonalnie) — np. sen i produktywność" />
+        </label>
+        <button type="submit" class="btn" id="podcastBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg>
+          Wygeneruj podcast
+        </button>
+      </form>
+    </section>
+
     <section class="section">
       <div class="section-head"><h2>Na antenie dziś</h2><span id="queueInfo">Lista pojawi się po włączeniu radia</span></div>
       <ul class="news" id="queue"><li class="empty">Po kliknięciu Graj zobaczysz tu wiadomości z linkami do źródeł.</li></ul>
@@ -137,24 +205,31 @@
   <div class="modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
     <div class="dialog">
       <h2 id="authTitle">Słuchaj dalej za darmo</h2>
-      <p id="authLead">Twoje darmowe 10 minut minęło. Załóż konto, żeby słuchać bez limitu.</p>
+      <p id="authLead">Twoja darmowa godzina minęła. Załóż konto i dostań 30 dni Plus za darmo.</p>
       <ul class="perks" id="perks">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wszystkie stacje bez limitu czasu</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>30 dni Plus za darmo po potwierdzeniu e-maila</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Komponowanie muzyki z własnego opisu nastroju</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wiadomości z wybranych tematów</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wkrótce w Plus: podcasty w duecie i dyskusje przeplatane muzyką</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>W Plus: podcasty w duecie i własne źródła wiadomości</li>
       </ul>
       <form id="authForm" novalidate>
         <input type="email" id="authEmail" placeholder="E-mail" autocomplete="email" required />
         <input type="password" id="authPassword" placeholder="Hasło (min. 8 znaków)" autocomplete="new-password" minlength="8" required />
         <div class="form-error" id="authError"></div>
         <button type="button" id="resendLink" hidden>Wyślij link potwierdzający ponownie</button>
-        <button class="btn primary" type="submit" id="authSubmit">Załóż konto i słuchaj</button>
+        <button class="btn primary" type="submit" id="authSubmit">Załóż konto i dostań 30 dni Plus za darmo</button>
       </form>
       <div class="switch" id="authSwitch">Masz już konto? <button type="button" id="toLogin">Zaloguj się</button></div>
     </div>
   </div>
 
+  <div class="modal" id="onboardModal" role="dialog" aria-modal="true" aria-label="Co chcesz usłyszeć"></div>
+
   <script type="module" src="/src/ui/dosradio.ts"></script>
+  <script type="module" src="/src/ui/billing.ts"></script>
+  <!-- feedby:start (managed by `jit feedby`, public widget key) -->
+  <script>window.FeedbyConfig=Object.assign({"widgetKey": "wk_live_NEr7sd0kdPJBUg0pQnF_9BPUTn_dDdsc33aMaKMUxxU", "locale": "pl"},window.FeedbyConfig||{});</script>
+  <script src="https://feedby.borg.tools/v1/feedby.global.js" async></script>
+  <!-- feedby:end -->
 </body>
 </html>

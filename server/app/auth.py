@@ -1,4 +1,4 @@
-"""Accounts, cookies and the listening allowance (10 min trial, then registration)."""
+"""Accounts, cookies and the listening allowance (1 h trial, then registration)."""
 from __future__ import annotations
 
 import hashlib
@@ -19,6 +19,7 @@ from .db import Database
 log = logging.getLogger("dosradio.auth")
 
 VERIFY_TTL_SECONDS = mailer.VERIFY_TTL_SECONDS
+WELCOME_PLUS_DAYS = 30
 
 SESSION_COOKIE = "dr_session"
 ANON_COOKIE = "dr_anon"
@@ -62,6 +63,7 @@ class Access:
     email: str | None
     trial_started: bool
     trial_remaining: int  # seconds, 0 when used up
+    plus: bool = False  # active DOS Radio Plus subscription
 
     def as_dict(self) -> dict:
         return {
@@ -70,6 +72,7 @@ class Access:
             "email": self.email,
             "trial_started": self.trial_started,
             "trial_remaining": self.trial_remaining,
+            "plus": self.plus,
         }
 
 
@@ -90,7 +93,8 @@ class AccessService:
         if session:
             user = self.db.user_for_session(token_hash(session))
             if user and user["email_verified"]:
-                return Access(True, True, user["email"], True, self.trial_seconds)
+                plus = user["plan"] == "plus" and (user["plus_until"] is None or user["plus_until"] > now)
+                return Access(True, True, user["email"], True, self.trial_seconds, plus)
         if ip.startswith("100.") or ip in ("127.0.0.1", "::1", "unknown"):
             return Access(True, False, "admin@theones.io", True, self.trial_seconds)
         started = self.db.trial_started_at(self._trial_keys(ip, cookies.get(ANON_COOKIE)))
@@ -179,6 +183,7 @@ def build_router(access: AccessService) -> APIRouter:
         if row is None or (row["verify_expires"] or 0) < time.time():
             raise HTTPException(400, "Link nieprawidłowy albo wygasł. Zaloguj się i wyślij nowy.")
         access.db.verify_email(int(row["id"]))
+        access.db.grant_welcome_plus(int(row["id"]), days=WELCOME_PLUS_DAYS)
         open_session(response, int(row["id"]))
         return {"ok": True, "email": row["email"], "verified": True}
 

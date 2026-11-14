@@ -8,3 +8,4 @@ data-local/
 *.tmp
 __pycache__/
 .DS_Store
+.planning/orchestration/waves/

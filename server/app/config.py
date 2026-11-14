@@ -76,7 +76,7 @@ def load_settings() -> Settings:
         key_pool=KeyPool(keys),
         secret=secret,
         data_dir=data_dir,
-        trial_seconds=int(os.environ.get("DOSRADIO_TRIAL_SECONDS", "600")),
+        trial_seconds=int(os.environ.get("DOSRADIO_TRIAL_SECONDS", "3600")),
         news_model=os.environ.get("DOSRADIO_NEWS_MODEL", "gemini-3.8-flash"),
         tts_model=os.environ.get("DOSRADIO_TTS_MODEL", "gemini-3.8-flash-tts"),
         news_refresh_seconds=int(os.environ.get("DOSRADIO_NEWS_REFRESH", "3600")),

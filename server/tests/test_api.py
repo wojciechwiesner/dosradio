@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 @pytest.fixture()
 def client(tmp_path, monkeypatch):
     monkeypatch.setenv("DOSRADIO_DATA_DIR", str(tmp_path))
-    monkeypatch.setenv("DOSRADIO_TRIAL_SECONDS", "600")
+    monkeypatch.setenv("DOSRADIO_TRIAL_SECONDS", "3600")
     for name in list(sys.modules):
         if name.startswith("app"):
             del sys.modules[name]
@@ -65,17 +65,24 @@ def test_parse_stories_keeps_only_sourced():
         parse_stories("Nie wiem.", "ai")
 
 
+def test_trial_defaults_to_one_hour(tmp_path, monkeypatch):
+    monkeypatch.delenv("DOSRADIO_TRIAL_SECONDS", raising=False)
+    monkeypatch.setenv("DOSRADIO_DATA_DIR", str(tmp_path))
+    from app.config import load_settings
+    assert load_settings().trial_seconds == 3600
+
+
 def test_trial_then_register_then_login(client, captured_emails):
     me = client.get("/radio-api/me").json()
-    assert me == {"allowed": True, "registered": False, "email": None, "trial_started": False, "trial_remaining": 600}
+    assert me == {"allowed": True, "registered": False, "email": None, "trial_started": False, "trial_remaining": 3600, "plus": False}
 
     started = client.post("/radio-api/trial/start").json()
-    assert started["trial_started"] is True and 595 <= started["trial_remaining"] <= 600
+    assert started["trial_started"] is True and 3595 <= started["trial_remaining"] <= 3600
 
-    # Expire the trial by moving its start back 11 minutes.
+    # Expire the trial by moving its start back past the one hour allowance.
     from app.main import db
     with db.connect() as conn:
-        conn.execute("UPDATE trials SET started_at = started_at - 660")
+        conn.execute("UPDATE trials SET started_at = started_at - 3660")
     assert client.get("/radio-api/me").json()["allowed"] is False
     assert client.get("/radio-api/news?cats=ai").status_code == 402
 

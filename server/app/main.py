@@ -1,4 +1,4 @@
-"""DOS Radio API: accounts + 10 min trial, AI news per category, shared TTS cache, Lyria RealTime WebSocket proxy.
+"""DOS Radio API: accounts + 1 h trial, AI news per category, shared TTS cache, Lyria RealTime WebSocket proxy.
 
 The Gemini key never leaves the server. Run: uvicorn app.main:app --port 3015
 """
@@ -14,19 +14,28 @@ from typing import Optional
 from pathlib import Path
 
 import websockets
+from dataclasses import asdict
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from .auth import AccessService, build_router, client_ip
 from .config import load_settings
 from .db import Database
 from .news import CATEGORIES, GeminiClient, NewsService
-from .spoken_time import spoken_time_pl
 from .archive import ArchiveRegistry
+from .stream import build_stream_router
 from .recorder import StationRecorder, STATION_SPECS
+from .mood import MoodRecorder
 from .notifier import trigger_telegram_alert
-from .hosts import HOSTS, host_for, intro_line
+from .hosts import BORROWED_HOSTS, HOSTS, host_for
+from .personal_news import PersonalNews
+from .podcast import PodcastService
+from .plus_api import build_plus_router
+from .host_clips import build_router as build_host_clips_router
+from .weather import WeatherService
+from .voice_routes import build_voice_router
+from .aired import build_aired_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("dosradio")
@@ -38,9 +47,12 @@ gemini = GeminiClient(settings.gemini_api_key, settings.news_model, settings.tts
 news = NewsService(gemini, settings.data_dir / "audio", settings.news_refresh_seconds)
 archives = ArchiveRegistry(settings.data_dir / "archive")
 recorder = StationRecorder(settings.gemini_api_key, archives)
-intro_dir = settings.data_dir / "audio" / "intro"
+mood_recorder = MoodRecorder(settings.gemini_api_key)
+podcasts = PodcastService(gemini, settings.data_dir / "podcasts", archives)
+personal = PersonalNews(db, news)
+news.on_personal_refresh = personal.refresh_all
+weather = WeatherService()
 static_audio_dir = settings.data_dir / "audio" / "static"
-intro_dir.mkdir(parents=True, exist_ok=True)
 static_audio_dir.mkdir(parents=True, exist_ok=True)
 
 # Notify on Telegram when a listener registers
@@ -69,7 +81,7 @@ async def render_host_audio(station_id: str, kind: str) -> Path:
 
 async def prewarm_hosts() -> None:
     """Voice every host's greeting and jingle in the background (2 files x stations)."""
-    for station_id in HOSTS:
+    for station_id in list(HOSTS) + list(BORROWED_HOSTS):
         for kind in ("welcome", "jingle"):
             try:
                 await render_host_audio(station_id, kind)
@@ -88,16 +100,33 @@ async def lifespan(_: FastAPI):
     for task in tasks:
         task.cancel()
     await gemini.http.aclose()
+    await weather.aclose()
 
 
 app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.include_router(build_router(access))
+app.include_router(build_plus_router(access, db, news, podcasts, personal))
+app.include_router(build_host_clips_router(gemini.speak, static_audio_dir))
+
+# Billing (Stripe) router — optional module, loaded only when present.
+try:
+    from .billing import router as _billing_router
+
+    app.include_router(_billing_router)
+except ImportError:
+    pass
 
 
 def require_access(request: Request) -> None:
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
     if not access.resolve(request.cookies, ip).allowed:
-        raise HTTPException(402, "Darmowe 10 minut minęło. Załóż konto, żeby słuchać dalej.")
+        raise HTTPException(402, "Darmowa godzina minęła. Załóż konto i odbierz 30 dni Plus za darmo.")
+
+
+app.include_router(build_voice_router(
+    require_access, news, gemini, settings.data_dir / "audio" / "voice", weather,
+))
+app.include_router(build_aired_router(db))
 
 
 @app.get("/radio-api/health")
@@ -132,10 +161,11 @@ def categories() -> list[dict]:
 class MoodRequest(BaseModel):
     mood: Optional[str] = None
     description: Optional[str] = None
+    prompt: Optional[str] = None
 
     @property
     def text(self) -> str:
-        return (self.mood or self.description or "").strip()
+        return (self.mood or self.description or self.prompt or "").strip()
 
 
 @app.post("/radio-api/mood")
@@ -145,6 +175,11 @@ async def generate_mood_station(body: MoodRequest, request: Request) -> dict:
     user_mood = body.text
     if not user_mood:
         raise HTTPException(400, "Podaj opis nastroju")
+    if body.prompt:
+        mood_id = mood_recorder.start(body.prompt.strip())
+        session = mood_recorder.session(mood_id)
+        session.task = asyncio.create_task(mood_recorder.record(mood_id))
+        return {"id": mood_id}
     prompt = (
         f"Użytkownik radia opisał swój nastrój: \"{user_mood}\".\n"
         "Przekształć ten opis w parametry dla generatora muzyki instrumentalnej (Lyria RealTime):\n"
@@ -180,14 +215,28 @@ async def generate_mood_station(body: MoodRequest, request: Request) -> dict:
         raise HTTPException(502, "Nie udało się skomponować nastroju. Spróbuj innego opisu.")
 
 
+
+@app.get("/radio-api/station/{mood_id}/part/{number}.ogg")
+def mood_part(mood_id: str, number: int) -> Response:
+    session = mood_recorder.session(mood_id)
+    if session is None:
+        raise HTTPException(404, "Nie ma takiego nastroju")
+    audio = session.part_ogg(number)
+    if audio is None:
+        raise HTTPException(425, "Nagranie jeszcze nie ma 30 sekund")
+    return Response(content=audio, media_type="audio/ogg; codecs=opus")
+
+
+
 @app.get("/radio-api/hosts")
 def list_hosts() -> dict:
-    return {station_id: {"name": host.name} for station_id, host in HOSTS.items()}
+    all_stations = list(HOSTS.keys()) + list(BORROWED_HOSTS.keys())
+    return {sid: {"name": host_for(sid).name} for sid in all_stations}
 
 
 @app.api_route("/radio-api/welcome/{station_id}.wav", methods=["GET", "HEAD"])
 async def welcome_audio(station_id: str) -> FileResponse:
-    if station_id not in HOSTS:
+    if station_id not in HOSTS and station_id not in BORROWED_HOSTS:
         raise HTTPException(404, "no such station")
     try:
         path = await render_host_audio(station_id, "welcome")
@@ -198,7 +247,7 @@ async def welcome_audio(station_id: str) -> FileResponse:
 
 @app.api_route("/radio-api/jingle/{station_id}.wav", methods=["GET", "HEAD"])
 async def jingle_audio(station_id: str) -> FileResponse:
-    if station_id not in HOSTS:
+    if station_id not in HOSTS and station_id not in BORROWED_HOSTS:
         raise HTTPException(404, "no such station")
     try:
         path = await render_host_audio(station_id, "jingle")
@@ -206,6 +255,8 @@ async def jingle_audio(station_id: str) -> FileResponse:
         raise HTTPException(502, f"Nie udało się nagrać dżingla: {error}") from error
     return FileResponse(path, media_type="audio/wav", headers={"cache-control": "public, max-age=604800"})
 
+
+app.include_router(build_stream_router(archives, require_access))
 
 @app.api_route("/radio-api/station/{station_id}/next-chunk", methods=["GET", "HEAD"])
 async def next_station_chunk(
@@ -220,6 +271,11 @@ async def next_station_chunk(
         raise HTTPException(404, f"Nieznana stacja: {station_id}")
     arch = archives.get(station_id)
     path, is_live = arch.pick_next(live_probability=live_prob, after=after)
+    if not path or not path.exists():
+        fallback_sid = BORROWED_HOSTS.get(station_id, (None, None))[0]
+        if fallback_sid:
+            arch = archives.get(fallback_sid)
+            path, is_live = arch.pick_next(live_probability=live_prob, after=after)
     if not path or not path.exists():
         raise HTTPException(503, "Stacja nagrywa pierwsze segmenty, spróbuj za chwilę.")
     return FileResponse(
@@ -238,14 +294,44 @@ async def next_station_chunk(
 @app.get("/radio-api/news")
 async def get_news(request: Request, cats: str = Query("ai")) -> dict:
     require_access(request)
-    wanted = [c for c in cats.split(",") if c in CATEGORIES][:len(CATEGORIES)]
-    if not wanted:
+    requested = cats.split(",")
+    wanted = [c for c in requested if c in CATEGORIES][:len(CATEGORIES)]
+    wants_personal = PERSONAL_CATEGORY in requested
+    if not wanted and not wants_personal:
         raise HTTPException(400, "Wybierz przynajmniej jedną kategorię wiadomości.")
     # Editions are produced by news.hourly_loop; a topic with no edition yet is fetched once here.
     missing = [c for c in wanted if not news.cache[c].stories]
     if missing:
         await asyncio.gather(*(news.ensure(c) for c in missing))
-    return {"categories": [news.public(c) for c in wanted]}
+    groups = [news.public(c) for c in wanted]
+    if wants_personal:
+        groups.append(await personal_group(request))
+    return {"categories": groups}
+
+
+PERSONAL_CATEGORY = "mine"
+
+
+async def personal_group(request: Request) -> dict:
+    """The listener's own RSS feeds and keywords as one more news topic (Plus only)."""
+    group = {"category": PERSONAL_CATEGORY, "label": "Moje źródła", "fetched_at": time.time(),
+             "edition": None, "error": None, "stories": []}
+    ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
+    current = access.resolve(request.cookies, ip)
+    user = db.find_user_by_email(current.email or "") if current.registered else None
+    if user is None or not current.plus:
+        group["error"] = "Własne źródła są w DOS Radio Plus."
+        return group
+    prefs = db.get_news_preferences(int(user["id"])) or {}
+    if not prefs.get("rss_feeds") and not prefs.get("keywords"):
+        group["error"] = "Dodaj kanał RSS w panelu Plus."
+        return group
+    is_personal, stories = await personal.digest(int(user["id"]), prefs)
+    if not is_personal:
+        group["error"] = "Twoje kanały teraz nie odpowiadają."
+        return group
+    group["stories"] = [asdict(story) for story in stories]
+    return group
 
 
 @app.get("/radio-api/story/{story_id}.wav")
@@ -262,27 +348,6 @@ async def story_audio(request: Request, story_id: str) -> FileResponse:
             path = await news.render_story(story)
         except Exception as error:
             raise HTTPException(502, f"Nie udało się nagrać wiadomości: {error}") from error
-    return FileResponse(path, media_type="audio/wav", headers={"cache-control": "private, max-age=86400"})
-
-
-@app.get("/radio-api/intro.wav")
-async def intro_audio(request: Request, time_hm: str = Query(..., alias="time"), station: str = Query("dos-groove")) -> FileResponse:
-    """Spoken time by the station host ('Czternasta dwadzieścia. Z tej strony Kuba, DOS Groove...'), cached for all."""
-    require_access(request)
-    match = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", time_hm)
-    if not match or station not in HOSTS:
-        raise HTTPException(400, "bad time or station")
-    host = host_for(station)
-    path = intro_dir / f"{station}-{time_hm.replace(':', '')}.wav"
-    if not path.exists():
-        text = f"{spoken_time_pl(int(match.group(1)), int(match.group(2))).capitalize()}. {intro_line(station)}"
-        try:
-            audio = await gemini.speak(text, host.voice, host.style)
-        except Exception as error:
-            raise HTTPException(502, f"Nie udało się nagrać zapowiedzi: {error}") from error
-        tmp = path.with_suffix(".tmp")
-        tmp.write_bytes(audio)
-        tmp.replace(path)
     return FileResponse(path, media_type="audio/wav", headers={"cache-control": "private, max-age=86400"})
 
 

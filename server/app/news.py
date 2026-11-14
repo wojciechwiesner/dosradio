@@ -8,18 +8,29 @@ import io
 import json
 import logging
 import re
+import subprocess
+import tempfile
 import time
 import wave
 from dataclasses import asdict, dataclass, field
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 import httpx
 
 from .hosts import NEWSROOM_VOICES
+from .radio_script import sentence, strip_emoji, word_count
 
 log = logging.getLogger("dosradio.news")
 API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
+NEWS_ITEM_COUNT = 6
+NEWS_WINDOW_HOURS = 48
+HEADLINE_MAX_WORDS = 18
+RADIO_MIN_WORDS = 45
+RADIO_MAX_WORDS = 70
+MIN_RADIO_CHARS = 80
+TARGET_LUFS = -19.0
 
 CATEGORIES: dict[str, dict[str, str]] = {
     "ai": {
@@ -59,6 +70,11 @@ class Story:
     confirmed: bool
     category: str
     audio_ready: bool = False
+    headline: str = ""
+
+
+def story_headline(story: Story) -> str:
+    return story.headline or story.title
 
 
 @dataclass
@@ -72,11 +88,12 @@ def build_news_prompt(category: str, today: date) -> str:
     spec = CATEGORIES[category]
     return "\n".join([
         f"Dzisiaj jest {today.isoformat()}.",
-        f"Znajdź 6 aktualnych wiadomości z ostatnich 48 godzin: {spec['brief']}.",
+        f"Znajdź {NEWS_ITEM_COUNT} aktualnych wiadomości z ostatnich {NEWS_WINDOW_HOURS} godzin: {spec['brief']}.",
         "Kolejność: najciekawsze najpierw. Każda historia musi mieć link do PIERWOTNEGO źródła.",
-        f"Dla każdej napisz radio_text po polsku do przeczytania w radiu (90-130 słów): {spec['angle']}.",
-        "Bez markdown, bez emoji, bez list. Nie wymyślaj faktów. Plotki oznacz confirmed=false i powiedz w tekście, że to niepotwierdzone.",
-        'Zwróć WYŁĄCZNIE JSON: [{"title":"...","radio_text":"...","source_url":"https://...","confirmed":true}]',
+        f"Dla każdej podaj headline: jedno zdanie po polsku, najwyżej {HEADLINE_MAX_WORDS} słów, z konkretem.",
+        f"Dla każdej podaj radio_text po polsku do przeczytania w radiu: {RADIO_MIN_WORDS}-{RADIO_MAX_WORDS} słów, konkretnie, bez wypełniaczy: {spec['angle']}.",
+        "Bez markdown, bez list. NO EMOJI. Nie wymyślaj faktów. Plotki oznacz confirmed=false i powiedz w tekście, że to niepotwierdzone.",
+        'Zwróć WYŁĄCZNIE JSON: [{"title":"...","headline":"...","radio_text":"...","source_url":"https://...","confirmed":true}]',
     ])
 
 
@@ -92,19 +109,26 @@ def parse_stories(reply_text: str, category: str) -> list[Story]:
     for item in raw:
         if not isinstance(item, dict):
             continue
-        title = str(item.get("title") or "").strip()
-        text = str(item.get("radio_text") or "").strip()
+        title = strip_emoji(str(item.get("title") or ""))
+        text = strip_emoji(str(item.get("radio_text") or ""))
         url = str(item.get("source_url") or "").strip()
-        if not title or len(text) < 80 or not re.match(r"^https?://", url):
+        if not title or len(text) < MIN_RADIO_CHARS or not re.match(r"^https?://", url):
             continue  # autocheck spot: every story needs a source and real text
+        headline = strip_emoji(str(item.get("headline") or ""))
+        if not 0 < word_count(headline) <= HEADLINE_MAX_WORDS:
+            headline = " ".join(title.split()[:HEADLINE_MAX_WORDS])
         story_id = hashlib.sha1(f"{category}|{title}".encode()).hexdigest()[:12]
-        stories.append(Story(story_id, title, text, url, item.get("confirmed") is not False, category))
+        stories.append(Story(
+            story_id, title, text, url, item.get("confirmed") is not False, category, headline=headline,
+        ))
     if not stories:
         raise ValueError("news reply had no valid stories")
     return stories
 
 
 def story_script(story: Story) -> str:
+    if story.category == "personal":
+        return f"Wiadomości z twoich źródeł. {story.title}. {story.radio_text} Wracamy do muzyki."
     if story.category == "stoic":
         return f"Stoicka myśl. {story.title}. {story.radio_text} Wracamy do muzyki."
     label = CATEGORIES[story.category]["label"]
@@ -120,6 +144,44 @@ def pcm_to_wav(pcm: bytes, rate: int = 24000) -> bytes:
         wav.setframerate(rate)
         wav.writeframes(pcm)
     return buffer.getvalue()
+
+
+def normalize_loudness(wav: bytes, target_lufs: float = TARGET_LUFS) -> bytes:
+    """Normalize voice clips to a broadcast-consistent loudness via ffmpeg's loudnorm.
+
+    Single-pass loudnorm: less sample-accurate than the two-pass variant (which needs
+    a prior analysis run to feed measured stats back in), but one ffmpeg call per clip
+    is simpler and cannot fail from a mismatched analysis step. Good enough for short
+    news/host clips where +-1 LU of drift is inaudible.
+
+    Uses real temp files rather than pipes: ffmpeg can only rewrite a correct WAV
+    header (size, format tag) when the output is seekable, otherwise it falls back to
+    WAVE_FORMAT_EXTENSIBLE with an unknown size, which Python's own `wave` module
+    cannot parse.
+
+    ffmpeg failures (missing binary, bad input) are logged and the original audio is
+    returned untouched, so a broken normalizer never blocks news or host speech.
+    """
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        src_path = Path(tmp_dir) / "in.wav"
+        dst_path = Path(tmp_dir) / "out.wav"
+        src_path.write_bytes(wav)
+        cmd = [
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-i", str(src_path),
+            "-af", f"loudnorm=I={target_lufs}:TP=-1.5:LRA=11",
+            "-ar", "24000", "-ac", "1", "-sample_fmt", "s16", "-c:a", "pcm_s16le",
+            str(dst_path),
+        ]
+        try:
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=30)
+        except (FileNotFoundError, subprocess.TimeoutExpired) as error:
+            log.warning("loudnorm unavailable (%s), returning original audio", error)
+            return wav
+        if proc.returncode != 0 or not dst_path.exists():
+            log.warning("loudnorm failed (exit %s): %s", proc.returncode, proc.stderr.decode()[:200])
+            return wav
+        return dst_path.read_bytes()
 
 
 class GeminiClient:
@@ -157,6 +219,12 @@ class GeminiClient:
                 log.warning("news %s attempt failed: %s: %s", category, type(error).__name__, error)
         raise RuntimeError(f"{type(last_error).__name__}: {last_error}") from last_error
 
+    async def chat(self, prompt: str) -> str:
+        """Single-shot text generation with the news model (no search grounding)."""
+        data = await self._call(self.news_model, {"contents": [{"parts": [{"text": prompt}]}]})
+        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+        return "".join(part.get("text", "") for part in parts)
+
     async def speak(self, text: str, voice: str, style: str = "") -> bytes:
         """Pure text in contents — Gemini TTS reads everything in contents verbatim."""
         data = await self._call(self.tts_model, {
@@ -171,10 +239,10 @@ class GeminiClient:
         if not inline:
             raise RuntimeError(f"{self.tts_model} returned no audio")
         audio = base64.b64decode(inline["data"])
-        if "wav" in inline.get("mimeType", ""):
-            return audio
-        rate_match = re.search(r"rate=(\d+)", inline.get("mimeType", ""))
-        return pcm_to_wav(audio, int(rate_match.group(1)) if rate_match else 24000)
+        if "wav" not in inline.get("mimeType", ""):
+            rate_match = re.search(r"rate=(\d+)", inline.get("mimeType", ""))
+            audio = pcm_to_wav(audio, int(rate_match.group(1)) if rate_match else 24000)
+        return await asyncio.to_thread(normalize_loudness, audio)
 
 
 
@@ -198,6 +266,10 @@ class NewsService:
         self.cache: dict[str, CategoryCache] = {name: self._load_edition(name) for name in CATEGORIES}
         self.locks: dict[str, asyncio.Lock] = {name: asyncio.Lock() for name in CATEGORIES}
         self.tts_lock = asyncio.Semaphore(2)
+        # Stories outside the global editions (e.g. personalized RSS digest) are looked
+        # up here so /radio-api/story/{id}.wav can voice them on demand.
+        self.extra: dict[str, Story] = {}
+        self.on_personal_refresh: Any = None  # optional async hook set by PersonalNews
 
     # --- persistence -----------------------------------------------------------
     def _edition_path(self, category: str) -> Path:
@@ -228,12 +300,13 @@ class NewsService:
         """Drop voiced stories older than 48 h; current editions are always kept."""
         keep = {story.id for cache in self.cache.values() for story in cache.stories}
         removed = 0
-        for path in self.audio_dir.glob("story-*.wav"):
-            if path.stem.removeprefix("story-") in keep:
-                continue
-            if time.time() - path.stat().st_mtime > STORY_AUDIO_MAX_AGE_S:
-                path.unlink(missing_ok=True)
-                removed += 1
+        for prefix in ("story-", "headline-"):
+            for path in self.audio_dir.glob(f"{prefix}*.wav"):
+                if path.stem.removeprefix(prefix) in keep:
+                    continue
+                if time.time() - path.stat().st_mtime > STORY_AUDIO_MAX_AGE_S:
+                    path.unlink(missing_ok=True)
+                    removed += 1
         return removed
 
     async def hourly_loop(self) -> None:
@@ -243,6 +316,12 @@ class NewsService:
                 if self.is_stale(category):
                     await self.ensure(category)
             self.prune_old_audio()
+            if self.on_personal_refresh is not None:
+                # Personalized digests must never break the global news cycle.
+                try:
+                    await self.on_personal_refresh()
+                except Exception as error:
+                    log.warning("personal digest refresh failed: %s", error)
             await asyncio.sleep(60)
 
     def audio_path(self, story_id: str) -> Path:
@@ -275,20 +354,28 @@ class NewsService:
                 cache.fetched_at = time.time() - self.refresh_seconds + 300  # retry in 5 min
             return self.cache[category]
 
-    async def render_story(self, story: Story) -> Path:
-        path = self.audio_path(story.id)
+    def headline_path(self, story_id: str) -> Path:
+        return self.audio_dir / f"headline-{story_id}.wav"
+
+    async def _voice_once(self, path: Path, text: str, category: str) -> Path:
         if path.exists():
-            story.audio_ready = True
             return path
-        voice, style = NEWSROOM_VOICES.get(story.category, NEWSROOM_VOICES["ai"])
+        voice, style = NEWSROOM_VOICES.get(category, NEWSROOM_VOICES["ai"])
         async with self.tts_lock:
             if not path.exists():
-                audio = await self.client.speak(story_script(story), voice, style)
+                audio = await self.client.speak(text, voice, style)
                 tmp = path.with_suffix(".tmp")
                 tmp.write_bytes(audio)
                 tmp.replace(path)
+        return path
+
+    async def render_story(self, story: Story) -> Path:
+        path = await self._voice_once(self.audio_path(story.id), story_script(story), story.category)
         story.audio_ready = True
         return path
+
+    async def render_headline(self, story: Story) -> Path:
+        return await self._voice_once(self.headline_path(story.id), sentence(story_headline(story)), story.category)
 
     async def render_all(self, category: str) -> None:
         for story in list(self.cache[category].stories):
@@ -302,7 +389,22 @@ class NewsService:
             for story in cache.stories:
                 if story.id == story_id:
                     return story
-        return None
+        return self.extra.get(story_id)
+
+    def remember(self, stories: list[Story]) -> None:
+        """Register non-edition stories so find()/render_story() can serve them."""
+        for story in stories:
+            self.extra[story.id] = story
+
+    def global_queue(self) -> list[Story]:
+        """All stories of the current global editions, interleaved across categories."""
+        pools = [list(cache.stories) for cache in self.cache.values() if cache.stories]
+        ordered: list[Story] = []
+        for index in range(max((len(pool) for pool in pools), default=0)):
+            for pool in pools:
+                if index < len(pool):
+                    ordered.append(pool[index])
+        return ordered
 
     def public(self, category: str) -> dict:
         cache = self.cache[category]

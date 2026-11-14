@@ -1,13 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import { STATIONS, stationById, hostStationId, isPresetStation } from '../src/radio/stations';
+import { defaultPrefs, parsePrefs, nextGenreChoice } from '../src/ui/prefs';
 import { interleaveStories, pickNextStory, type QueuedStory } from '../src/radio/newsQueue';
 import { nextBreakAt, msUntilNextBreak, spokenTimePl } from '../src/radio/radioClock';
 
 describe('DOS Radio Stations', () => {
   it('loads 14 stations with unique IDs and hosts', () => {
-    expect(STATIONS.length).toBe(14);
+    expect(STATIONS.length).toBe(25);
     const ids = new Set(STATIONS.map((s) => s.id));
-    expect(ids.size).toBe(14);
+    expect(ids.size).toBe(25);
   });
 
   it('resolves preset station correctly', () => {
@@ -15,6 +16,20 @@ describe('DOS Radio Stations', () => {
     expect(groove.name).toBe('DOS Groove');
     expect(isPresetStation(groove)).toBe(true);
     expect(hostStationId(groove)).toBe('dos-groove');
+  });
+
+  it('keeps a second genre only when it is a different station', () => {
+    const prefs = parsePrefs({ ...defaultPrefs(), station: 'dos-groove', blend: 'micro-house' });
+    expect(prefs.blend).toBe('micro-house');
+    const same = parsePrefs({ ...defaultPrefs(), station: 'dos-groove', blend: 'dos-groove' });
+    expect(same.blend).toBeNull();
+  });
+
+    it('a shifted click adds a second genre instead of replacing the station', () => {
+    const added = nextGenreChoice('dos-groove', null, 'micro-house', true);
+    expect(added).toEqual({ station: 'dos-groove', blend: 'micro-house' });
+    const cleared = nextGenreChoice('dos-groove', 'micro-house', 'micro-house', true);
+    expect(cleared.blend).toBeNull();
   });
 
   it('falls back to default station on unknown id', () => {
@@ -79,5 +94,17 @@ describe('Radio Clock & Intervals', () => {
   it('converts time to natural Polish speech', () => {
     const d = new Date(2026, 10, 5, 14, 20, 0);
     expect(spokenTimePl(d)).toBe('czternasta dwadzieścia');
+  });
+
+  it('allows standalone news breaks to preempt speaking without getting dropped', () => {
+    // REGRESSION INVARIANT: standalone breaks (e.g. newsNow) must not be rejected when speaking is true
+    const shouldAir = (speaking: boolean, standalone: boolean, playing: boolean, hostMode: string) => {
+      if ((speaking && !standalone) || (!playing && !standalone) || hostMode === 'music-only') return false;
+      return true;
+    };
+    expect(shouldAir(true, false, true, 'with-host')).toBe(false); // scheduled break deferred
+    expect(shouldAir(true, true, true, 'with-host')).toBe(true);   // manual newsNow preempts speaking
+    expect(shouldAir(false, false, true, 'with-host')).toBe(true);
+    expect(shouldAir(false, false, true, 'music-only')).toBe(false);
   });
 });
