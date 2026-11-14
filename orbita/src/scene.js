@@ -9,6 +9,8 @@ import { STATIONS, N, CATS, TOPIC_IDS } from './data.js';
 
 const C = h => new THREE.Color(h);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+import { todPalette, stationSymmetry } from './tod.js';
+
 export const STEP = Math.PI * 2 / N;
 
 export function createScene(canvas, cb) {
@@ -78,25 +80,39 @@ export function createScene(canvas, cb) {
   const speaker = new THREE.Mesh(spGeo, coreMat);
   const speakerGroup = new THREE.Group(); speakerGroup.add(speaker); coreScene.add(speakerGroup);
 
-  /* hosts: head + jaw + headphones + mic, built from primitives */
+  /* hosts: abstract voice forms, no faces. A = a breathing orb inside gyroscope rings, B = a crystal with orbiting rings. */
   const plainVert = `varying vec3 vN; varying vec3 vView; varying float vR;
     void main(){ vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position, 1.); vView = mv.xyz; vR = 0.0; gl_Position = projectionMatrix * mv; }`;
+  const orbVert = `varying vec3 vN; varying vec3 vView; varying float vR; uniform float uAmp, uTime;
+    void main(){ vec3 p = position;
+      float d = (sin(p.x * 4.3 + uTime * 1.9) + sin(p.y * 5.1 - uTime * 1.6) + sin(p.z * 3.7 + uTime * 2.2)) * 0.3333;
+      p += normal * d * uAmp;
+      vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(p, 1.); vView = mv.xyz; vR = 0.0; gl_Position = projectionMatrix * mv; }`;
   function makeHost(style) {
-    const mat = new THREE.ShaderMaterial({ uniforms: { uLight: { value: light }, uGlow: { value: 0 }, uFlag: { value: 1 } }, vertexShader: plainVert, fragmentShader: litFrag, side: THREE.DoubleSide });
-    const g = new THREE.Group(), add = (geo, x, y, z, parent = g) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
-    add(new THREE.SphereGeometry(1, 40, 20), 0, -1.0, 0).scale.set(0.86, 0.5, 0.46);              // shoulders
-    add(new THREE.CylinderGeometry(0.2, 0.25, 0.5, 20), 0, -0.3, 0);                                  // neck
-    const head = new THREE.Group(); head.position.set(0, 0.12, 0); g.add(head);
-    add(new THREE.SphereGeometry(0.5, 36, 24, 0, Math.PI * 2, 0, Math.PI * 0.6), 0, 0.18, 0, head).scale.set(0.9, 1.1, 0.98); // skull
-    const jaw = new THREE.Group(); jaw.position.set(0, 0.1, 0.05); head.add(jaw);
-    add(new THREE.SphereGeometry(0.43, 32, 16, 0, Math.PI * 2, Math.PI * 0.45, Math.PI * 0.55), 0, 0.02, -0.04, jaw).scale.set(0.95, 1.05, 1);
-    const band = add(new THREE.TorusGeometry(0.55, 0.05, 8, 40, Math.PI), 0, 0.22, 0, head); band.rotation.z = 0;
-    for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(0.17, 0.17, 0.12, 20), sx * 0.53, 0.19, 0, head).rotation.z = Math.PI / 2;
-    if (style === 'B') { add(new THREE.SphereGeometry(0.22, 20, 14), 0, 0.5, -0.42, head); add(new THREE.SphereGeometry(0.52, 28, 18, 0, Math.PI * 2, 0, Math.PI * 0.5), 0, 0.2, -0.05, head).scale.set(1.02, 1.0, 1.05); }
-    const mx = style === 'B' ? -0.32 : 0.32;
-    add(new THREE.SphereGeometry(0.12, 18, 12), mx, -0.02, 0.62);                                     // mic head
-    add(new THREE.CylinderGeometry(0.03, 0.03, 1.1, 8), mx, -0.6, 0.62);                              // mic stand
-    g.userData = { head, jaw, mat, mouth: 0 };
+    const glow = { value: 0 }, amp = { value: 0.03 }, tm = { value: 0 };
+    const orbMat = new THREE.ShaderMaterial({ uniforms: { uLight: { value: light }, uGlow: glow, uFlag: { value: 1 }, uAmp: amp, uTime: tm }, vertexShader: orbVert, fragmentShader: litFrag, side: THREE.DoubleSide });
+    const solidMat = new THREE.ShaderMaterial({ uniforms: { uLight: { value: light }, uGlow: glow, uFlag: { value: 1 } }, vertexShader: plainVert, fragmentShader: litFrag, side: THREE.DoubleSide });
+    const g = new THREE.Group(), head = new THREE.Group(), jaw = new THREE.Group();
+    head.position.set(0, 0.2, 0); g.add(head); head.add(jaw);
+    const ring = (r, tube, rx, ry) => { const m = new THREE.Mesh(new THREE.TorusGeometry(r, tube, 10, 96), solidMat); m.rotation.set(rx, ry, 0); head.add(m); return m; };
+    let tick;
+    if (style === 'B') {
+      const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.64, 0), solidMat); head.add(crystal);
+      const r1 = ring(1.0, 0.04, 1.25, 0), r2 = ring(0.8, 0.032, 0.35, 1.2);
+      tick = (mouth, t, talking, dt) => {
+        crystal.rotation.y += dt * (0.35 + mouth * 2.2); crystal.rotation.x = 0.35 + Math.sin(t * 0.7) * 0.12; crystal.scale.setScalar(1 + mouth * 0.22);
+        r1.rotation.z += dt * (0.4 + mouth * 3); r2.rotation.z -= dt * (0.55 + mouth * 3.4);
+      };
+    } else {
+      const orb = new THREE.Mesh(new THREE.IcosahedronGeometry(0.62, 5), orbMat); head.add(orb);
+      const rs = [ring(1.0, 0.04, 0, 0), ring(0.86, 0.034, 1.05, 0.5), ring(1.12, 0.03, 0.55, 2.1)];
+      tick = (mouth, t, talking, dt) => {
+        tm.value = t; amp.value += ((0.03 + mouth * 0.22) - amp.value) * Math.min(1, dt * 10);
+        orb.scale.setScalar(1 + mouth * 0.12);
+        rs.forEach((r, i) => { r.rotation.z += dt * (0.3 + mouth * 2.6) * (i % 2 ? -1 : 1) * (1 + i * 0.35); });
+      };
+    }
+    g.userData = { head, jaw, mat: orbMat, mouth: 0, tick };
     return g;
   }
   const hostA = makeHost('A'), hostB = makeHost('B');
@@ -117,7 +133,7 @@ export function createScene(canvas, cb) {
   }
   sGeo.setAttribute('aData', new THREE.InstancedBufferAttribute(pData, 4)); sGeo.setAttribute('aColor', new THREE.InstancedBufferAttribute(pCol, 3)); sGeo.instanceCount = PC;
   const sMat = new THREE.ShaderMaterial({
-    uniforms: { uTravel: { value: 0 }, uStretch: { value: 1 }, uHue: { value: 0 }, uTint: { value: C('#ffffff') } },
+    uniforms: { uTravel: { value: 0 }, uStretch: { value: 1 }, uHue: { value: 0 }, uTint: { value: C('#ffffff') }, uVis: { value: 0.05 } },
     vertexShader: `attribute vec4 aData; attribute vec3 aColor; uniform float uTravel, uStretch, uHue; uniform vec3 uTint; varying vec3 vColor; varying float vFade; varying float vT;
       vec3 hue(vec3 c, float a){ const vec3 k = vec3(0.57735); float ca = cos(a); return c * ca + cross(k, c) * sin(a) + k * dot(k, c) * (1.0 - ca); }
       void main(){ float D = ${PD.toFixed(1)}; float z = mod(aData.z + uTravel * (0.6 + aData.w * 0.8), D) - D * 0.86;
@@ -125,10 +141,56 @@ export function createScene(canvas, cb) {
         vFade = smoothstep(-D * 0.86, -D * 0.5, z) * (1.0 - smoothstep(6.0, 11.0, z));
         vColor = mix(hue(aColor, uHue), uTint, 0.35);
         gl_Position = projectionMatrix * viewMatrix * vec4(vec3(aData.xy, z) + p, 1.0); }`,
-    fragmentShader: 'varying vec3 vColor; varying float vFade; varying float vT; void main(){ gl_FragColor = vec4(vColor * vFade * mix(0.08, 1.0, vT * vT) * 2.6, 1.0); }',
+    fragmentShader: 'uniform float uVis; varying vec3 vColor; varying float vFade; varying float vT; void main(){ gl_FragColor = vec4(vColor * vFade * mix(0.08, 1.0, vT * vT) * 2.6 * uVis, 1.0); }',
     blending: THREE.AdditiveBlending, depthWrite: false, transparent: true,
   });
   const streaks = new THREE.Mesh(sGeo, sMat); streaks.frustumCulled = false; bgScene.add(streaks);
+
+  /* ---------- background: interference field, a standing wave from n symmetric sources ---------- */
+  const srgb = (c) => new THREE.Color().setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace);
+  const fieldMat = new THREE.ShaderMaterial({
+    uniforms: { uAspect: { value: 1 }, uPhase: { value: 0 }, uRing: { value: 9 }, uLow: { value: 0 }, uMid: { value: 0 }, uLevel: { value: 0 }, uMorph: { value: 1 },
+      uNA: { value: 5 }, uNB: { value: 5 }, uHostMix: { value: 0 }, uLine: { value: new THREE.Color() }, uAccent: { value: new THREE.Color() }, uBg: { value: new THREE.Color() } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.9999, 1.0); }',
+    fragmentShader: `precision highp float;
+      uniform float uAspect, uPhase, uRing, uLow, uMid, uLevel, uMorph, uHostMix; uniform int uNA, uNB; uniform vec3 uLine, uAccent, uBg; varying vec2 vUv;
+      float field(vec2 p, int n, float k, float rot){
+        float f = 0.0;
+        for (int i = 0; i < 8; i++){ if (i >= n) break;
+          float a = 6.2831853 * float(i) / float(n) + rot;
+          f += cos(k * length(p - vec2(cos(a), sin(a)) * 0.46) - uPhase); }
+        return f / float(n);
+      }
+      void main(){
+        vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 2.0; p.y -= 0.12;
+        float k = 10.0 + uMid * 5.0, rot = uPhase * 0.025;
+        float f = field(p, uNA, k, rot);
+        if (uNA != uNB) f = mix(f, field(p, uNB, k, rot), smoothstep(0.0, 1.0, uMorph));
+        float v = f * 3.2, w = fwidth(v) * 1.15 + 1e-4;
+        float lines = 1.0 - clamp(abs(fract(v + 0.5) - 0.5) / w, 0.0, 1.0);
+        float node = 1.0 - clamp(abs(f) / (fwidth(f) * 2.4 + 1e-4), 0.0, 1.0);
+        float r = length(p), fade = smoothstep(1.9, 0.15, r) * (1.0 - 0.4 * uHostMix);
+        float ringR = uRing * 1.05, ring = exp(-uRing * 2.1) * (1.0 - smoothstep(0.0, 0.035, abs(r - ringR)));
+        vec3 col = uBg + uLine * (0.20 * lines + 0.75 * node) * fade * (0.55 + uLevel * 0.9 + uLow * 0.6) + uAccent * (ring * 0.9 + 0.05 * (0.4 + uLevel) * smoothstep(1.3, 0.0, r));
+        gl_FragColor = vec4(col, 1.0);
+      }`,
+    depthTest: false, depthWrite: false,
+  });
+  const fieldMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), fieldMat); fieldMesh.frustumCulled = false; fieldMesh.renderOrder = -100; bgScene.add(fieldMesh);
+  const fieldState = { phase: 0, ringT: 9, wasKick: false, a: 5, b: 5, morph: 1, idx: -1, hour: 0, hourAt: -9 };
+  const hourOverride = parseFloat(new URLSearchParams(location.search).get('hour'));
+  function updateField(s, dt, f, kick) {
+    const st = fieldState;
+    st.phase += dt * (0.22 + f.level * 1.1) * (s.timeScale || 1);
+    const isKick = kick > 0.5; if (isKick && !st.wasKick) st.ringT = 0; else st.ringT += dt; st.wasKick = isKick;
+    if (s.tunedIdx !== st.idx && s.tunedIdx >= 0) { st.a = st.b; st.b = stationSymmetry(s.tunedIdx); st.morph = 0; st.idx = s.tunedIdx; }
+    st.morph = Math.min(1, st.morph + dt / 1.4); if (st.morph >= 1) st.a = st.b;
+    if (elapsed - st.hourAt > 5) { const d = new Date(); st.hour = Number.isFinite(hourOverride) ? hourOverride : d.getHours() + d.getMinutes() / 60; st.hourAt = elapsed; }
+    const tp = todPalette(st.hour), u = fieldMat.uniforms;
+    u.uLine.value.copy(srgb(tp.line)).lerp(palette.cat, 0.22); u.uAccent.value.copy(srgb(tp.accent)).lerp(palette.accent, 0.3); u.uBg.value.copy(srgb(tp.bg));
+    u.uPhase.value = st.phase; u.uRing.value = Math.min(st.ringT, 9); u.uLow.value = f.low; u.uMid.value = f.mid; u.uLevel.value = f.level;
+    u.uNA.value = st.a; u.uNB.value = st.b; u.uMorph.value = st.morph; u.uHostMix.value = hostMix; u.uAspect.value = camera.aspect;
+  }
 
   /* ---------- dial ---------- */
   const RING_R = 5.3;
@@ -259,6 +321,7 @@ export function createScene(canvas, cb) {
     elapsed += dt;
     const { f, kick, timeScale, pointer } = s;
     updatePalette(dt, CATS[s.station.cat]?.color || '#8f6bff', f, kick, s.playing);
+    updateField(s, dt, f, kick);
 
     camPos.set(camBase.x + pointer.nx * 0.6, camBase.y + pointer.ny * 0.35, camBase.z - (timeScale - 1) * 0.5);
     camera.position.lerp(camPos, Math.min(1, dt * 3)); camera.lookAt(lookAt);
@@ -285,7 +348,7 @@ export function createScene(canvas, cb) {
     for (const [h, id] of [[hostA, 'A'], [hostB, 'B']]) {
       const u = h.userData, talking = s.hosts?.who === id;
       u.mouth += ((talking ? f.voice : 0) - u.mouth) * Math.min(1, dt * 20);
-      u.jaw.rotation.x = u.mouth * 0.42;
+      u.tick(u.mouth, elapsed, talking, dt);
       u.head.rotation.x = -u.mouth * 0.06 + Math.sin(elapsed * 1.3 + (id === 'B' ? 1 : 0)) * 0.03;
       const look = s.hosts?.duo ? (id === 'A' ? 0.35 : -0.35) * (talking ? 0.3 : 1) : 0;
       u.head.rotation.y += (look + Math.sin(elapsed * 0.5) * 0.05 - u.head.rotation.y) * Math.min(1, dt * 3);
@@ -323,6 +386,7 @@ export function createScene(canvas, cb) {
 
     /* streaks */
     travel += dt * (5 + kick * 6) * timeScale * (reduceMotion ? 0.3 : 1);
+    sMat.uniforms.uVis.value = 0.05 + Math.min(1, Math.max(0, (timeScale - 1) * 0.5));
     sMat.uniforms.uTravel.value = travel; sMat.uniforms.uStretch.value = 0.8 + (timeScale - 1) * 3.2 + kick * 0.6;
 
     /* fluid */

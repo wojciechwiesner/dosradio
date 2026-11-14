@@ -7,28 +7,22 @@ const L = obj => obj[getLang()] || obj.pl;
 /* ---------- Opening: the host explains the radio (always first) ---------- */
 export const introScript = (host) => L({
   pl: [
-    `Cześć, tu ${host}, a to jest DOS Radio. Pierwsze radio osobiste, czyli takie, które gra i mówi to, co ty chcesz usłyszeć.`,
-    'Muzyka nie pochodzi z płyt. Sztuczna inteligencja komponuje ją na żywo, osobno dla każdej z dwudziestu pięciu stacji. Stroisz je jak na starym odbiorniku: przeciągnij tarczę na dole, a gdy zgubisz się między stacjami, usłyszysz szum.',
-    'Co kilka minut wchodzę z wiadomościami. Tematy wybierasz ty, to te księżyce wokół głośnika. Co godzinę jest pełny serwis z pogodą.',
-    'Mogę też czytać twoje źródła: słowa kluczowe, kanały RSS, a nawet najważniejsze maile ze skrzynki. Twoje sprawy zawsze idą przed resztą świata.',
-    'A jeśli masz ochotę na dłuższą rozmowę, wpisz dowolny temat, a we dwoje nagramy o nim podcast. Z długiego odcinka na YouTube zrobimy pigułkę z samym konkretem.',
-    'Pierwsza godzina jest za darmo. Na dobry początek przygotowaliśmy podcast o tym radiu i stoicką pigułkę. Zostań, zaraz wracam.',
+    `Cześć, tu ${host}. To DOS Radio: muzyka powstaje na żywo, osobno dla każdej z dwudziestu pięciu stacji.`,
+    'Przeciągnij tarczę, żeby zmienić stację. Księżyce wokół głośnika to tematy wiadomości, wybierz te, które chcesz.',
+    'Wpisz dowolny temat, a nagramy o nim podcast. Twoje źródła i maile idą na antenę przed resztą świata.',
+    'Pierwsza godzina jest za darmo. Zostań.',
   ],
   en: [
-    `Hi, I'm ${host}, and this is DOS Radio. The first personal radio: it plays and says what you want to hear.`,
-    'The music does not come from records. AI composes it live, separately for each of twenty-five stations. You tune them like an old receiver: drag the dial at the bottom, and if you get lost between stations, you will hear static.',
-    'Every few minutes I come in with the news. You pick the topics, they are the moons around the speaker. Every hour there is a full bulletin with the weather.',
-    'I can also read your own sources: keywords, RSS feeds, even the most important emails in your inbox. Your things always go before the rest of the world.',
-    'And if you want a longer conversation, type any topic and the two of us will record a podcast about it. A long YouTube episode becomes a pill with just the essentials.',
-    'Your first hour is free. To start, we prepared a podcast about this radio and a stoic pill. Stay with me, I will be right back.',
+    `Hi, I'm ${host}. This is DOS Radio: the music is composed live, separately for each of twenty-five stations.`,
+    'Drag the dial to change station. The moons around the speaker are news topics, pick the ones you want.',
+    'Type any topic and we will record a podcast about it. Your own sources and mail go on air before the rest of the world.',
+    'The first hour is free. Stay.',
   ],
   ru: [
-    `Привет, это ${host}, а это DOS Radio. Первое личное радио: оно играет и говорит то, что хочешь услышать именно ты.`,
-    'Музыка здесь не с пластинок. Искусственный интеллект сочиняет её вживую, отдельно для каждой из двадцати пяти станций. Настраивай их, как старый приёмник: тяни шкалу внизу, а если заблудишься между станциями, услышишь шум.',
-    'Каждые несколько минут я выхожу с новостями. Темы выбираешь ты, это луны вокруг динамика. Каждый час полный выпуск с погодой.',
-    'Я могу читать и твои источники: ключевые слова, RSS-ленты и даже самые важные письма из почты. Твои дела всегда идут раньше остального мира.',
-    'А если хочется поговорить подольше, напиши любую тему, и мы вдвоём запишем о ней подкаст. Из длинного выпуска на YouTube сделаем пилюлю с одной сутью.',
-    'Первый час бесплатно. Для начала мы приготовили подкаст об этом радио и стоическую пилюлю. Оставайся, я скоро вернусь.',
+    `Привет, это ${host}. Это DOS Radio: музыка рождается вживую, отдельно для каждой из двадцати пяти станций.`,
+    'Потяни шкалу, чтобы сменить станцию. Луны вокруг динамика это темы новостей, выбери нужные.',
+    'Напиши любую тему, и мы запишем о ней подкаст. Твои источники и письма выходят в эфир раньше остального мира.',
+    'Первый час бесплатно. Оставайся.',
   ],
 });
 

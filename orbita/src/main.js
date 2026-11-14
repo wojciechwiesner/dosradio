@@ -566,7 +566,6 @@ function frame(now) {
   applyI18n();
   app.refreshMe();
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopSeek(); });
-  if ('speechSynthesis' in window) speechSynthesis.onvoiceschanged = () => {};
   window.__orbita = { app, dial };
   requestAnimationFrame(t0 => { last = t0; frame(t0); });
 })();

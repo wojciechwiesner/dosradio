@@ -39,9 +39,9 @@ export function fmtLeft(sec) {
 const S = {
 pl: {
   brand: 'DOS RADIO', howto: 'Jak to działa', demo: 'Demo', live: 'Na żywo', holdSeek: 'Przytrzymaj = seek',
-  enterMeta1: 'Pierwsze radio osobiste', enterTitle: 'Orbita', enterLead: 'Twoje radio w przestrzeni. Stroisz stacje jak na starym odbiorniku, księżyce wokół głośnika to tematy wiadomości, a gdy ktoś mówi, widzisz prowadzących.',
+  enterMeta1: 'Pierwsze radio osobiste', enterTitle: 'DOS Radio', enterLead: 'Radio komponowane na żywo, osobno dla każdej stacji. Przeciągnij tarczę, żeby zmienić stację. Księżyce wokół głośnika to tematy wiadomości.',
   enterFree: 'Pierwsza godzina za darmo, bez konta. W niej: wiadomości, stoicka pigułka i jeden twój podcast.',
-  enterSound: 'Wejdź z dźwiękiem', enterMute: 'Bez dźwięku', enterDemo: 'Tryb demo: muzyka i głosy z przeglądarki', enterLive: 'Połączone z DOS Radio',
+  enterSound: 'Wejdź z dźwiękiem', enterMute: 'Bez dźwięku', enterDemo: 'Tryb demo: muzyka z przeglądarki, prowadzący jako napisy', enterLive: 'Połączone z DOS Radio',
   trialLeft: 'Darmowa godzina', plusActive: 'Plus aktywny', freeEnded: 'Darmowa godzina minęła',
   onAir: 'Na antenie', offAir: 'Poza anteną', music: 'Muzyka', newsLive: 'Wiadomości na żywo', hostLive: 'Prowadzący na żywo', podcastLive: 'Podcast', pillLive: 'Pigułka', musicOnly: 'Tylko muzyka', jingle: 'DOS Radio',
   nextIn: 'Za {t}: {title}', nextSoon: 'Za chwilę: {title}', nextBreak: 'Następne wejście {time}', breakOff: 'wejścia wyłączone',
@@ -98,9 +98,9 @@ pl: {
 },
 en: {
   brand: 'DOS RADIO', howto: 'How it works', demo: 'Demo', live: 'Live', holdSeek: 'Hold = seek',
-  enterMeta1: 'The first personal radio', enterTitle: 'Orbit', enterLead: 'Your radio in space. Tune stations like on an old receiver, the moons around the speaker are your news topics, and when someone talks, you see the hosts.',
+  enterMeta1: 'The first personal radio', enterTitle: 'DOS Radio', enterLead: 'Radio composed live, separately for each station. Drag the dial to change station. The moons around the speaker are the news topics.',
   enterFree: 'Your first hour is free, no account needed. It includes news, a stoic pill and one podcast of your own.',
-  enterSound: 'Enter with sound', enterMute: 'Without sound', enterDemo: 'Demo mode: music and voices from your browser', enterLive: 'Connected to DOS Radio',
+  enterSound: 'Enter with sound', enterMute: 'Without sound', enterDemo: 'Demo mode: music from your browser, hosts as captions', enterLive: 'Connected to DOS Radio',
   trialLeft: 'Free hour', plusActive: 'Plus active', freeEnded: 'Your free hour is over',
   onAir: 'On air', offAir: 'Off air', music: 'Music', newsLive: 'News live', hostLive: 'Host live', podcastLive: 'Podcast', pillLive: 'Pill', musicOnly: 'Music only', jingle: 'DOS Radio',
   nextIn: 'In {t}: {title}', nextSoon: 'Coming up: {title}', nextBreak: 'Next break {time}', breakOff: 'breaks off',
@@ -157,9 +157,9 @@ en: {
 },
 ru: {
   brand: 'DOS RADIO', howto: 'Как это работает', demo: 'Демо', live: 'В эфире', holdSeek: 'Удерживай = поиск',
-  enterMeta1: 'Первое личное радио', enterTitle: 'Орбита', enterLead: 'Твоё радио в пространстве. Настраивай станции, как на старом приёмнике. Луны вокруг динамика — темы новостей, а когда кто-то говорит, ты видишь ведущих.',
+  enterMeta1: 'Первое личное радио', enterTitle: 'DOS Radio', enterLead: 'Радио, которое сочиняется прямо сейчас, отдельно для каждой станции. Потяни шкалу, чтобы сменить станцию. Луны вокруг динамика это темы новостей.',
   enterFree: 'Первый час бесплатно и без аккаунта. В нём новости, стоическая пилюля и один твой подкаст.',
-  enterSound: 'Войти со звуком', enterMute: 'Без звука', enterDemo: 'Демо-режим: музыка и голоса из браузера', enterLive: 'Подключено к DOS Radio',
+  enterSound: 'Войти со звуком', enterMute: 'Без звука', enterDemo: 'Демо-режим: музыка из браузера, ведущие в виде субтитров', enterLive: 'Подключено к DOS Radio',
   trialLeft: 'Бесплатный час', plusActive: 'Plus активен', freeEnded: 'Бесплатный час закончился',
   onAir: 'В эфире', offAir: 'Не в эфире', music: 'Музыка', newsLive: 'Новости в эфире', hostLive: 'Ведущий в эфире', podcastLive: 'Подкаст', pillLive: 'Пилюля', musicOnly: 'Только музыка', jingle: 'DOS Radio',
   nextIn: 'Через {t}: {title}', nextSoon: 'Сейчас будет: {title}', nextBreak: 'Следующий выход {time}', breakOff: 'выходы выключены',

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Orbita: no synthetic speech, a quieter and more artistic stage** (`orbita/src/`): the browser speech-synthesis fallback is gone;
+  a part without a recording is shown as a caption at reading pace while the host form moves with it, and silent captions no
+  longer duck the music. The opening text is shorter (4 lines, PL/EN/RU) and the start screen copy was rewritten. The streaks
+  background is now an interference field: a standing wave from 3-8 symmetric sources (a different symmetry per station,
+  morphing on tune), contours in the colour of the time of day (`tod.js`, `?hour=` overrides for testing), a ring on every
+  kick and the line weight following the level. The hosts are abstract forms (a breathing orb in gyroscope rings, a crystal
+  with orbiting rings) instead of head-and-jaw figures.
+
 ### Fixed
 - **At least 2 minutes of music between anything that speaks** (`src/radio/radioClock.ts`, `publicRadioEngine.ts`): the gap
   after a news break was 45 s and host jingles/chatter ignored breaks entirely, so a clip could land right before or on top

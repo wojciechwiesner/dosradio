@@ -55,7 +55,6 @@ export class AudioCore {
   stopVoice() {
     this.voiceToken++;
     if (this.voiceSrc) { try { this.voiceSrc.stop(); } catch { /* ended */ } this.voiceSrc = null; }
-    if ('speechSynthesis' in window) { try { speechSynthesis.cancel(); } catch { /* none */ } }
     clearInterval(this.pulseTimer); this.ttsActive = false;
   }
   playBuffer(buffer, bus = 'voice') {
@@ -64,51 +63,23 @@ export class AudioCore {
     if (bus === 'voice') this.voiceSrc = src;
     return new Promise(res => { src.onended = () => { if (this.voiceSrc === src) this.voiceSrc = null; res(); }; src.start(); });
   }
-  voices() {
-    if (!('speechSynthesis' in window)) return [];
-    const p = getLang();
-    return speechSynthesis.getVoices().filter(v => v.lang && v.lang.toLowerCase().startsWith(p));
-  }
-  async speak(text, who = 'A', rate = 1.03) {
+  /* No synthetic voice. A part without a recording is shown as a caption at reading pace while the host figure
+     breathes with it; recordings play through playBuffer. */
+  async speak(text, who = 'A', rate = 1.0) {
     const token = ++this.voiceToken;
-    const vs = this.voices();
-    const sentences = text.match(/[^.!?…]+[.!?…]*/g)?.map(s => s.trim()).filter(Boolean) || [text];
     this.ttsActive = true;
-    try {
-      for (const s of sentences) {
-        if (token !== this.voiceToken) return;
-        if (vs.length) await this.speakOne(s, who, rate, vs, token);
-        else await this.fakeSpeak(s, rate, token);
-      }
-    } finally { if (token === this.voiceToken) this.ttsActive = false; }
+    try { await this.readCaption(text, rate, token); }
+    finally { if (token === this.voiceToken) this.ttsActive = false; }
   }
-  speakOne(text, who, rate, vs, token) {
+  readCaption(text, rate, token) {
+    const words = text.split(/\s+/).filter(Boolean).length, dur = Math.max(1.8, words * 0.36 / rate) * 1000, t0 = performance.now();
+    clearInterval(this.pulseTimer);
+    this.pulseTimer = setInterval(() => { this.voiceEnv = 0.25 + Math.random() * 0.35; }, 220);
     return new Promise(res => {
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = locale();
-      const female = vs.filter(v => /female|zosia|ewa|paulina|milena|anna|samantha|karen|serena|alena|irina|google polski|google рус/i.test(v.name));
-      const male = vs.filter(v => !female.includes(v));
-      u.voice = who === 'B' ? (female[0] || vs[1] || vs[0]) : (male[0] || vs[0]);
-      u.pitch = who === 'B' && u.voice === (male[0] || vs[0]) ? 1.25 : 1; u.rate = rate; u.volume = 1;
-      let gotBoundary = false;
-      u.onboundary = () => { gotBoundary = true; this.voiceEnv = 1; };
-      // network voices often skip boundary events: pulse the mouth ourselves
-      clearInterval(this.pulseTimer);
-      this.pulseTimer = setInterval(() => { if (!gotBoundary) this.voiceEnv = 0.55 + Math.random() * 0.45; }, 170);
-      const done = () => { clearInterval(this.pulseTimer); res(); };
-      u.onend = done; u.onerror = done;
-      if (token !== this.voiceToken) return res();
-      speechSynthesis.speak(u);
-      // safety: if the engine never starts (blocked autoplay, no audio device) fall through on a timer
-      setTimeout(() => { if (!speechSynthesis.speaking && !speechSynthesis.pending) done(); }, 2500);
-    });
-  }
-  fakeSpeak(text, rate, token) { // no voices for this language: animate and caption at speech pace
-    const words = text.split(/\s+/).length, dur = Math.max(1.2, words * 0.34 / rate) * 1000;
-    return new Promise(res => {
-      clearInterval(this.pulseTimer);
-      this.pulseTimer = setInterval(() => { this.voiceEnv = 0.5 + Math.random() * 0.5; }, 160);
-      setTimeout(() => { clearInterval(this.pulseTimer); res(); }, token === this.voiceToken ? dur : 0);
+      const poll = setInterval(() => {
+        if (token === this.voiceToken && performance.now() - t0 < dur) return;
+        clearInterval(poll); if (token === this.voiceToken) clearInterval(this.pulseTimer); res();
+      }, 100);
     });
   }
   /* ---------- features for visuals ---------- */

@@ -169,7 +169,7 @@ export class RadioEngine {
     const aired = [];
     this.speaking = true; this.setMode('news');
     try {
-      this.core.duck(this.prefs.duckLevel ?? 0.34, 1.2); await sleep(600);
+      this.setDuck(this.prefs.duckLevel ?? 0.34, 1.2); await sleep(600);
       const deadline = plan.kind === 'hourly' ? Date.now() + HOURLY_MAX : Infinity;
       for (const p of parts) {
         if (!this.speaking || Date.now() > deadline) break;
@@ -215,6 +215,7 @@ export class RadioEngine {
 
   /* ---------------- voice ---------------- */
   /* one spoken part; returns true when it played */
+  setDuck(level, secs) { this.wantDuck = level; this.core.duck(level, secs); }
   async say(p, ctx) {
     const who = p.who || 'A';
     const name = ctx.hosts.length > 1 ? ctx.hosts[who === 'B' ? 1 : 0] : ctx.hosts[0];
@@ -228,7 +229,8 @@ export class RadioEngine {
     }
     const caption = p.text || p.caption || '';
     this.events.onHost({ ...ctx, speaking: true, who: p.kind === 'clip' ? 'clip' : who, name, caption });
-    if (p.kind === 'tts' || (!p.url && caption)) { await this.core.speak(caption, who); return true; }
+    if (p.kind === 'tts' || (!p.url && caption)) { this.core.duck(1, 0.5); await this.core.speak(caption, who); return true; }
+    this.core.duck(this.wantDuck ?? 0.34, 0.4);
     const buf = await this.decode(p.url);
     if (!buf) return false;
     await this.core.playBuffer(buf, 'voice');
@@ -241,7 +243,7 @@ export class RadioEngine {
   async hostMoment(part, kind) {
     if (this.speaking) return;
     this.speaking = true; this.setMode('host');
-    try { this.core.duck(this.prefs.duckLevel ?? 0.34, 0.8); await sleep(400); await this.say(part, { kind, hosts: [this.hosts[0]] }); }
+    try { await sleep(400); await this.say(part, { kind, hosts: [this.hosts[0]] }); }
     finally { this.speaking = false; this.events.onHost(null); if (this.playing) { this.core.duck(1, 1.6); this.setMode('music'); } }
   }
   /* The opening: host explains what the radio is and can do. Live tries the station's welcome clip first. */
@@ -249,7 +251,7 @@ export class RadioEngine {
     this.introDone = true;
     this.speaking = true; this.setMode('intro');
     try {
-      this.core.duck(0.22, 0.6); await sleep(500);
+      await sleep(500);
       const lines = introScript(this.hosts[0]);
       for (const text of lines) {
         if (!this.speaking || !this.playing) break;
@@ -286,7 +288,7 @@ export class RadioEngine {
     const hosts = this.hosts; let voiceIdx = 0;
     this.busy = pod.id;
     try {
-      this.core.duck(0.18, 0.8); await sleep(500);
+      this.setDuck(0.18, 0.8); await sleep(500);
       for (let i = 0; i < pod.parts.length; i++) {
         if (this.busy !== pod.id || !this.playing) break;
         const p = pod.parts[i];
