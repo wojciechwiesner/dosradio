@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **AP newest news in the `ap` feed** (`scripts/publish_feeds.py`): reads ap_improve `GET /api/radio` first (blockers, overdue and just finished company topics, most urgent IT ticket) and puts those lines before the queue signals. Optional: an older ap_improve without the endpoint still publishes the queue signals.
+
 ### Fixed
 - **Station stream: a second listener got silence** (`server/app/stream.py`): the shared Ogg/Opus encoder writes its Opus headers
   only once, when it starts. Anyone who joined a station that already had a listener received audio pages with no header, so
