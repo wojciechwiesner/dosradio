@@ -209,6 +209,12 @@ export class RadioEngine {
   }
   async airFiller() {
     this.events.onStatus(t('st_filler'));
+    const clips = this.api.live ? await this.api.hostClips(this.station.id) : null;
+    const chatter = clips?.chatter || [];
+    if (chatter.length) {
+      await this.hostMoment({ kind: 'voice', who: 'A', url: chatter[(Math.random() * chatter.length) | 0], caption: '' }, 'host');
+      return;
+    }
     const lines = t('tts_chatter');
     await this.hostMoment({ kind: 'tts', who: 'A', text: lines[(Math.random() * lines.length) | 0] }, 'host');
   }
@@ -232,7 +238,10 @@ export class RadioEngine {
     if (p.kind === 'tts' || (!p.url && caption)) { this.core.duck(1, 0.5); await this.core.speak(caption, who); return true; }
     this.core.duck(this.wantDuck ?? 0.34, 0.4);
     const buf = await this.decode(p.url);
-    if (!buf) return false;
+    if (!buf) {
+      if (caption) { this.core.duck(1, 0.5); await this.core.speak(caption, who); return true; }
+      return false;
+    }
     await this.core.playBuffer(buf, 'voice');
     return true;
   }
@@ -246,16 +255,26 @@ export class RadioEngine {
     try { await sleep(400); await this.say(part, { kind, hosts: [this.hosts[0]] }); }
     finally { this.speaking = false; this.events.onHost(null); if (this.playing) { this.core.duck(1, 1.6); this.setMode('music'); } }
   }
-  /* The opening: host explains what the radio is and can do. Live tries the station's welcome clip first. */
+  /* The opening: host explains what the radio is and can do. Live renders & caches station host recordings. */
   async playIntro() {
     this.introDone = true;
     this.speaking = true; this.setMode('intro');
     try {
       await sleep(500);
       const lines = introScript(this.hosts[0]);
-      for (const text of lines) {
+      const stId = this.station.id;
+      if (this.api.live && lines.length > 1 && typeof fetch === 'function') {
+        fetch(this.api.orbitaIntroUrl(stId, 1), { credentials: 'same-origin' }).catch(() => {});
+      }
+      for (let i = 0; i < lines.length; i++) {
         if (!this.speaking || !this.playing) break;
-        await this.say({ kind: 'tts', who: 'A', text }, { kind: 'intro', hosts: [this.hosts[0]] });
+        if (this.api.live && i + 2 < lines.length && typeof fetch === 'function') {
+          fetch(this.api.orbitaIntroUrl(stId, i + 2), { credentials: 'same-origin' }).catch(() => {});
+        }
+        const text = lines[i];
+        const url = this.api.live ? this.api.orbitaIntroUrl(stId, i) : null;
+        const part = url ? { kind: 'voice', who: 'A', url, text } : { kind: 'tts', who: 'A', text };
+        await this.say(part, { kind: 'intro', hosts: [this.hosts[0]] });
       }
     } finally {
       this.speaking = false; this.events.onHost(null); this.events.onIntroDone();
@@ -278,7 +297,12 @@ export class RadioEngine {
     }, wait);
   }
   /* a spoken line outside the schedule (sales nudges, thought of the day) */
-  async announce(text, kind = 'host') { if (!this.playing || this.speaking) return false; await this.hostMoment({ kind: 'tts', who: 'A', text }, kind); return true; }
+  async announce(text, kind = 'host', url = null) {
+    if (!this.playing || this.speaking) return false;
+    const part = (url && this.api.live) ? { kind: 'voice', who: 'A', url, text } : { kind: 'tts', who: 'A', text };
+    await this.hostMoment(part, kind);
+    return true;
+  }
 
   /* ---------------- podcasts & pills ---------------- */
   async playPodcast(pod, { kind = 'podcast' } = {}) {

@@ -356,10 +356,10 @@ app.generatePodcast = async topic => {
     else app.toast(err.message, { error: true });
   } finally { if (btn) btn.disabled = false; }
 };
-app.playShowcase = which => {
+app.playShowcase = async which => {
   app.ensureEntered();
-  const [a, b] = app.engine.hosts;
-  const pod = which === 'stoic' ? { id: 'showcase-stoic-now', title: stoicPillTitle(), parts: toParts(stoicPill(a, b)) } : { ...app.sales.showcasePodcast(), id: 'showcase-now' };
+  await app.sales.loadShowcase();
+  const pod = which === 'stoic' ? { ...app.sales.showcaseStoic(), id: 'showcase-stoic-now' } : { ...app.sales.showcasePodcast(), id: 'showcase-now' };
   app.engine.playPodcast(pod, { kind: which === 'stoic' ? 'pill' : 'podcast' });
 };
 app.makePill = async (url, info) => {

@@ -41,6 +41,8 @@ export class LiveApi {
   checkout(plan) { return post('/radio-api/billing/checkout', { plan }); }
   /* proposed endpoints (see BACKEND.md); the UI falls back gracefully when they are missing */
   showcase() { return req(`/radio-api/showcase?${q({ lang: getLang() })}`).catch(() => null); }
+  orbitaIntroUrl(stationId, index) { return `/radio-api/orbita/intro/${encodeURIComponent(stationId)}/${index}.wav?${q({ lang: getLang() })}`; }
+  orbitaNudgeUrl(slug, stationId) { return `/radio-api/orbita/nudge/${encodeURIComponent(slug)}.wav?${q({ station: stationId, lang: getLang() })}`; }
   connectors() { return req('/radio-api/plus/connectors').catch(() => null); }
   aired = {
     fetchIds: async day => { const r = await fetch(`/radio-api/aired?day=${encodeURIComponent(day)}`, { credentials: 'same-origin' }); return r.ok ? (await r.json()).ids ?? null : null; },
@@ -87,6 +89,8 @@ export class DemoApi {
   async billing() { return { registered: false, plus: false, checkout_available: false, plans: [{ id: 'plus', amount_pln: 39 }, { id: 'plus_ai', amount_pln: 59 }], demo: true }; }
   async checkout() { const e = new Error('demo'); e.demo = true; throw e; }
   async showcase() { return null; }
+  orbitaIntroUrl() { return null; }
+  orbitaNudgeUrl() { return null; }
   async connectors() { return { gmail: { available: false, demo: true } }; }
   aired = null;
   async audio() { throw new Error('demo has no audio files'); }

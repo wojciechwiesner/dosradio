@@ -36,6 +36,7 @@ from .host_clips import build_router as build_host_clips_router
 from .weather import WeatherService
 from .voice_routes import build_voice_router
 from .aired import build_aired_router
+from .orbita_voice import build_orbita_voice_router, prewarm_orbita_voice
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("dosradio")
@@ -95,6 +96,7 @@ async def lifespan(_: FastAPI):
     if settings.prewarm:
         tasks.append(asyncio.create_task(news.hourly_loop()))  # one edition per topic per hour
         tasks.append(asyncio.create_task(prewarm_hosts()))
+        tasks.append(asyncio.create_task(prewarm_orbita_voice(gemini.speak, static_audio_dir)))
     yield
     recorder.running = False
     for task in tasks:
@@ -107,6 +109,7 @@ app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url
 app.include_router(build_router(access))
 app.include_router(build_plus_router(access, db, news, podcasts, personal))
 app.include_router(build_host_clips_router(gemini.speak, static_audio_dir))
+app.include_router(build_orbita_voice_router(gemini.speak, static_audio_dir))
 
 # Billing (Stripe) router — optional module, loaded only when present.
 try:

@@ -1,5 +1,5 @@
 /* Free-hour experience and conversion: checklist, showcase programme, nudges, paywall/recap, plans, auth. */
-import { t, fmtLeft } from './i18n.js';
+import { t, fmtLeft, getLang } from './i18n.js';
 import { storage } from './data.js';
 import { defaultPodcast, defaultPodcastTitle, stoicPill, stoicPillTitle, toParts } from './content.js';
 
@@ -17,6 +17,8 @@ export class Sales {
     this.nudged = new Set(s.nudged || []);
     this.demoRemaining = typeof s.demoRemaining === 'number' ? s.demoRemaining : 3600;
     this.showcaseQueued = false;
+    this.showcaseData = null;
+    this.showcaseLang = null;
     this.authMode = 'register';
   }
   save() { storage.write(KEY, { done: [...this.done], stats: this.stats, credit: this.credit, nudged: [...this.nudged], demoRemaining: this.demoRemaining }); }
@@ -33,18 +35,42 @@ export class Sales {
 
   /* Showcase programme for the first hour: default podcast after the first news, stoic pill after the second.
      Live servers can provide their own audio via /radio-api/showcase (see BACKEND.md); otherwise the browser voices read the scripts. */
+  async loadShowcase() {
+    const lang = getLang();
+    if (this.showcaseData && this.showcaseLang === lang) return this.showcaseData;
+    if (!this.app.api.live) return null;
+    const sc = await this.app.api.showcase();
+    if (sc && (sc.podcast || sc.stoic)) {
+      this.showcaseData = sc;
+      this.showcaseLang = lang;
+    }
+    return this.showcaseData;
+  }
   async queueShowcase() {
     if (this.showcaseQueued || !this.active) return;
     this.showcaseQueued = true;
-    const e = this.app.engine, [a, b] = e.hosts;
-    const sc = this.app.api.live ? await this.app.api.showcase() : null;
-    const pod = sc?.podcast || { id: 'showcase-default', title: defaultPodcastTitle(), parts: toParts(defaultPodcast(a, b)) };
-    const stoic = sc?.stoic || { id: 'showcase-stoic', title: stoicPillTitle(), parts: toParts(stoicPill(a, b)) };
+    const e = this.app.engine;
+    await this.loadShowcase();
+    const pod = this.showcasePodcast();
+    const stoic = this.showcaseStoic();
+    const firstVoice = pod.parts?.find(p => p.url);
+    if (firstVoice && typeof fetch === 'function') fetch(firstVoice.url, { credentials: 'same-origin' }).catch(() => {});
     e.enqueuePill({ ...stoic, showcase: true, whole: true }, true);
     e.enqueuePill({ ...pod, showcase: true, whole: true }, true);
     e.firstBreakMs = 20000; // first news 20 s after the intro instead of 5 min
   }
-  showcasePodcast() { const [a, b] = this.app.engine.hosts; return { id: 'showcase-default', title: defaultPodcastTitle(), parts: toParts(defaultPodcast(a, b)) }; }
+  showcasePodcast() {
+    const live = this.showcaseLang === getLang() ? this.showcaseData?.podcast : null;
+    if (live?.parts?.length) return { id: live.id || 'showcase-default', title: live.title || defaultPodcastTitle(), parts: live.parts };
+    const [a, b] = this.app.engine.hosts;
+    return { id: 'showcase-default', title: defaultPodcastTitle(), parts: toParts(defaultPodcast(a, b)) };
+  }
+  showcaseStoic() {
+    const live = this.showcaseLang === getLang() ? this.showcaseData?.stoic : null;
+    if (live?.parts?.length) return { id: live.id || 'showcase-stoic', title: live.title || stoicPillTitle(), parts: live.parts };
+    const [a, b] = this.app.engine.hosts;
+    return { id: 'showcase-stoic', title: stoicPillTitle(), parts: toParts(stoicPill(a, b)) };
+  }
 
   /* trial clock (live: server value, decremented locally while playing; demo: stored locally) */
   remaining() { const me = this.app.me; if (!me) return 3600; return this.app.api.live ? me.trial_remaining ?? 3600 : this.demoRemaining; }
@@ -54,7 +80,7 @@ export class Sales {
     else { this.demoRemaining = Math.max(0, this.demoRemaining - 1); if (this.demoRemaining % 10 === 0) this.save(); }
     const r = this.remaining();
     if (r <= 900 && !this.nudged.has(15)) { this.nudged.add(15); this.save(); this.app.toast(t('nudge15'), { action: t('podGo'), onAction: () => this.app.openTab('pods'), long: true }); }
-    if (r <= 300 && !this.nudged.has(5)) { this.nudged.add(5); this.save(); this.app.engine.announce(t('tts_5min')); this.app.toast(t('nudge5'), { action: t('register'), onAction: () => this.open('ended'), long: true }); }
+    if (r <= 300 && !this.nudged.has(5)) { this.nudged.add(5); this.save(); const nudgeUrl = this.app.api.live ? this.app.api.orbitaNudgeUrl('5min', this.app.engine.station.id) : null; this.app.engine.announce(t('tts_5min'), 'host', nudgeUrl); this.app.toast(t('nudge5'), { action: t('register'), onAction: () => this.open('ended'), long: true }); }
     if (r <= 0) { this.app.engine.stop(); this.open('ended'); }
     this.renderTrial();
   }

@@ -58,6 +58,7 @@ DOS Radio v1.0.0 — publiczne radio AI (Lyria RealTime, 14 stacji z prowadzący
   - [ ] U3a beatgrid: zrewertowany przez autora (0e1095d), brak numpy/librosa na prod — NIE wdrożone
   - [ ] U3b beat-aligned mix: commit 5da230e niekompletny (usuwa _feed/_drain/_publish, test_stream nie zbiera się) — ODRZUCONY, wymaga przepisania
 - [x] Moje pigułki: user_pills + GET /radio-api/plus/pills; pigułka Dr. K przypisana do user 13
+- [x] **Orbita Voice Recordings (2026-11-18):** nagrania głosowe WAV na starcie Orbity (`/radio-api/orbita/intro/{station}/{0..3}.wav` — Kuba i wszyscy prowadzący), `/radio-api/showcase` (duet Kuba+Ola i Marek+Ola), `/radio-api/orbita/nudge/5min.wav`, cache dyskowy `data/voice/orbita/` + prewarm przy starcie
 
 ## Next Steps (Backlog / v1.3)
 - [ ] Podpięcie produkcyjnych kluczy Stripe (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) na serwerze
