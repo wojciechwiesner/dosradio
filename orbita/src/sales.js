@@ -57,7 +57,7 @@ export class Sales {
     if (firstVoice && typeof fetch === 'function') fetch(firstVoice.url, { credentials: 'same-origin' }).catch(() => {});
     e.enqueuePill({ ...stoic, showcase: true, whole: true }, true);
     e.enqueuePill({ ...pod, showcase: true, whole: true }, true);
-    e.firstBreakMs = 20000; // first news 20 s after the intro instead of 5 min
+    e.firstBreakMs = 75000; // let full-volume music breathe for 75 s after the intro before showcase/news
   }
   showcasePodcast() {
     const live = this.showcaseLang === getLang() ? this.showcaseData?.podcast : null;
@@ -107,7 +107,7 @@ export class Sales {
       const d = this.done.size;
       h += `<section class="group"><h2>${t('fhTitle')} <span class="hint">${t('fhProgress', { d, n: STEPS.length })}</span></h2>
         <div class="progress"><i style="width:${(d / STEPS.length * 100).toFixed(0)}%"></i></div>
-        <ol class="steps">${STEPS.map(s => `<li><button type="button" data-step="${s}" class="${this.done.has(s) ? 'done' : ''}"><span class="box">${this.done.has(s) ? '✓' : ''}</span><span>${esc(t('fhSteps')[s])}</span></button></li>`).join('')}</ol>
+        <ol class="steps">${STEPS.map(s => `<li><button type="button" data-step="${s}" class="${this.done.has(s) ? 'done' : ''}"><span class="box">${this.done.has(s) ? '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M2 6.5 4.8 9.2 10 3" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>' : ''}</span><span>${esc(t('fhSteps')[s])}</span></button></li>`).join('')}</ol>
         ${this.app.api.live ? '' : `<button class="btn small" type="button" data-act="skip">${t('demoSkip')}</button>`}
       </section>`;
       h += `<section class="group"><h2>${t('plansTitle')}</h2>${this.plansHtml(plan)}<p class="hint">${t('stripeNote')}</p></section>`;

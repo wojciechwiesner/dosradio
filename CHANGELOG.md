@@ -7,7 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Require a verified email for admin password login and issue only the session cookie, not the shared admin token.
+- **Admin token no longer exposes secret material** (`server/app/admin_api.py`): without a dedicated
+  `DOSRADIO_ADMIN_TOKEN`, the token returned by `POST /radio-api/admin/login` was the first 32 characters of
+  `DOSRADIO_SECRET`. The fallback is now an HMAC-SHA256 derivation of the app secret, so the session-signing
+  secret never leaves the server; a dedicated `DOSRADIO_ADMIN_TOKEN` still wins when set. Covered by
+  `server/tests/test_admin_token.py`. `server/tests/test_main_integration.py` now pins its own admin token, so
+  it no longer depends on which test module set `DOSRADIO_SECRET` first.
+
+### Changed
+- **Safer deploy** (`deploy.sh`): refuses to ship uncommitted deploy inputs (`ALLOW_DIRTY=1` overrides), builds
+  with `npm run build` (Orbita bundle, type check, Vite) and checks `orbita.html` and `admin.html` in `dist/`,
+  keeps `feeds/` and `share-*` in the web root during `--delete`, no longer uploads `.venv312` or
+  `.pytest_cache`, backs up `.env`, the SQLite database (online backup API) and the nginx vhost before
+  uploading, and fails when the health check does not answer within 30 s.
+
 ### Added
+- **Inline Lyria Prompt Editor in Admin (`/admin.html`), Universal MP3/Ogg DJ Stream & Ducking Fix** (`public/admin.html`, `server/app/stream.py`, `orbita/src/audio.js`, `orbita/src/engine.js`, `src/radio/publicRadioEngine.ts`, `src/radio/chunkStreamer.ts`): every station row in `/admin.html` (`Rodzaje Muzyki`) now exposes an inline Lyria prompt `<textarea>` with instant search and 1-click `Zapisz prompt` (`PATCH /radio-api/admin/catalog/stations/{id}`) feeding `StationRecorder` live; added `/radio-api/station/{id}/stream.mp3` and `/radio-api/group/{id}/stream.mp3` (`libmp3lame 160k`) auto-selected on Safari/WebKit/iOS so `mixer.py` 16-beat DJ crossfades are no longer bypassed by `stream.ogg` fallback; fixed `ChunkStreamer` intra-session continuity (`live_prob=0` after initial segment + 2.4s inter-session crossfade); fixed voice/music ducking (`musicBus = 1.0`, `DUCK_LEVEL = 0.24`, `VOICE_BASE_GAIN = 0.42`, 320 ms pre-duck, 1.8 s restore).
+- **8 Techno & Rave Genres + 3 B2B Venue Sets (42 Stations Total)** (`server/app/catalog_extra.py`, `server/app/catalog.py`, `server/app/hosts.py`, `server/app/recorder.py`, `src/radio/extraStations.ts`, `src/radio/stations.ts`, `orbita/src/data.js`, `orbita/src/i18n.js`): added group `techno-rave` (`berlin-bcco-techno`, `raw-techno`, `hypnotic-techno`, `etno-techno`, `tribal-techno`, `goa-trance`, `hard-dance`, `tekk`) and group `przestrzenie-b2b` (`salon-beauty-spa`, `lobby-hotelowe`, `poczekalnia`), plus updated 4th Orbita welcome line highlighting the free first hour and registration.
+- **Share Station with Personal Host Dedication (`?d=<token>`)** (`server/app/dedications.py`, `orbita/src/dedication.js`, `src/ui/dedicationModal.ts`): `POST /radio-api/dedications` creates a shareable link (`Dla [Imię]`, `Od [Imię]`, dedication up to 200 chars) and synthesizes/caches a personalized WAV host greeting (`/radio-api/dedications/{id}/greeting.wav`) played automatically when the recipient opens `/orbita.html?d=...` or `/?d=...`.
+- **Unified Classic <-> Orbita 3D View Switcher & PWA Integration** (`index.html`, `src/ui/dosradio.ts`, `src/ui/prefs.ts`, `orbita/src/main.js`, `public/sw.js`, `public/manifest.webmanifest`): live view switcher (`Widok: Klasyczny | Orbita 3D`) persisting `dosradio.view.v1`, `?view=orbita` / `?view=classic` deep links, PWA app shortcuts for Classic, Orbita 3D and Auto-Ramowka, and Service Worker caching for `/orbita.html` and `/admin.html`.
+- **6 Music Groups, Subgroups, Group Streaming & 7 New Genres** (`server/app/catalog.py`, `server/app/stream.py`, `server/app/hosts.py`, `server/app/recorder.py`, `src/radio/stations.ts`, `orbita/src/data.js`): 32 stations organized into 6 groups (`fokus-puls`, `klub-energia`, `synth-filmowa`, `klasyka-instrumentalna`, `etno-folk`, `chill-noc`), continuous DJ-mixed group stream `/radio-api/group/{group_id}/stream.ogg`, and 7 new genres (`stranger-synth`, `muzyka-filmowa`, `cyber-noir`, `muzyka-klasyczna`, `instrumentalna-akustyczna`, `etno-world`, `slowianski-folk`).
+- **Auto-Ramowka 24/7 Engine & `zrobi.my` B2B Audio Funnel** (`server/app/auto_ramowka.py`, `src/radio/publicRadioEngine.ts`, `orbita/src/main.js`): hourly genre rotation matched to Warsaw time of day, news bulletins every 20 minutes, podcasts, host jingles, TTS-synthesized `zrobi.my` AI audit/implementation spots (`/radio-api/ramowka/spot/{id}.wav`), and CORS-enabled lead receiver `POST /radio-api/leads/zrobimy` coupled with the standalone B2B project `/Users/wojciechwiesner/Projects/active/zrobimy`.
+- **Admin Cockpit (`/admin.html`) & Admin API** (`public/admin.html`, `server/app/admin_api.py`, `server/app/telemetry.py`): recorded `.opus` track browser/player, interactive A/B DJ Mixer Tester with live WAV synthesis and 64-point envelope plot, token/Lyria usage telemetry, registered & online listener presence, dynamic station/group catalog CRUD, 24h Auto-Ramowka editor, and `zrobi.my` SME lead inbox.
+
+### Fixed
+- **Phrase-Long DJ Mixer & Seamless Intra-Session Continuity** (`server/app/mixer.py`, `server/app/stream.py`): fixed short/audible transitions caused by 4-beat (~1.9s) linear fades, 0.5s fallback cuts on syncopated/ambient tracks, and destructive beat-slicing inside continuous 30s Lyria takes. Consecutive 30s intra-session segments now splice via 15 ms equal-power micro-declick (0 dropped beats); inter-session and group transitions use a 16-beat (4-bar, ~7.6-8.0s) beat-matched crossfade with Linkwitz-Riley 150 Hz midpoint bass-swap and 6.5s equal-power crossfade for beatless/ambient genres.
 - **AP newest news in the `ap` feed** (`scripts/publish_feeds.py`): reads ap_improve `GET /api/radio` first (blockers, overdue and just finished company topics, most urgent IT ticket) and puts those lines before the queue signals. Optional: an older ap_improve without the endpoint still publishes the queue signals.
 
 ### Fixed

@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { STATIONS, N, CATS, TOPIC_IDS } from './data.js';
+import { STATIONS, N, CATS, TOPIC_IDS, groupById } from './data.js';
 
 const C = h => new THREE.Color(h);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -356,11 +356,14 @@ export function createScene(canvas, cb) {
     }
 
     /* satellites */
-    const tuned = s.tunedIdx, blend = s.blendIdx;
+    const tuned = s.tunedIdx, blend = s.blendIdx, activeGrp = s.playGroup ? groupById(s.playGroup) : null;
     sats.forEach((o, i) => {
-      o.glow += ((i === tuned ? 1 : i === s.needleIdx ? 0.6 : i === blend ? 0.5 : 0) - o.glow) * Math.min(1, dt * 6);
+      const inGroup = activeGrp && STATIONS[i]?.group === activeGrp.id;
+      const targetGlow = i === tuned ? 1 : inGroup ? 0.72 : i === s.needleIdx ? 0.6 : i === blend ? 0.5 : 0;
+      o.glow += (targetGlow - o.glow) * Math.min(1, dt * 6);
       o.mesh.scale.setScalar(1 + o.glow * 0.45 + (i === tuned ? kick * 0.3 : 0));
-      o.mesh.material.color.copy(i === tuned ? palette.cat : o.base).multiplyScalar(0.6 + o.glow * 1.25);
+      const baseCol = i === tuned ? palette.cat : inGroup ? tmpC.set(activeGrp.color) : o.base;
+      o.mesh.material.color.copy(baseCol).multiplyScalar(0.6 + o.glow * 1.25);
     });
     dialG.rotation.y = s.phi;
 

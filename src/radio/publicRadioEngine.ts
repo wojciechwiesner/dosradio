@@ -13,7 +13,15 @@ import { getSharedAudioContext } from '../audio/iosAudioUnlock';
 import { applyStationToHelper, createLyriaHelper } from './liveLyria';
 import { radioApi, TrialEndedError } from './radioApi';
 import { interleaveStories, type NewsCategory, type QueuedStory } from './newsQueue';
-import { hostStationId, isPresetStation, type Station } from './stations';
+import {
+  groupById,
+  hostStationId,
+  isPresetStation,
+  nextStationInGroup,
+  stationsForGroup,
+  type MusicGroupId,
+  type Station,
+} from './stations';
 import { DEFAULT_BREAK_INTERVAL, FIRST_BREAK_DELAY_MS, canSpeakNow, nextScheduledBreak, type BreakInterval } from './radioClock';
 import { HostClipPlayer } from './hostClipPlayer';
 import { ChunkStreamer } from './chunkStreamer';
@@ -27,7 +35,7 @@ import { PillQueue } from './pillQueue';
 import type { BreakPlan } from './programme';
 
 /** Music bed volume while voice is speaking, relative to full volume. */
-export const DUCK_LEVEL = 0.34;
+export const DUCK_LEVEL = 0.24;
 const NEWS_POLL_MS = 10 * 60_000;
 /** A scheduled break with news switched off: no stories, only what the programme queue holds. */
 const NO_NEWS_PLAN: BreakPlan = { kind: 'main', headlines: [], full: [], teaser: null, weather: false, empty: true };
@@ -49,7 +57,10 @@ export interface PublicRadioEvents {
   onLevel: (level: number) => void;
   onHostModeChange?: (mode: HostMode) => void;
   onHostState?: (speaking: boolean, role: 'host' | 'news' | 'jingle' | null) => void;
+  onStationChange?: (station: Station, groupId: MusicGroupId | null) => void;
 }
+
+const GROUP_ROTATE_MS = 6 * 60_000;
 
 export class PublicRadioEngine {
   private readonly ctx = getSharedAudioContext();
@@ -77,6 +88,10 @@ export class PublicRadioEngine {
   private timers: ReturnType<typeof setTimeout>[] = [];
   private newsTimer: ReturnType<typeof setInterval> | null = null;
   private levelTimer: ReturnType<typeof setInterval> | null = null;
+  private groupRotateTimer: ReturnType<typeof setInterval> | null = null;
+  private ramowkaSpotTimer: ReturnType<typeof setTimeout> | null = null;
+  private playGroupId: MusicGroupId | null = null;
+  private usingGroupStream = false;
 
   private silentTicks = 0;
   private recovering = false;
@@ -84,6 +99,11 @@ export class PublicRadioEngine {
   private playing = false;
   private currentVoiceSource: AudioBufferSourceNode | null = null;
   private welcomeGeneration = 0;
+  private pendingDedication: { audio_url: string; script: string; host_name?: string; to_name?: string; from_name?: string } | null = null;
+
+  setPendingDedication(ded: { audio_url: string; script: string; host_name?: string; to_name?: string; from_name?: string } | null): void {
+    this.pendingDedication = ded;
+  }
   private switchCount = 0;
 
   private startedAt = new Date();
@@ -106,6 +126,8 @@ export class PublicRadioEngine {
   public hostMode: HostMode = 'with-host';
   /** When false the host still chats, but scheduled news breaks are skipped ("Bez wiadomości"). */
   public newsEnabled = true;
+  public autoRamowka = false;
+  public activeSpotId = 'zrobimy-ai';
 
   constructor(
     station: Station,
@@ -138,6 +160,18 @@ export class PublicRadioEngine {
 
   get currentStation(): Station {
     return this.station;
+  }
+
+  get currentGroup(): MusicGroupId | null {
+    return this.playGroupId;
+  }
+
+  private statusLabel(): string {
+    if (this.playGroupId) {
+      const grp = groupById(this.playGroupId);
+      if (grp) return `Grupa: ${grp.name} · ${this.station.name}`;
+    }
+    return `Gra ${this.station.name}`;
   }
 
   private clamp01(value: number): number {
@@ -189,7 +223,7 @@ export class PublicRadioEngine {
     this.startLevelMeter();
     this.toneKiller.start();
 
-    if (this.hostMode === 'with-host') {
+    if (this.hostMode === 'with-host' || this.pendingDedication) {
       void this.playWelcomeIntro(); // host speaks within ~100 ms while music loads underneath
     }
 
@@ -199,9 +233,11 @@ export class PublicRadioEngine {
       this.events.onStatus('Muzyka się ładuje, za chwilę wejdzie...');
       void this.triggerDeadAirRecovery();
     } else {
-      this.events.onStatus(`Gra ${this.station.name}`);
+      this.events.onStatus(this.statusLabel());
     }
     this.events.onState('playing');
+    this.syncGroupRotationTimer();
+    this.scheduleRamowkaSpot();
 
     if (this.hostMode === 'with-host') {
       void this.refreshNews();
@@ -214,17 +250,45 @@ export class PublicRadioEngine {
   }
 
 
+  private cachedExt: 'ogg' | 'mp3' | null = null;
+
+  private streamExt(): 'ogg' | 'mp3' {
+    if (this.cachedExt) return this.cachedExt;
+    if (typeof document === 'undefined' || typeof document.createElement !== 'function') {
+      this.cachedExt = 'ogg';
+      return 'ogg';
+    }
+    const probe = document.createElement('audio') as HTMLAudioElement & { canPlayType?: (t: string) => string };
+    if (typeof probe?.canPlayType !== 'function') {
+      this.cachedExt = 'ogg';
+      return 'ogg';
+    }
+    const oggOk = probe.canPlayType('audio/ogg; codecs="opus"');
+    const mp3Ok = probe.canPlayType('audio/mpeg');
+    this.cachedExt = !oggOk && mp3Ok ? 'mp3' : 'ogg';
+    return this.cachedExt;
+  }
+
   /**
    * Play the station through a real <audio> element. Resolves false (so the
    * chunk streamer takes over) when the element errors or the platform refuses
    * to create a media element source.
    */
   private async startStreamElement(): Promise<boolean> {
+    const ext = this.streamExt();
+    if (this.playGroupId) {
+      const groupOk = await this.openStream(`/radio-api/group/${this.playGroupId}/stream.${ext}`);
+      if (groupOk) {
+        this.usingGroupStream = true;
+        return true;
+      }
+      this.usingGroupStream = false;
+    }
     return this.openStream(this.streamUrl());
   }
 
   private streamUrl(): string {
-    return `/radio-api/station/${this.station.id}/stream.ogg`;
+    return `/radio-api/station/${this.station.id}/stream.${this.streamExt()}`;
   }
 
   /**
@@ -327,8 +391,12 @@ export class PublicRadioEngine {
     this.clipPlayer.stop();
     if (this.newsTimer) clearInterval(this.newsTimer);
     if (this.levelTimer) clearInterval(this.levelTimer);
+    if (this.groupRotateTimer) clearInterval(this.groupRotateTimer);
+    if (this.ramowkaSpotTimer) clearTimeout(this.ramowkaSpotTimer);
     this.newsTimer = null;
     this.levelTimer = null;
+    this.groupRotateTimer = null;
+    this.ramowkaSpotTimer = null;
     this.toneKiller.stop();
 
     if (this.chunkStreamer) {
@@ -342,9 +410,151 @@ export class PublicRadioEngine {
     this.events.onLevel(0);
   }
 
-  async setStation(station: Station): Promise<void> {
-    const prev = this.station;
+  private syncGroupRotationTimer(): void {
+    if (this.groupRotateTimer) {
+      clearInterval(this.groupRotateTimer);
+      this.groupRotateTimer = null;
+    }
+    if (!this.playing || !this.playGroupId) return;
+    this.groupRotateTimer = setInterval(() => {
+      if (!this.playing || !this.playGroupId) return;
+      const next = nextStationInGroup(this.playGroupId, this.station.id);
+      if (next.id !== this.station.id) {
+        void this.rotateToGroupStation(next);
+      }
+    }, GROUP_ROTATE_MS);
+  }
+
+  private async rotateToGroupStation(next: Station): Promise<void> {
+    this.station = next;
+    this.events.onStationChange?.(next, this.playGroupId);
+    if (!this.playing) return;
+    if (!this.usingGroupStream) {
+      this.chunkStreamer?.stop();
+      this.chunkStreamer = null;
+      this.helper?.stop();
+      if (this.streamHandle) {
+        await this.openStream(this.streamUrl(), this.streamHandle);
+      } else {
+        await this.startMusic();
+      }
+    }
+    this.events.onStatus(this.statusLabel());
+  }
+
+  async setGroup(groupId: MusicGroupId | null, preferredStation?: Station): Promise<void> {
+    this.playGroupId = groupId;
+    if (!groupId) {
+      this.usingGroupStream = false;
+      this.syncGroupRotationTimer();
+      if (preferredStation) {
+        await this.setStation(preferredStation);
+      } else {
+        this.events.onStationChange?.(this.station, null);
+        if (this.playing) this.events.onStatus(this.statusLabel());
+      }
+      return;
+    }
+    const groupStations = stationsForGroup(groupId);
+    const chosen =
+      preferredStation && groupStations.some((s) => s.id === preferredStation.id)
+        ? preferredStation
+        : groupStations.find((s) => s.id === this.station.id) ?? groupStations[0] ?? this.station;
+    this.station = chosen;
+    this.events.onStationChange?.(chosen, groupId);
+    this.syncGroupRotationTimer();
+    if (!this.playing) return;
+
+    this.chunkStreamer?.stop();
+    this.chunkStreamer = null;
+    this.helper?.stop();
+    this.stopVoice();
+
+    if (!isIOS()) {
+      const ok = await this.openStream(`/radio-api/group/${groupId}/stream.ogg`, this.streamHandle);
+      if (ok) {
+        this.usingGroupStream = true;
+        this.events.onStatus(this.statusLabel());
+        return;
+      }
+    }
+    this.usingGroupStream = false;
+    if (this.streamHandle) {
+      await this.openStream(this.streamUrl(), this.streamHandle);
+    } else {
+      await this.startMusic();
+    }
+    this.events.onStatus(this.statusLabel());
+  }
+
+  setAutoRamowka(enabled: boolean, spotId?: string): void {
+    this.autoRamowka = enabled;
+    if (spotId) this.activeSpotId = spotId;
+    if (enabled) {
+      this.setInterval(20);
+      this.scheduleRamowkaSpot();
+    } else if (this.ramowkaSpotTimer) {
+      clearTimeout(this.ramowkaSpotTimer);
+      this.ramowkaSpotTimer = null;
+    }
+  }
+
+  private scheduleRamowkaSpot(): void {
+    if (this.ramowkaSpotTimer) {
+      clearTimeout(this.ramowkaSpotTimer);
+      this.ramowkaSpotTimer = null;
+    }
+    if (!this.playing || !this.autoRamowka || this.hostMode === 'music-only') return;
+    const now = new Date();
+    const min = now.getMinutes();
+    const targetMins = [10, 30, 50];
+    let nextMin = targetMins.find((m) => m > min);
+    const nextDate = new Date(now.getTime());
+    if (nextMin === undefined) {
+      nextDate.setHours(nextDate.getHours() + 1, 10, 0, 0);
+    } else {
+      nextDate.setMinutes(nextMin, 0, 0);
+    }
+    const delayMs = Math.max(5_000, nextDate.getTime() - now.getTime());
+    this.ramowkaSpotTimer = setTimeout(async () => {
+      await this.playRamowkaSpot(this.activeSpotId);
+      if (this.playing && this.autoRamowka) this.scheduleRamowkaSpot();
+    }, delayMs);
+  }
+
+  async playRamowkaSpot(spotId: string = this.activeSpotId): Promise<void> {
+    if (!this.playing || this.speaking || this.hostMode === 'music-only') return;
+    const raw = await radioApi.ramowkaSpotAudio(spotId);
+    if (!raw || !this.playing || this.speaking) return;
+    let buffer: AudioBuffer;
+    try {
+      buffer = await this.ctx.decodeAudioData(raw);
+    } catch {
+      return;
+    }
+    if (!this.playing || this.speaking) return;
+    this.speaking = true;
+    try {
+      this.events.onHostState?.(true, 'jingle');
+      this.duck(DUCK_LEVEL, 0.8);
+      await new Promise((r) => setTimeout(r, 400));
+      await this.playVoice(buffer);
+    } finally {
+      if (this.playing) this.duck(1.0, 1.5);
+      this.speaking = false;
+      this.lastBreakEndedAt = new Date();
+      this.events.onHostState?.(false, null);
+    }
+  }
+
+  async setStation(station: Station, keepGroup = false): Promise<void> {
+    if (!keepGroup) {
+      this.playGroupId = null;
+      this.usingGroupStream = false;
+      this.syncGroupRotationTimer();
+    }
     this.station = station;
+    this.events.onStationChange?.(station, this.playGroupId);
     if (!this.playing) return;
 
     // Stop competing engines and any in-flight voice clip
@@ -369,7 +579,7 @@ export class PublicRadioEngine {
       // The live model keeps its context across a prompt change; resetting it mid-bar is a hard cut.
       await this.helper.play();
     }
-    this.events.onStatus(`Gra ${station.name}`);
+    this.events.onStatus(this.statusLabel());
   }
 
   async setCategories(categories: NewsCategory[]): Promise<void> {
@@ -465,13 +675,25 @@ export class PublicRadioEngine {
   private async playWelcomeIntro(): Promise<void> {
     const gen = ++this.welcomeGeneration;
     const sid = hostStationId(this.station);
+    const ded = this.pendingDedication;
+    this.pendingDedication = null;
     try {
-      const buf = await this.decode(`/radio-api/welcome/${sid}.wav`);
+      const voiceUrl = ded?.audio_url || `/radio-api/welcome/${sid}.wav`;
+      const bufPromise = this.decode(voiceUrl);
+      await new Promise((r) => setTimeout(r, 1600));
+      const buf = await bufPromise;
       if (!this.playing || gen !== this.welcomeGeneration) return;
-      this.stopVoice();
-      this.duck(0.15, 0.2);
+      this.stopVoiceSource();
+      this.duck(DUCK_LEVEL, 0.55);
       this.speaking = true;
       this.events.onHostState?.(true, 'host');
+      if (ded?.script) {
+        this.events.onStatus(
+          `Dedykacja dla ${ded.to_name || ''} od ${ded.from_name || ''}: ${ded.script}`,
+        );
+      }
+      await new Promise((r) => setTimeout(r, 320));
+      if (!this.playing || gen !== this.welcomeGeneration) return;
       await this.playVoice(buf);
     } catch {
       // Ignored if greeting is missing
@@ -479,7 +701,7 @@ export class PublicRadioEngine {
       if (gen === this.welcomeGeneration) {
         this.speaking = false;
         this.events.onHostState?.(false, null);
-        this.duck(1.0, 1.8);
+        if (this.playing) this.duck(1.0, 1.8);
       }
     }
   }

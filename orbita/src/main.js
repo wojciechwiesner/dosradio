@@ -1,11 +1,12 @@
-import { STATIONS, N, byId, CATS, TOPIC_IDS, INTERVALS, loadPrefs, savePrefs, sanitizePrefs } from './data.js';
-import { t, setLang, detectLang, getLang, LANGS, LANG_NAMES, stationName, stationTag, topicLabel, intervalText, fmtClock, fmtLeft } from './i18n.js';
+import { STATIONS, byId, CATS, TOPIC_IDS, INTERVALS, MUSIC_GROUPS, groupById, stationsForGroup, nextStationInGroup, applyCatalog, computeAutoRamowkaSlot, VIEW_KEY, saveViewPref, loadPrefs, savePrefs, sanitizePrefs } from './data.js';
+import { t, setLang, detectLang, getLang, LANGS, LANG_NAMES, stationName, stationTag, groupName, groupTag, topicLabel, intervalText, fmtClock, fmtLeft } from './i18n.js';
 import { AudioCore } from './audio.js';
 import { detectApi, stationFromMood } from './api.js';
 import { RadioEngine } from './engine.js';
 import { createScene, STEP } from './scene.js';
 import { Sales } from './sales.js';
 import { radioPane, minePane, podsPane } from './panes.js';
+import { openDedicationModal, loadIncomingDedication } from './dedication.js';
 import { stoicThoughts, stoicPill, stoicPillTitle, toParts, gmailSample } from './content.js';
 
 const $ = s => document.querySelector(s);
@@ -22,6 +23,11 @@ const app = {
   history: [],
 };
 let prefs = loadPrefs();
+try {
+  const sp = new URLSearchParams(location.search);
+  if (sp.get('ramowka') === '1') { prefs.autoRamowka = true; prefs.playGroup = true; }
+  if (sp.get('view') === 'orbita') saveViewPref('orbita');
+} catch { /* ignore */ }
 Object.defineProperty(app, 'prefs', { get: () => prefs });
 
 /* =========================================================  toast / announce  */
@@ -77,16 +83,17 @@ app.setHostMode = m => app.commit(p => { p.hostMode = m; }, m === 'with-host' ? 
 /* =========================================================  dial physics + input  */
 const dial = {
   phi: 0, vel: 0, target: 0, dragging: false, seeking: false, lastIdx: -1, settleTimer: 0, userMoved: false,
-  idxAt(phi) { return ((Math.round(-phi / STEP) % N) + N) % N; },
+  idxAt(phi) { const len = STATIONS.length; return ((Math.round(-phi / STEP) % len) + len) % len; },
   goTo(idx, instant = false) {
+    const len = STATIONS.length;
     const cur = -this.phi / STEP; let k = Math.round(cur);
-    const d = ((idx - (((k % N) + N) % N)) % N + N) % N; k += d > N / 2 ? d - N : d;
+    const d = ((idx - (((k % len) + len) % len)) % len + len) % len; k += d > len / 2 ? d - len : d;
     this.target = -k * STEP; if (instant) { this.phi = this.target; this.vel = 0; }
   },
   nudge(dir) { this.userMoved = true; this.target = -Math.round(-this.target / STEP + dir) * STEP; },
 };
 app.nudgeDial = () => dial.nudge(1);
-dial.goTo(byId[prefs.station].idx, true);
+dial.goTo((byId[prefs.station] || STATIONS[0]).idx, true);
 app.goToStation = idx => { dial.userMoved = true; dial.goTo(idx); };
 
 const stage = $('#stage');
@@ -151,11 +158,35 @@ addEventListener('keyup', e => { if (e.code === 'Space') stopSeek(); });
 
 /* =========================================================  labels  */
 const labelsEl = $('#labels');
-const satLabels = STATIONS.map((s, i) => { const el = document.createElement('button'); el.type = 'button'; el.className = 'sat-label'; el.dataset.station = i; el.tabIndex = -1; el.innerHTML = '<b></b><small></small>'; labelsEl.appendChild(el); return el; });
+let satLabels = [];
+function rebuildSatLabels() {
+  satLabels.forEach(el => el.remove());
+  satLabels = STATIONS.map((s, i) => {
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'sat-label';
+    el.dataset.station = i;
+    el.tabIndex = -1;
+    el.innerHTML = '<b></b><small></small>';
+    labelsEl.appendChild(el);
+    return el;
+  });
+}
+rebuildSatLabels();
 const moonLabels = TOPIC_IDS.map(id => { const el = document.createElement('button'); el.type = 'button'; el.className = 'moon-label'; el.dataset.topic = id; el.tabIndex = -1; labelsEl.appendChild(el); return el; });
 const hostLabels = ['A', 'B'].map(() => { const el = document.createElement('div'); el.className = 'host-label'; el.innerHTML = '<i></i><span></span>'; el.style.opacity = 0; labelsEl.appendChild(el); return el; });
 function syncLabels() {
-  satLabels.forEach((el, i) => { const s = STATIONS[i]; el.firstChild.textContent = stationName(s); el.lastChild.textContent = `${s.freq} · ${s.bpm} BPM`; el.classList.toggle('tuned', s.id === prefs.station); el.classList.toggle('blend', s.id === prefs.blend); });
+  if (satLabels.length !== STATIONS.length) rebuildSatLabels();
+  const hiGroup = app.highlightedGroup || (prefs.playGroup ? prefs.activeGroup : null);
+  satLabels.forEach((el, i) => {
+    const s = STATIONS[i];
+    if (!s) return;
+    el.firstChild.textContent = stationName(s);
+    el.lastChild.textContent = `${s.freq} · ${s.bpm} BPM`;
+    el.classList.toggle('tuned', s.id === prefs.station);
+    el.classList.toggle('in-group', !!hiGroup && s.group === hiGroup);
+    el.classList.toggle('blend', s.id === prefs.blend);
+  });
   moonLabels.forEach((el, i) => { el.textContent = `${i + 1} · ${topicLabel(TOPIC_IDS[i])}`; el.setAttribute('aria-pressed', prefs.categories.includes(TOPIC_IDS[i])); });
 }
 const pt = { x: 0, y: 0, z: 0 };
@@ -185,22 +216,29 @@ function placeLabels() {
 const smooth = (a, b, x) => { const t2 = Math.max(0, Math.min(1, (x - a) / (b - a))); return t2 * t2 * (3 - 2 * t2); };
 
 /* =========================================================  card, HUD, on-air, schedule, captions  */
-function curStation() { return app.moodStation || byId[prefs.station]; }
+function curStation() { return app.moodStation || byId[prefs.station] || STATIONS[0]; }
 function renderCard() {
-  const s = curStation(), base = byId[prefs.station];
+  const s = curStation(), base = byId[prefs.station] || STATIONS[0];
+  const grp = prefs.playGroup && prefs.activeGroup ? groupById[prefs.activeGroup] : null;
   $('#cardName').textContent = app.moodStation ? `${s.name}` : stationName(s);
-  $('#cardTag').textContent = app.moodStation ? `${t('mood')} → ${stationName(base)}` : stationTag(s);
-  $('#cardCat').textContent = t(`cat_${base.cat}`); $('#cardFreq').textContent = base.freq; $('#cardBpm').textContent = base.bpm;
+  $('#cardTag').textContent = app.moodStation
+    ? `${t('mood')} → ${stationName(base)}`
+    : grp
+      ? `${t('groupLabel')}: ${groupName(grp)} · ${stationName(s)} — ${stationTag(s)}`
+      : stationTag(s);
+  $('#cardCat').textContent = grp ? `${t('groupLabel')}: ${groupName(grp)}` : t(`cat_${base.cat}`);
+  $('#cardFreq').textContent = base.freq; $('#cardBpm').textContent = base.bpm;
   $('#cardHostLbl').textContent = prefs.hostMode === 'with-host' ? t('hostBy') : t('modeLbl');
   $('#cardHostName').textContent = prefs.hostMode === 'with-host' ? base.host : t('musicOnlyLower');
   $('#freqTop').textContent = `${base.freq} MHz`;
-  $('#blendInfo').hidden = !prefs.blend; if (prefs.blend) $('#blendName').textContent = stationName(byId[prefs.blend]);
+  $('#blendInfo').hidden = !prefs.blend; if (prefs.blend && byId[prefs.blend]) $('#blendName').textContent = stationName(byId[prefs.blend]);
   $('#newsNowBtn').hidden = prefs.hostMode === 'music-only';
   const on = app.engine?.playing;
   $('#playTxt').textContent = on ? t('pause') : t('play');
   $('#playIcon').setAttribute('d', on ? 'M4 2.5h3v11H4zM9 2.5h3v11H9z' : 'M4 2.5v11l9-5.5z');
   $('#playBtn').classList.toggle('playing', !!on);
   $('#prevBtn').setAttribute('aria-label', t('prev')); $('#nextBtn').setAttribute('aria-label', t('next'));
+  renderAutoRamowkaBar();
 }
 let nextBreakAt = null, upcoming = null, hostState = null, onAirStory = null, schedule = [];
 const MODE_LABEL = { idle: 'offAir', music: 'music', news: 'newsLive', host: 'hostLive', intro: 'hostLive', podcast: 'podcastLive', pill: 'pillLive' };
@@ -227,9 +265,146 @@ const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': 
 function renderCaption() {
   const h = hostState, el = $('#captions');
   if (!h || !h.caption) { el.hidden = true; return; }
-  el.hidden = false; $('#capWho').textContent = h.speaking ? (h.who === 'clip' ? (h.title || 'DOS Radio') : h.name || 'DOS Radio') : '♪';
+  el.hidden = false; $('#capWho').textContent = h.speaking ? (h.who === 'clip' ? (h.title || 'DOS Radio') : h.name || 'DOS Radio') : t('music');
   $('#capText').textContent = h.caption.length > 260 ? h.caption.slice(0, 257) + '…' : h.caption;
 }
+
+/* =========================================================  groups & auto-ramówka 24/7  */
+const GROUP_ROTATE_MS = 6 * 60 * 1000;
+let groupRotateTimer = 0;
+let ramowkaPollTimer = 0;
+let ramowkaMidSlotTimer = 0;
+let lastAiredMidSlotKey = '';
+let currentRamowkaSlot = null;
+
+app.highlightedGroup = prefs.activeGroup || null;
+app.highlightGroup = gid => { app.highlightedGroup = gid; syncLabels(); };
+
+function scheduleGroupRotate() {
+  clearInterval(groupRotateTimer);
+  groupRotateTimer = 0;
+  if (!prefs.playGroup || !prefs.activeGroup) return;
+  groupRotateTimer = setInterval(() => {
+    if (!prefs.playGroup || !prefs.activeGroup || !app.engine?.playing) return;
+    const next = nextStationInGroup(prefs.activeGroup, prefs.station);
+    if (next && next.id !== prefs.station) {
+      app.commit(p => { p.station = next.id; }, stationName(next));
+      dial.goTo(next.idx);
+    }
+  }, GROUP_ROTATE_MS);
+}
+
+app.playGroup = gid => {
+  const g = groupById[gid];
+  if (!g) return;
+  const sts = stationsForGroup(gid);
+  if (!sts.length) return;
+  const cur = byId[prefs.station];
+  const nextSt = cur && cur.group === gid ? cur : sts[0];
+  app.highlightedGroup = gid;
+  app.commit(p => {
+    p.activeGroup = gid;
+    p.playGroup = true;
+    p.autoRamowka = false;
+    p.station = nextSt.id;
+  }, `${t('groupLabel')}: ${groupName(g)}`, { toast: true });
+  dial.goTo(nextSt.idx);
+  scheduleGroupRotate();
+  if (!app.engine?.playing) { app.ensureEntered(); app.togglePlay(true); }
+};
+
+app.selectStationFromGroup = idx => {
+  const s = STATIONS[idx];
+  if (!s) return;
+  app.highlightedGroup = s.group;
+  app.commit(p => {
+    p.playGroup = false;
+    p.activeGroup = s.group;
+    p.station = s.id;
+  }, stationName(s));
+  app.goToStation(s.idx);
+  scheduleGroupRotate();
+};
+
+function renderAutoRamowkaBar() {
+  const bar = $('#autoRamowkaBar'), txt = $('#autoRamowkaText');
+  if (!bar || !txt) return;
+  if (!prefs.autoRamowka) { bar.hidden = true; return; }
+  const slot = currentRamowkaSlot || computeAutoRamowkaSlot();
+  const st = byId[slot.station_id] || byId[prefs.station] || STATIONS[0];
+  bar.hidden = false;
+  txt.textContent = `${t('autoRamowkaLive')}: ${slot.label} (${slot.slot}) · ${st.host}`;
+}
+
+async function syncAutoRamowka() {
+  if (!prefs.autoRamowka) return;
+  const remote = app.api ? await app.api.ramowkaState() : null;
+  const fallback = computeAutoRamowkaSlot();
+  const slot = remote && remote.group_id ? {
+    slot: remote.slot || fallback.slot,
+    label: remote.label || fallback.label,
+    group_id: remote.group_id || fallback.group_id,
+    station_id: remote.station_id || fallback.station_id,
+    host: remote.host || fallback.host,
+    current_spot: remote.current_spot || null,
+  } : fallback;
+  currentRamowkaSlot = slot;
+  const targetGroup = groupById[slot.group_id] ? slot.group_id : fallback.group_id;
+  const sts = stationsForGroup(targetGroup);
+  const targetStation = byId[slot.station_id] || sts[0] || STATIONS[0];
+  app.highlightedGroup = targetGroup;
+  if (prefs.activeGroup !== targetGroup || !prefs.playGroup || (byId[prefs.station]?.group !== targetGroup)) {
+    app.commit(p => {
+      p.activeGroup = targetGroup;
+      p.playGroup = true;
+      p.station = targetStation.id;
+      p.interval = 20;
+    }, null);
+    dial.goTo(targetStation.idx);
+    scheduleGroupRotate();
+  }
+  renderAutoRamowkaBar();
+}
+
+async function checkAutoRamowkaMidSlot() {
+  if (!prefs.autoRamowka || !app.engine?.playing || app.engine.speaking) return;
+  const now = new Date();
+  const m = now.getMinutes();
+  if (m === 10 || m === 30 || m === 50) {
+    const key = `${now.toDateString()}-${now.getHours()}:${m}`;
+    if (key === lastAiredMidSlotKey) return;
+    lastAiredMidSlotKey = key;
+    const spot = currentRamowkaSlot?.current_spot;
+    if (spot?.id) {
+      await app.engine.playRamowkaSpot(spot.id, spot.text || spot.title || t('autoRamowkaLive'));
+    } else {
+      await app.engine.airFiller();
+    }
+  }
+}
+
+function startAutoRamowkaTimers() {
+  clearInterval(ramowkaPollTimer);
+  clearInterval(ramowkaMidSlotTimer);
+  if (!prefs.autoRamowka) return;
+  syncAutoRamowka();
+  ramowkaPollTimer = setInterval(() => syncAutoRamowka(), 60000);
+  ramowkaMidSlotTimer = setInterval(() => checkAutoRamowkaMidSlot(), 15000);
+}
+
+app.setAutoRamowka = on => {
+  app.commit(p => {
+    p.autoRamowka = !!on;
+    if (on) {
+      p.playGroup = true;
+      p.interval = 20;
+      p.hostMode = 'with-host';
+    }
+  }, t('autoRamowka'), { toast: true });
+  startAutoRamowkaTimers();
+  scheduleGroupRotate();
+  renderAutoRamowkaBar();
+};
 
 /* =========================================================  stoic card  */
 function stoicOfDay() {
@@ -396,10 +571,10 @@ function commands() {
   INTERVALS.forEach(v => c.push({ label: `${t('news')} ${intervalText(v)}`, hint: t('news'), run: () => app.setInterval(v), keys: `${v}` }));
   c.push({ label: t('withHost'), hint: 'H', run: () => app.setHostMode('with-host'), keys: 'host' }, { label: t('musicOnlyBtn'), hint: 'H', run: () => app.setHostMode('music-only'), keys: 'music' });
   c.push({ label: t('newsNow'), hint: 'N', run: () => app.engine.newsNow(), keys: 'news' }, { label: t('cmdPodcast'), hint: t('tabPods'), run: () => app.openTab('pods', '#podTopic'), keys: 'podcast' });
-  c.push({ label: t('stoicListen') + ': ' + t('stoicTitle'), hint: t('stoicTitle'), run: app.playStoic, keys: 'stoic' }, { label: t('cmdRandom'), hint: '⟳', run: () => app.goToStation((Math.random() * N) | 0), keys: 'random' });
-  c.push({ label: app.engine?.playing ? t('pause') : t('play'), hint: 'P', run: () => app.togglePlay(), keys: 'play pause' }, { label: t('cmdUndo'), hint: '⌘Z', run: undo, keys: 'undo' });
+  c.push({ label: t('stoicListen') + ': ' + t('stoicTitle'), hint: t('stoicTitle'), run: app.playStoic, keys: 'stoic' }, { label: t('cmdRandom'), hint: 'R', run: () => app.goToStation((Math.random() * STATIONS.length) | 0), keys: 'random' });
+  c.push({ label: app.engine?.playing ? t('pause') : t('play'), hint: 'P', run: () => app.togglePlay(), keys: 'play pause' }, { label: t('cmdUndo'), hint: 'Ctrl+Z', run: undo, keys: 'undo' });
   LANGS.forEach(l => c.push({ label: t('cmdLang', { l: LANG_NAMES[l] }), hint: l.toUpperCase(), run: () => switchLang(l), keys: `${l} language` }));
-  c.push({ label: t('plansTitle'), hint: t('tabPlus'), run: () => app.sales.open('plans'), keys: 'plus plan' }, { label: t('cmdOpen'), hint: '↗', run: () => { location.href = app.api.live ? '/' : 'https://dosradio.theones.io/'; }, keys: 'classic' });
+  c.push({ label: t('plansTitle'), hint: t('tabPlus'), run: () => app.sales.open('plans'), keys: 'plus plan' }, { label: t('cmdOpen'), hint: 'VIEW', run: () => switchToClassicView(), keys: 'classic' });
   return c;
 }
 function score(q, s) { if (!q) return 1; let qi = 0, sc = 0, prev = -2; for (let i = 0; i < s.length && qi < q.length; i++) if (s[i] === q[qi]) { sc += (i === prev + 1 ? 3 : 1) + (i === 0 || s[i - 1] === ' ' ? 2 : 0); prev = i; qi++; } return qi === q.length ? sc : 0; }
@@ -460,13 +635,76 @@ app.togglePlay = async force => {
   if (!on) { e.stop(); renderCard(); return; }
   try {
     let me = await app.refreshMe();
-    if (!me.allowed) { app.sales.open('ended'); return; }
+    const ded = app.pendingDedication || null;
+    if (!me.allowed && !ded) { app.sales.open('ended'); return; }
     if (!me.registered && !me.trial_started) { me = app.me = { ...me, ...(await app.api.startTrial()) }; }
     if (app.sales.active) await app.sales.queueShowcase();
-    await e.start();
+    app.pendingDedication = null;
+    await e.start({ dedication: ded });
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'dosradio:orbita-audio-started', station: prefs.station }, '*');
+    }
+    sendPresenceHeartbeat();
   } catch (err) { app.toast(err.message || t('st_stream'), { error: true }); e.stop(); }
   renderCard();
 };
+
+function switchToClassicView() {
+  saveViewPref('classic');
+  const wasPlaying = !!app.engine?.playing;
+  if (wasPlaying) app.engine.stop();
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({
+      type: 'dosradio:switch-view',
+      view: 'classic',
+      station: prefs.station,
+      activeGroup: prefs.activeGroup,
+      playGroup: prefs.playGroup,
+      autoRamowka: prefs.autoRamowka,
+      wasPlaying,
+    }, '*');
+    return;
+  }
+  location.href = '/?view=classic';
+}
+$('#classicViewBtn')?.addEventListener('click', switchToClassicView);
+
+window.addEventListener('message', ev => {
+  const d = ev.data;
+  if (!d || typeof d !== 'object') return;
+  if (d.type === 'dosradio:activate-orbita') {
+    app.commit(p => {
+      if (d.station && byId[d.station]) p.station = d.station;
+      if (d.activeGroup !== undefined) p.activeGroup = d.activeGroup;
+      if (d.playGroup !== undefined) p.playGroup = !!d.playGroup;
+      if (d.autoRamowka !== undefined) p.autoRamowka = !!d.autoRamowka;
+    }, null);
+    const st = byId[prefs.station] || STATIONS[0];
+    dial.goTo(st.idx, true);
+    startAutoRamowkaTimers();
+    scheduleGroupRotate();
+    if (d.autoPlay) {
+      enter(true);
+    }
+  } else if (d.type === 'dosradio:suspend-orbita') {
+    if (app.engine?.playing) {
+      app.engine.stop();
+      renderCard();
+    }
+  }
+});
+
+function sendPresenceHeartbeat() {
+  if (!app.engine?.playing || !app.api) return;
+  const st = byId[prefs.station] || STATIONS[0];
+  app.api.presence({
+    station: st.id,
+    group: prefs.activeGroup || st.group,
+    view: 'orbita',
+    auto_ramowka: !!prefs.autoRamowka,
+  });
+}
+setInterval(sendPresenceHeartbeat, 60000);
 $('#playBtn').addEventListener('click', () => { app.ensureEntered(); app.togglePlay(); });
 $('#prevBtn').addEventListener('click', () => { app.ensureEntered(); dial.nudge(-1); });
 $('#nextBtn').addEventListener('click', () => { app.ensureEntered(); dial.nudge(1); });
@@ -523,26 +761,36 @@ function frame(now) {
   const off = Math.abs(-dial.phi / STEP - Math.round(-dial.phi / STEP));
   const moving = dial.dragging || dial.seeking || Math.abs(dial.vel) > 0.05;
   app.core.setStatic(moving && e.playing ? Math.min(1, off * 2 + Math.abs(dial.vel) * 0.04) * 0.2 : 0);
-  if (!moving && off < 0.02 && STATIONS[idx].id !== prefs.station && !dial.settleTimer) {
+  if (!moving && off < 0.02 && STATIONS[idx] && STATIONS[idx].id !== prefs.station && !dial.settleTimer) {
     dial.settleTimer = setTimeout(() => {
       dial.settleTimer = 0; const s = STATIONS[dial.idxAt(dial.phi)];
+      if (!s) return;
       app.moodStation = app.pendingMood || null; app.pendingMood = null;
-      app.commit(p => { p.station = s.id; if (p.blend === s.id) p.blend = null; }, t('tuned', { name: stationName(s), bpm: s.bpm }));
+      app.commit(p => {
+        p.station = s.id;
+        if (p.blend === s.id) p.blend = null;
+        if (dial.userMoved && p.playGroup && p.activeGroup && s.group !== p.activeGroup) {
+          p.playGroup = false;
+          p.activeGroup = s.group;
+        }
+      }, t('tuned', { name: stationName(s), bpm: s.bpm }));
       if (dial.userMoved) { app.sales.stats.stations++; app.sales.save(); app.sales.mark('orbit'); }
     }, 120);
   }
   timeScale += (timeScaleTarget - timeScale) * Math.min(1, dt * (timeScaleTarget > timeScale ? 2.2 : 3.5));
   /* audio features */
   const f = app.core.analyse(dt, e?.playing);
+  const curBase = byId[prefs.station] || STATIONS[0];
   if (e?.playing) { if (f.kick) kickEnv = Math.max(kickEnv, f.kick); }
-  else { const s = byId[prefs.station]; beat += dt * s.bpm / 60; if (beat >= 1) { beat -= 1; if (s.bpm >= 80) kickEnv = Math.max(kickEnv, 0.55); } }
+  else { beat += dt * curBase.bpm / 60; if (beat >= 1) { beat -= 1; if (curBase.bpm >= 80) kickEnv = Math.max(kickEnv, 0.55); } }
   kickEnv *= Math.exp(-dt * (reduceMotion ? 14 : 8));
   const kick = reduceMotion ? kickEnv * 0.3 : kickEnv;
   pointer.dx = pointer.x - pointer.px; pointer.dy = pointer.y - pointer.py; pointer.px = pointer.x; pointer.py = pointer.y;
 
   app.scene.render({
-    f, kick, timeScale, pointer, phi: dial.phi, playing: !!e?.playing, station: byId[prefs.station],
-    tunedIdx: byId[prefs.station].idx, needleIdx: idx, blendIdx: prefs.blend ? byId[prefs.blend].idx : -1,
+    f, kick, timeScale, pointer, phi: dial.phi, playing: !!e?.playing, station: curBase,
+    tunedIdx: curBase.idx, needleIdx: idx, blendIdx: prefs.blend && byId[prefs.blend] ? byId[prefs.blend].idx : -1,
+    activeGroup: app.highlightedGroup || (prefs.playGroup ? prefs.activeGroup : null),
     topics: prefs.categories, interval: prefs.interval,
     hosts: hostState ? { duo: hostState.duo, who: hostState.who } : null,
   }, dt);
@@ -559,12 +807,31 @@ function frame(now) {
 /* =========================================================  boot  */
 (async function boot() {
   app.api = await detectApi();
-  app.engine = new RadioEngine({ core: app.core, api: app.api, prefs: { ...prefs, stationObj: byId[prefs.station] }, events: engineEvents() });
+  try {
+    const cat = await app.api.catalog();
+    if (cat) applyCatalog(cat);
+  } catch { /* fallback to built-in 32 stations */ }
+  if (!byId[prefs.station]) prefs.station = STATIONS[0].id;
+  app.engine = new RadioEngine({ core: app.core, api: app.api, prefs: { ...prefs, stationObj: byId[prefs.station] || STATIONS[0] }, events: engineEvents() });
   app.sales = new Sales(app);
   app.scene = createScene($('#gl'), {});
+  rebuildSatLabels();
+  dial.goTo((byId[prefs.station] || STATIONS[0]).idx, true);
   try { app.connectors = await app.api.connectors(); } catch { app.connectors = null; }
   applyI18n();
+  $('#dedicateBtn')?.addEventListener('click', () => openDedicationModal(app, prefs.station));
+  await loadIncomingDedication(app, prefs, dial);
+  renderCard();
+  if (new URLSearchParams(location.search).get('embed') === '1') {
+    entered = true;
+    $('#enter')?.classList.add('gone');
+  }
   app.refreshMe();
+  startAutoRamowkaTimers();
+  scheduleGroupRotate();
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
   document.addEventListener('visibilitychange', () => { if (document.hidden) stopSeek(); });
   window.__orbita = { app, dial };
   requestAnimationFrame(t0 => { last = t0; frame(t0); });

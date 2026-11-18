@@ -111,8 +111,8 @@ STATION_SPECS: dict[str, dict] = {
         "bpm": 122, "density": 0.60, "brightness": 0.60,
     },
     "raw-techno": {
-        "prompt": "heavy driving raw techno, dark industrial warehouse groove, thunderous kick, metallic percussion, hypnotic modular rumble, instrumental",
-        "bpm": 134, "density": 0.70, "brightness": 0.40,
+        "prompt": "Raw warehouse techno, 138 BPM, overdriven analog 909 kickdrum, dark industrial rumble sub-bass, metallic percussive loops, sidechained vinyl stabs, hypnotic relentless groove, no melodic synth leads, instrumental",
+        "bpm": 138, "density": 0.80, "brightness": 0.35,
     },
     "club-dance": {
         "prompt": "energetic club dance, pumping modern tech house groove, tight groovy bassline, crisp snappy claps, euphoric uplifting vibe, instrumental",
@@ -130,7 +130,39 @@ STATION_SPECS: dict[str, dict] = {
         "prompt": "infectious neo funk groove, bouncy slap bassline, tight rhythm guitar chops, warm vintage clavinet, upbeat soulful strut, instrumental",
         "bpm": 112, "density": 0.65, "brightness": 0.60,
     },
+    "stranger-synth": {
+        "prompt": "1980s retro dark analog synthwave soundtrack, Stranger Things style pulsing Roland Juno-60 arpeggio, warm Moog sub bass, vintage Prophet-5 pads, nocturnal mystery tension, instrumental",
+        "bpm": 108, "density": 0.50, "brightness": 0.42,
+    },
+    "muzyka-filmowa": {
+        "prompt": "epic cinematic film score, sweeping orchestral strings, noble French horns, felt piano motif, Hans Zimmer and Johann Johannsson inspired emotional soundstage, wide dynamic atmosphere, instrumental",
+        "bpm": 76, "density": 0.45, "brightness": 0.45,
+    },
+    "cyber-noir": {
+        "prompt": "Blade Runner inspired futuristic neo-noir soundtrack, Vangelis CS-80 brass swells, rain-soaked ambient pads, slow deep electronic pulse, moody sci-fi horizon, instrumental",
+        "bpm": 72, "density": 0.35, "brightness": 0.35,
+    },
+    "muzyka-klasyczna": {
+        "prompt": "refined classical chamber music, expressive string quartet, warm concert grand piano, lyrical cello counterpoint, natural concert hall acoustics, instrumental",
+        "bpm": 72, "density": 0.35, "brightness": 0.45,
+    },
+    "instrumentalna-akustyczna": {
+        "prompt": "intimate acoustic instrumental, warm fingerstyle steel-string and nylon guitar, upright double bass, delicate brushed percussion, organic wooden studio warmth, instrumental",
+        "bpm": 88, "density": 0.38, "brightness": 0.50,
+    },
+    "etno-world": {
+        "prompt": "organic ethno world fusion, hypnotic handpan and oud melodies, warm talking drum and frame drum groove, desert duduk phrases, earthy global acoustic textures, instrumental",
+        "bpm": 96, "density": 0.48, "brightness": 0.48,
+    },
+    "slowianski-folk": {
+        "prompt": "modern Slavic and Carpathian acoustic folk instrumental, lyrical fiddle, warm acoustic guitar, wooden flute, gentle frame drum pulse, misty mountain twilight mood, instrumental",
+        "bpm": 94, "density": 0.45, "brightness": 0.50,
+    },
 }
+
+from .catalog_extra import EXTRA_RECORDER_SPECS  # noqa: E402
+
+STATION_SPECS.update(EXTRA_RECORDER_SPECS)
 
 
 def session_temperature() -> float:
@@ -172,17 +204,36 @@ def encode_pcm_to_opus(pcm_bytes: bytes, rate: int = 48000, channels: int = 2, b
 
 
 class StationRecorder:
-    def __init__(self, api_key: str, archives: ArchiveRegistry) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        archives: ArchiveRegistry,
+        specs_provider=None,
+        on_segment_recorded=None,
+    ) -> None:
         self.api_key = api_key
         self.archives = archives
+        self.specs_provider = specs_provider
+        self.on_segment_recorded = on_segment_recorded
         self.running = False
         self.current_station: str | None = None
         self.total_recorded_segments = 0
 
+    def _active_specs(self) -> dict[str, dict]:
+        if self.specs_provider is not None:
+            try:
+                dynamic = self.specs_provider()
+                if dynamic:
+                    return dynamic
+            except Exception as err:
+                log.warning("Catalog specs_provider failed, falling back to static specs: %s", err)
+        return STATION_SPECS
+
     def pick_station_to_record(self) -> str:
         """Prioritise stations with the fewest recorded segments."""
+        specs = self._active_specs()
         stats = []
-        for sid in STATION_SPECS:
+        for sid in specs:
             arch = self.archives.get(sid)
             stats.append((len(arch.list_segments()), sid))
         stats.sort()
@@ -190,11 +241,12 @@ class StationRecorder:
 
     async def record_loop(self) -> None:
         self.running = True
-        log.info("Starting DOS Radio recorder loop with %d stations", len(STATION_SPECS))
+        log.info("Starting DOS Radio recorder loop with %d stations", len(self._active_specs()))
         while self.running:
+            specs = self._active_specs()
             station_id = self.pick_station_to_record()
             self.current_station = station_id
-            spec = STATION_SPECS[station_id]
+            spec = specs.get(station_id) or STATION_SPECS[station_id]
             log.info("Recording station %s (prompt: %s...)", station_id, spec["prompt"][:40])
             try:
                 await self.record_session(station_id, spec)
@@ -245,5 +297,10 @@ class StationRecorder:
                         arch.add_segment(opus_data, is_live=True)
                         segments_saved += 1
                         self.total_recorded_segments += 1
+                        if self.on_segment_recorded is not None:
+                            try:
+                                self.on_segment_recorded(station_id, float(TARGET_SEGMENT_SECONDS))
+                            except Exception:
+                                pass
                         log.info("[%s] Saved segment #%d (total %s: %.2f h)",
                                  station_id, segments_saved, station_id, arch.total_hours())

@@ -185,13 +185,14 @@ def normalize_loudness(wav: bytes, target_lufs: float = TARGET_LUFS) -> bytes:
 
 
 class GeminiClient:
-    def __init__(self, api_key: str, news_model: str, tts_model: str) -> None:
+    def __init__(self, api_key: str, news_model: str, tts_model: str, on_usage=None) -> None:
         self.api_key = api_key
         self.news_model = news_model
         self.tts_model = tts_model
+        self.on_usage = on_usage
         self.http = httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=15.0))
 
-    async def _call(self, model: str, body: dict) -> dict:
+    async def _call(self, model: str, body: dict, feature: str = "gemini") -> dict:
         response = await self.http.post(
             f"{API_BASE}/{model}:generateContent",
             headers={"x-goog-api-key": self.api_key, "content-type": "application/json"},
@@ -201,6 +202,14 @@ class GeminiClient:
         if response.status_code != 200 or "error" in data:
             message = data.get("error", {}).get("message", "unknown error")
             raise RuntimeError(f"{model} HTTP {response.status_code}: {message}")
+        if self.on_usage is not None:
+            try:
+                meta = data.get("usageMetadata") or {}
+                in_tok = int(meta.get("promptTokenCount") or 0)
+                out_tok = int(meta.get("candidatesTokenCount") or 0)
+                self.on_usage(feature, model, in_tok, out_tok, 0.0)
+            except Exception:
+                pass
         return data
 
     async def news(self, category: str, attempts: int = 2) -> list[Story]:
@@ -211,7 +220,7 @@ class GeminiClient:
                 data = await self._call(self.news_model, {
                     "contents": [{"parts": [{"text": build_news_prompt(category, date.today())}]}],
                     "tools": [{"google_search": {}}],
-                })
+                }, feature=f"news:{category}")
                 parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
                 return parse_stories("".join(part.get("text", "") for part in parts), category)
             except Exception as error:
@@ -221,7 +230,7 @@ class GeminiClient:
 
     async def chat(self, prompt: str) -> str:
         """Single-shot text generation with the news model (no search grounding)."""
-        data = await self._call(self.news_model, {"contents": [{"parts": [{"text": prompt}]}]})
+        data = await self._call(self.news_model, {"contents": [{"parts": [{"text": prompt}]}]}, feature="chat_podcast")
         parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
         return "".join(part.get("text", "") for part in parts)
 
@@ -233,7 +242,7 @@ class GeminiClient:
                 "responseModalities": ["AUDIO"],
                 "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}},
             },
-        })
+        }, feature="tts_voice")
         parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
         inline = next((part["inlineData"] for part in parts if "inlineData" in part), None)
         if not inline:

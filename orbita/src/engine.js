@@ -51,15 +51,18 @@ export class RadioEngine {
   applyPrefs(p) {
     this.prefs = p; this.interval = p.interval; this.hostMode = p.hostMode; this.categories = p.categories; this.newsEnabled = p.newsEnabled;
     this.dayTopic = p.dayTopic; this.hourlyEnabled = p.hourlyBulletin;
+    this.wantDuck = p.duckLevel ?? 0.24;
     this.place = (p.weatherCity || (p.weatherLat !== null && p.weatherLon !== null)) ? { city: p.weatherCity, lat: p.weatherLat, lon: p.weatherLon } : null;
-    this.core.voiceGain && this.core.voiceGain.gain.setTargetAtTime(p.voiceVolume ?? 0.9, this.core.t, 0.05);
+    this.core.musicBus && this.core.musicBus.gain.setTargetAtTime(1.0, this.core.t, 0.05);
+    this.core.setVoiceVolume ? this.core.setVoiceVolume(p.voiceVolume ?? 0.9) : (this.core.voiceGain && this.core.voiceGain.gain.setTargetAtTime((p.voiceVolume ?? 0.9) * 0.42, this.core.t, 0.05));
   }
   get hosts() { const a = this.station.host || 'Kuba'; return [a, coHostFor(a)]; }
 
   /* ---------------- lifecycle ---------------- */
-  async start({ intro = !this.introDone } = {}) {
+  async start({ intro = !this.introDone, dedication = null } = {}) {
     if (this.playing) return;
     this.core.init(); await this.core.ctx.resume();
+    this.core.setVolume(this.prefs.volume ?? 0.9); this.applyPrefs(this.prefs); this.core.duck(1, 0.15);
     this.playing = true; this.startedAt = new Date(); this.lastBreakAt = null; this.lastBreakEndedAt = null;
     this.headlined.clear(); this.lastFormat = null; this.lastHourlyKey = hourKey(new Date());
     this.aired.pull();
@@ -70,8 +73,12 @@ export class RadioEngine {
     this.events.onState('playing'); this.setMode('music');
     if (this.hostMode === 'with-host') {
       this.refreshNews(); this.newsTimer = setInterval(() => this.refreshNews(), NEWS_REFRESH);
-      if (intro) await this.playIntro();
+      if (dedication) await this.playDedicationIntro(dedication);
+      else if (intro) await this.playIntro();
       this.scheduleNextBreak(); this.scheduleClip();
+    } else if (dedication) {
+      await this.playDedicationIntro(dedication);
+      this.events.onNextBreak(null);
     } else this.events.onNextBreak(null);
   }
   stop() {
@@ -84,13 +91,22 @@ export class RadioEngine {
     this.core.duck(1, 0.3);
     if (!this.api.live) { this.synth.start(this.station); return true; }
     this.core.onsetLive = true;
-    return this.liveMusic.start(this.station);
+    return this.liveMusic.start(this.station, this.prefs?.playGroup ? this.prefs?.activeGroup : null);
   }
   async setStation(st) {
     this.station = st;
     if (!this.playing) return;
-    if (!this.api.live) this.synth.set(st); else await this.liveMusic.setStation(st);
+    if (!this.api.live) this.synth.set(st); else await this.liveMusic.setStation(st, this.prefs?.playGroup ? this.prefs?.activeGroup : null);
     if (!this.speaking) this.events.onStatus(t('st_playing', { name: stationName(st) }));
+  }
+  async playRamowkaSpot(spotId, caption = '') {
+    if (!this.playing || this.speaking || this.hostMode === 'music-only') return false;
+    const url = this.api.ramowkaSpotUrl ? this.api.ramowkaSpotUrl(spotId) : `/radio-api/ramowka/spot/${encodeURIComponent(spotId)}.wav`;
+    const part = this.api.live
+      ? { kind: 'voice', url, caption: caption || t('autoRamowkaLive') }
+      : { kind: 'tts', who: 'A', text: caption || t('tts_jingle') };
+    await this.hostMoment(part, 'host');
+    return true;
   }
   setHostMode(m) {
     this.hostMode = m;
@@ -226,7 +242,7 @@ export class RadioEngine {
     const who = p.who || 'A';
     const name = ctx.hosts.length > 1 ? ctx.hosts[who === 'B' ? 1 : 0] : ctx.hosts[0];
     if (p.kind === 'bumper' || p.kind === 'music') {
-      this.events.onHost({ ...ctx, speaking: false, who: null, caption: '♪' });
+      this.events.onHost({ ...ctx, speaking: false, who: null, caption: t('music') });
       this.core.duck(1, 0.4);
       if (p.url) { const b = await this.decode(p.url); if (b) await this.core.playBuffer(b, 'music'); }
       else await this.synth.sting(this.station);
@@ -236,8 +252,12 @@ export class RadioEngine {
     const caption = p.text || p.caption || '';
     this.events.onHost({ ...ctx, speaking: true, who: p.kind === 'clip' ? 'clip' : who, name, caption });
     if (p.kind === 'tts' || (!p.url && caption)) { this.core.duck(1, 0.5); await this.core.speak(caption, who); return true; }
-    this.core.duck(this.wantDuck ?? 0.34, 0.4);
-    const buf = await this.decode(p.url);
+    const targetDuck = this.wantDuck ?? 0.24;
+    const wasFull = (this.core.musicDuck?.gain?.value ?? 1) > targetDuck + 0.15;
+    this.core.duck(targetDuck, 0.55);
+    const decodePromise = this.decode(p.url);
+    if (wasFull) await sleep(320);
+    const buf = await decodePromise;
     if (!buf) {
       if (caption) { this.core.duck(1, 0.5); await this.core.speak(caption, who); return true; }
       return false;
@@ -255,12 +275,29 @@ export class RadioEngine {
     try { await sleep(400); await this.say(part, { kind, hosts: [this.hosts[0]] }); }
     finally { this.speaking = false; this.events.onHost(null); if (this.playing) { this.core.duck(1, 1.6); this.setMode('music'); } }
   }
+  async playDedicationIntro(ded) {
+    this.introDone = true;
+    this.speaking = true; this.setMode('intro');
+    try {
+      await sleep(2200);
+      if (this.speaking && this.playing) {
+        const part = (ded.audio_url && this.api.live)
+          ? { kind: 'voice', who: 'A', url: ded.audio_url, text: ded.script }
+          : { kind: 'tts', who: 'A', text: ded.script };
+        await this.say(part, { kind: 'intro', hosts: [ded.host_name || this.hosts[0]] });
+      }
+    } finally {
+      this.speaking = false; this.events.onHost(null); this.events.onIntroDone();
+      if (this.playing) { this.core.duck(1, 1.8); this.setMode('music'); }
+      this.lastBreakAt = null; this.startedAt = new Date();
+    }
+  }
   /* The opening: host explains what the radio is and can do. Live renders & caches station host recordings. */
   async playIntro() {
     this.introDone = true;
     this.speaking = true; this.setMode('intro');
     try {
-      await sleep(500);
+      await sleep(2400);
       const lines = introScript(this.hosts[0]);
       const stId = this.station.id;
       if (this.api.live && lines.length > 1 && typeof fetch === 'function') {

@@ -1,6 +1,8 @@
 /* Audio graph, music analysis for visuals, voice playback (buffers or browser TTS), demo synth, live music streamers */
 import { getLang, locale } from './i18n.js';
 
+export const VOICE_BASE_GAIN = 0.42;
+
 export class AudioCore {
   constructor() {
     this.ctx = null; this.kickQueue = []; this.voiceEnv = 0; this.ttsActive = false; this.voiceToken = 0;
@@ -14,12 +16,13 @@ export class AudioCore {
     this.limiter = ctx.createDynamicsCompressor(); this.limiter.threshold.value = -2; this.limiter.ratio.value = 12;
     this.out = ctx.createAnalyser(); this.out.fftSize = 512;
     this.master.connect(this.limiter); this.limiter.connect(this.out); this.out.connect(ctx.destination);
-    this.musicBus = ctx.createGain(); this.musicDuck = ctx.createGain();
+    this.musicBus = ctx.createGain(); this.musicBus.gain.value = 1.0;
+    this.musicDuck = ctx.createGain(); this.musicDuck.gain.value = 1.0;
     this.musicBus.connect(this.musicDuck); this.musicDuck.connect(this.master);
     this.musicAn = ctx.createAnalyser(); this.musicAn.fftSize = 1024; this.musicAn.smoothingTimeConstant = 0.55;
     this.musicBus.connect(this.musicAn);
     this.mfreq = new Uint8Array(this.musicAn.frequencyBinCount);
-    this.voiceGain = ctx.createGain(); this.voiceGain.gain.value = 0.9;
+    this.voiceGain = ctx.createGain(); this.voiceGain.gain.value = 0.9 * VOICE_BASE_GAIN;
     this.voiceAn = ctx.createAnalyser(); this.voiceAn.fftSize = 512; this.vbuf = new Float32Array(512);
     this.voiceGain.connect(this.voiceAn); this.voiceAn.connect(this.master);
     // static between stations
@@ -34,6 +37,7 @@ export class AudioCore {
   }
   get t() { return this.ctx ? this.ctx.currentTime : 0; }
   setVolume(v) { this.master && this.master.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), this.t, 0.05); }
+  setVoiceVolume(v) { this.voiceGain && this.voiceGain.gain.setTargetAtTime(Math.max(0, Math.min(1.5, v)) * VOICE_BASE_GAIN, this.t, 0.05); }
   setStatic(v) {
     if (!this.ctx || Math.abs(v - (this._sv ?? -1)) < 0.004) return; this._sv = v;
     this.staticGain.gain.setTargetAtTime(Math.min(0.2, v), this.t, 0.04);
@@ -172,16 +176,24 @@ export class DemoSynth {
   }
 }
 
-/* ---------- Live music: Ogg stream element, falling back to the chunk endpoint ---------- */
+/* ---------- Live music: Ogg/MP3 DJ-mixed stream element, falling back to the chunk endpoint ---------- */
+const STREAM_EXT = (() => {
+  if (typeof document === 'undefined' || typeof document.createElement !== 'function') return 'ogg';
+  const p = document.createElement('audio');
+  if (!p || typeof p.canPlayType !== 'function') return 'ogg';
+  return !p.canPlayType('audio/ogg; codecs="opus"') && p.canPlayType('audio/mpeg') ? 'mp3' : 'ogg';
+})();
 export class LiveMusic {
   constructor(core, events) { this.core = core; this.events = events; this.handle = null; this.chunks = null; }
-  async start(station) {
+  async start(station, groupId = null) {
     this.station = station;
+    this.groupId = groupId;
+    if (groupId && await this.openStream(station, `/radio-api/group/${encodeURIComponent(groupId)}/stream.${STREAM_EXT}`)) return true;
     if (await this.openStream(station)) return true;
     return this.startChunks(station);
   }
-  async openStream(station) {
-    const el = new Audio(`/radio-api/station/${encodeURIComponent(station.id)}/stream.ogg`);
+  async openStream(station, customUrl = null) {
+    const el = new Audio(customUrl || `/radio-api/station/${encodeURIComponent(station.id)}/stream.${STREAM_EXT}`);
     el.preload = 'auto'; el.crossOrigin = 'anonymous'; el.setAttribute('playsinline', 'true');
     let src;
     try { src = this.core.ctx.createMediaElementSource(el); } catch { return false; }
@@ -200,10 +212,11 @@ export class LiveMusic {
     this.chunks = new ChunkStreamer(this.core, station.id, this.events);
     return this.chunks.start();
   }
-  async setStation(station) {
+  async setStation(station, groupId = null) {
     this.station = station;
+    this.groupId = groupId;
     if (this.chunks) { this.chunks.stop(); this.chunks = null; }
-    return this.start(station);
+    return this.start(station, groupId);
   }
   stop() { this.stopStream(); this.chunks?.stop(); this.chunks = null; }
 }
@@ -221,18 +234,23 @@ class ChunkStreamer {
   }
   schedule(c) {
     const ctx = this.core.ctx, s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = c.buffer; s.connect(g); g.connect(this.core.musicBus);
-    const at = Math.max(this.core.t + 0.05, this.next), d = c.buffer.duration, x = 0.08;
-    g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(1, at + x); g.gain.setValueAtTime(1, Math.max(at + x, at + d - x)); g.gain.linearRampToValueAtTime(0, at + d);
-    s.onended = () => { this.sources.delete(s); g.disconnect(); }; s.start(at); this.sources.add(s); this.next = at + d - x;
+    const at = Math.max(this.core.t + 0.05, this.next), d = c.buffer.duration;
+    const xIn = c.consecutive ? 0.04 : Math.min(2.4, d * 0.25), xOut = Math.min(2.4, d * 0.25);
+    g.gain.setValueAtTime(0, at); g.gain.linearRampToValueAtTime(1, at + xIn); g.gain.setValueAtTime(1, Math.max(at + xIn, at + d - xOut)); g.gain.linearRampToValueAtTime(0, at + d);
+    s.onended = () => { this.sources.delete(s); g.disconnect(); }; s.start(at); this.sources.add(s); this.next = at + d - xOut;
   }
   async fetch() {
-    const after = this.last ? `&after=${encodeURIComponent(this.last)}` : '';
+    const prev = this.last;
+    const after = prev ? `&after=${encodeURIComponent(prev)}` : '';
+    const lp = prev ? '0' : '0.3';
     try {
-      const r = await fetch(`/radio-api/station/${this.id}/next-chunk?live_prob=0.3${after}`, { credentials: 'same-origin' });
+      const r = await fetch(`/radio-api/station/${this.id}/next-chunk?live_prob=${lp}${after}`, { credentials: 'same-origin' });
       if (r.status === 402) { this.events.onTrialEnded?.(); this.stop(); return null; }
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const seg = r.headers.get('x-dosradio-segment'), buffer = await this.core.ctx.decodeAudioData(await r.arrayBuffer());
-      this.last = seg; this.fail = 0; return { buffer };
+      const m1 = prev && prev.match(/^(.+)_(\d+)\.\w+$/), m2 = seg && seg.match(/^(.+)_(\d+)\.\w+$/);
+      const consecutive = Boolean(m1 && m2 && m1[1] === m2[1] && Number(m2[2]) === Number(m1[2]) + 1);
+      this.last = seg; this.fail = 0; return { buffer, consecutive };
     } catch (e) { if (++this.fail >= 3) { this.fail = 0; this.events.onError?.(e.message); } return null; }
   }
 }

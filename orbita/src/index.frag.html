@@ -1,6 +1,10 @@
 <title>DOS Radio</title>
 <meta name="description" content="DOS Radio: osobiste radio AI w przestrzeni.">
 <meta name="theme-color" content="#07060a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;700&family=Unbounded:wght@500;700&display=swap">
@@ -34,6 +38,7 @@ a { color: inherit; }
 .sat-label b { font-weight: 500; color: var(--ink); font-size: 11px; }
 .sat-label small { font-size: 9px; opacity: .7; }
 .sat-label.tuned b { color: var(--accent); }
+.sat-label.in-group b { color: var(--ink); text-shadow: 0 0 8px var(--accent); }
 .sat-label.blend b { text-decoration: underline; text-underline-offset: 3px; }
 .moon-label { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; border: 1px solid var(--line); background: rgba(7,6,10,.55); color: var(--ink-dim); padding: 3px 7px; font-size: 10px; text-transform: uppercase; white-space: nowrap; will-change: transform; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .moon-label[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
@@ -65,6 +70,27 @@ a { color: inherit; }
 #leftCol { position: fixed; top: calc(var(--gt) + 34px); left: var(--gl); width: 290px; z-index: 5; display: grid; gap: 8px; }
 .glass { background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); }
 #onair { padding: 10px 12px; display: grid; gap: 6px; }
+#autoRamowkaBar { padding: 9px 12px; display: grid; gap: 5px; border-color: var(--accent); }
+.ramowka-top { display: flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); }
+.ramowka-top .dot.live { width: 7px; height: 7px; background: var(--accent); box-shadow: 0 0 8px var(--accent); flex: none; animation: blink 1.2s ease-in-out infinite; }
+.ramowka-cta { font-size: 10px; color: var(--ink-dim); text-decoration: none; display: inline-flex; gap: 4px; align-items: center; }
+.ramowka-cta b { color: var(--accent); font-weight: 700; }
+.ramowka-cta:hover { color: var(--ink); }
+.grp-tree { display: grid; gap: 6px; }
+.grp-acc { border: 1px solid var(--line); background: rgba(236,232,244,.02); }
+.grp-acc.active { border-color: var(--accent); }
+.grp-sum { list-style: none; cursor: pointer; padding: 7px 9px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.grp-sum::-webkit-details-marker { display: none; }
+.grp-title { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; text-transform: uppercase; min-width: 0; }
+.grp-title b { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grp-title small { color: var(--ink-dim); font-size: 10px; }
+.grp-dot { width: 7px; height: 7px; flex: none; display: inline-block; }
+.grp-tag { padding: 0 9px 6px; }
+.grp-stations { display: grid; gap: 3px; padding: 0 7px 7px; }
+.grp-st { display: flex; align-items: center; justify-content: space-between; gap: 6px; padding: 5px 7px; border: 1px solid transparent; background: rgba(236,232,244,.03); text-align: left; font-size: 11px; color: var(--ink); }
+.grp-st small { font-size: 9px; color: var(--ink-dim); text-transform: uppercase; white-space: nowrap; }
+.grp-st:hover { border-color: var(--line); }
+.grp-st.on { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 .onair-row { display: flex; align-items: center; gap: 8px; text-transform: uppercase; font-size: 10px; letter-spacing: .1em; }
 .onair-row .dot { width: 7px; height: 7px; background: var(--ink-dim); }
 #onair.live .dot { background: var(--accent); box-shadow: 0 0 10px var(--accent); animation: blink 1.2s ease-in-out infinite; }
@@ -241,6 +267,7 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
   <div class="lang" role="group" aria-label="Language"><button type="button" data-lang="pl">PL</button><button type="button" data-lang="en">EN</button><button type="button" data-lang="ru">RU</button></div>
 </header>
 <div class="hud hud-tr">
+  <button id="classicViewBtn" class="btn small" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="3" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="8" width="5.5" height="5" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="8.5" y="8" width="5.5" height="5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span data-i18n="classicView"></span></button>
   <button id="trialPill" type="button" hidden><svg class="ring" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="2.5"/><circle id="trialRing" cx="10" cy="10" r="8" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="50.3" stroke-dashoffset="0" transform="rotate(-90 10 10)"/></svg><span data-i18n="trialLeft"></span><b id="trialLeft">60:00</b></button>
   <span id="modeBadge" class="badge"></span><span class="sep freq-top"></span><span id="freqTop" class="freq-top"></span>
 </div>
@@ -248,6 +275,10 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 <div class="hud hud-br"><span class="hold-txt" data-i18n="holdSeek"></span><span class="sep hold-txt"></span><span id="speedVal">1.00x</span></div>
 
 <div id="leftCol">
+  <div id="autoRamowkaBar" class="glass" hidden>
+    <div class="ramowka-top"><span class="dot live"></span><span id="autoRamowkaText"></span></div>
+    <a href="https://zrobi.my" target="_blank" rel="noopener" class="ramowka-cta"><span data-i18n="b2bCta"></span> <b>zrobi.my</b></a>
+  </div>
   <section id="onair" class="glass" aria-live="polite">
     <div class="onair-row"><span class="dot"></span><span id="onairState"></span></div>
     <div id="nextLine"></div>
@@ -273,8 +304,9 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
     <button id="prevBtn" class="btn icon" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
     <button id="nextBtn" class="btn icon" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
     <button id="newsNowBtn" class="btn" type="button" data-i18n="newsNow"></button>
-    <button id="paletteBtn" class="btn" type="button" aria-label="⌘K"><kbd>⌘K</kbd></button>
-    <button id="deckBtn" class="btn mobile-only" type="button" aria-controls="deck" aria-expanded="false">⚙</button>
+    <button id="dedicateBtn" class="btn" type="button" title="Udostępnij stację z dedykacją"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 2.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-7 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM6.3 7.1l3.4-1.7M6.3 8.9l3.4 1.7" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span id="dedicateTxt">Dedykuj</span></button>
+    <button id="paletteBtn" class="btn" type="button" aria-label="Ctrl+K"><kbd>Ctrl+K</kbd></button>
+    <button id="deckBtn" class="btn icon mobile-only" type="button" aria-controls="deck" aria-expanded="false" aria-label="Radio"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
   </div>
   <div id="blendInfo" hidden><span data-i18n="mixWith"></span> <b id="blendName"></b><button id="blendClear" type="button" aria-label="×">×</button></div>
 </section>
@@ -308,6 +340,7 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 <div id="palette" class="modal" hidden role="dialog" aria-modal="true"><div class="modal-box"><input id="palInput" autocomplete="off" spellcheck="false" aria-controls="palList"><ul id="palList" role="listbox"></ul><div class="pal-foot" data-i18n="palFoot"></div></div></div>
 <div id="info" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="infoTitle"><div class="modal-box pad"><h2 id="infoTitle" data-i18n="infoTitle"></h2><dl id="infoList"></dl><p class="hint" data-i18n="infoNote"></p><div><button class="btn" type="button" data-close data-i18n="close"></button></div></div></div>
 <div id="paywall" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="pwTitle"><div class="modal-box pad" id="pwBox"></div></div>
+<div id="dedModal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="dedTitle"><div class="modal-box pad" id="dedModalBox"></div></div>
 <div id="toast" role="status" hidden><span id="toastMsg"></span><button id="toastAct" type="button" hidden></button></div>
 <div id="sr" class="sr-only" aria-live="polite"></div>
 

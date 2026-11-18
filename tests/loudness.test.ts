@@ -7,8 +7,8 @@ describe('Voice loudness under music bed (v1.4 U1)', () => {
     expect(VOICE_GAIN).toBeCloseTo(0.4, 5);
   });
 
-  it('ducks the music bed to a level below full volume but above the voice floor', () => {
-    // 0.34 linear duck level ~= -9.4 dB: just under the voice (-8 dB) so the voice leads.
-    expect(DUCK_LEVEL).toBeCloseTo(0.34, 5);
+  it('ducks the music bed to a level below full volume so the voice sits clearly on top', () => {
+    // 0.24 linear duck level (~ -12.4 dB) gives clear separation under 0.40 (-8 dB) voice gain.
+    expect(DUCK_LEVEL).toBeCloseTo(0.24, 5);
   });
 });

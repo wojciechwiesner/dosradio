@@ -355,6 +355,13 @@ BORROWED_HOSTS: dict[str, tuple[str, str]] = {
     "drum-and-bass": ("liquid-dnb", "Drum and Bass"),
     "trance": ("poranna-kawa", "Trance"),
     "afro-house": ("groove-funk", "Afro House"),
+    "stranger-synth": ("raw-techno", "Stranger Synth 84"),
+    "muzyka-filmowa": ("stoa", "Muzyka Filmowa"),
+    "cyber-noir": ("warm-jazz", "Neon Noir Synth"),
+    "muzyka-klasyczna": ("stoa", "Muzyka Klasyczna"),
+    "instrumentalna-akustyczna": ("deep-ambient", "Instrumentalna Akustyczna"),
+    "etno-world": ("groove-funk", "Etno i Muzyka Świata"),
+    "slowianski-folk": ("lofi-nauka", "Folk i Korzenie"),
 }
 
 
@@ -375,6 +382,11 @@ def host_for(station_id: str | None) -> Host:
             jingles=custom_jingles,
         )
     return HOSTS.get(station_id or "", HOSTS[DEFAULT_HOST_STATION])
+
+
+from .catalog_extra import EXTRA_BORROWED_HOSTS
+
+BORROWED_HOSTS.update(EXTRA_BORROWED_HOSTS)
 
 
 def intro_line(station_id: str) -> str:

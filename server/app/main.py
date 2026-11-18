@@ -37,17 +37,39 @@ from .weather import WeatherService
 from .voice_routes import build_voice_router
 from .aired import build_aired_router
 from .orbita_voice import build_orbita_voice_router, prewarm_orbita_voice
+from .dedications import build_dedications_router
+from .catalog import CatalogService
+from .telemetry import TelemetryService
+from .auto_ramowka import RamowkaService, build_ramowka_router
+from .admin_api import build_admin_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("dosradio")
 
 settings = load_settings()
 db = Database(settings.data_dir / "dosradio.db")
-access = AccessService(db, settings.secret, settings.trial_seconds)
-gemini = GeminiClient(settings.gemini_api_key, settings.news_model, settings.tts_model)
-news = NewsService(gemini, settings.data_dir / "audio", settings.news_refresh_seconds)
 archives = ArchiveRegistry(settings.data_dir / "archive")
-recorder = StationRecorder(settings.gemini_api_key, archives)
+catalog = CatalogService(db, archives)
+telemetry = TelemetryService(db)
+ramowka_service = RamowkaService(db, catalog, data_dir=settings.data_dir)
+access = AccessService(db, settings.secret, settings.trial_seconds)
+gemini = GeminiClient(
+    settings.gemini_api_key,
+    settings.news_model,
+    settings.tts_model,
+    on_usage=lambda feature, model, inp, out, aud: telemetry.record_tokens(
+        feature=feature, model=model, prompt_tokens=inp, output_tokens=out, audio_seconds=aud
+    ),
+)
+news = NewsService(gemini, settings.data_dir / "audio", settings.news_refresh_seconds)
+recorder = StationRecorder(
+    settings.gemini_api_key,
+    archives,
+    specs_provider=catalog.active_specs,
+    on_segment_recorded=lambda sid, secs: telemetry.record_tokens(
+        feature=f"lyria:{sid}", model="lyria-realtime-exp", prompt_tokens=0, output_tokens=0, audio_seconds=secs
+    ),
+)
 mood_recorder = MoodRecorder(settings.gemini_api_key)
 podcasts = PodcastService(gemini, settings.data_dir / "podcasts", archives)
 personal = PersonalNews(db, news)
@@ -110,6 +132,34 @@ app.include_router(build_router(access))
 app.include_router(build_plus_router(access, db, news, podcasts, personal))
 app.include_router(build_host_clips_router(gemini.speak, static_audio_dir))
 app.include_router(build_orbita_voice_router(gemini.speak, static_audio_dir))
+app.include_router(
+    build_dedications_router(
+        speak=gemini.speak,
+        audio_dir=static_audio_dir,
+        db_path=settings.data_dir / "dosradio.db",
+        station_lookup=lambda sid: next(
+            (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
+            ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
+        ),
+    )
+)
+app.include_router(build_ramowka_router(
+    db=db,
+    catalog=catalog,
+    telemetry=telemetry,
+    gemini=gemini,
+    data_dir=settings.data_dir,
+    ramowka_service=ramowka_service,
+))
+app.include_router(build_admin_router(
+    db=db,
+    access=access,
+    archives=archives,
+    catalog=catalog,
+    telemetry=telemetry,
+    ramowka_service=ramowka_service,
+    recorder=recorder,
+))
 
 # Billing (Stripe) router — optional module, loaded only when present.
 try:
@@ -259,7 +309,13 @@ async def jingle_audio(station_id: str) -> FileResponse:
     return FileResponse(path, media_type="audio/wav", headers={"cache-control": "public, max-age=604800"})
 
 
-app.include_router(build_stream_router(archives, require_access))
+app.include_router(
+    build_stream_router(
+        archives,
+        require_access,
+        group_resolver=lambda gid: [s["id"] for s in catalog.stations_in_group(gid, only_enabled=True)],
+    )
+)
 
 @app.api_route("/radio-api/station/{station_id}/next-chunk", methods=["GET", "HEAD"])
 async def next_station_chunk(
@@ -270,7 +326,7 @@ async def next_station_chunk(
 ) -> FileResponse:
     """Next 30-second Opus segment for a listener: continues the recording after `after`, else 70/30 jump."""
     require_access(request)
-    if station_id not in STATION_SPECS:
+    if station_id not in STATION_SPECS and catalog.get_station(station_id) is None:
         raise HTTPException(404, f"Nieznana stacja: {station_id}")
     arch = archives.get(station_id)
     path, is_live = arch.pick_next(live_probability=live_prob, after=after)

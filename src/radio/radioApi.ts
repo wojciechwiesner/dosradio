@@ -3,6 +3,7 @@
  */
 import type { CategoryNews, NewsCategory } from './newsQueue';
 import type { AiredRemote } from './airedStore';
+import type { AutoRamowkaSlot, CatalogPayload, MusicGroupId } from './stations';
 
 export interface AccessState {
   allowed: boolean;
@@ -52,6 +53,34 @@ export interface PodcastManifest {
 export interface HostClips {
   jingles: string[];
   chatter: string[];
+}
+
+export interface RamowkaStateResponse {
+  slot?: Partial<AutoRamowkaSlot> & {
+    id?: string;
+    label?: string;
+    hours?: string;
+    group?: MusicGroupId;
+    groupId?: MusicGroupId;
+    station?: string;
+    stationId?: string;
+    host?: string;
+  };
+  spot?: {
+    id?: string;
+    title?: string;
+    audio_url?: string;
+    cta_label?: string;
+    cta_url?: string;
+  };
+}
+
+export interface PresencePayload {
+  client_id: string;
+  station: string;
+  group: string | null;
+  view: 'classic' | 'orbita';
+  ramowka: boolean;
 }
 
 export class TrialEndedError extends Error {
@@ -141,6 +170,45 @@ export const radioApi = {
       return { jingles: body.jingles ?? [], chatter: body.chatter ?? [] };
     } catch {
       return null;
+    }
+  },
+  catalog: async (): Promise<CatalogPayload | null> => {
+    try {
+      const response = await fetch('/radio-api/catalog', { credentials: 'same-origin' });
+      if (!response.ok) return null;
+      return (await response.json()) as CatalogPayload;
+    } catch {
+      return null;
+    }
+  },
+  ramowkaState: async (): Promise<RamowkaStateResponse | null> => {
+    try {
+      const response = await fetch('/radio-api/ramowka/state', { credentials: 'same-origin' });
+      if (!response.ok) return null;
+      return (await response.json()) as RamowkaStateResponse;
+    } catch {
+      return null;
+    }
+  },
+  ramowkaSpotAudio: async (spotId: string): Promise<ArrayBuffer | null> => {
+    try {
+      const response = await fetch(`/radio-api/ramowka/spot/${encodeURIComponent(spotId)}.wav`, { credentials: 'same-origin' });
+      if (!response.ok) return null;
+      return await response.arrayBuffer();
+    } catch {
+      return null;
+    }
+  },
+  presence: async (payload: PresencePayload): Promise<void> => {
+    try {
+      await fetch('/radio-api/presence', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    } catch {
+      // Telemetry is best-effort
     }
   },
   audio: fetchAudio,

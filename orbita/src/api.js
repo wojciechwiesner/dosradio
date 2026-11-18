@@ -43,7 +43,13 @@ export class LiveApi {
   showcase() { return req(`/radio-api/showcase?${q({ lang: getLang() })}`).catch(() => null); }
   orbitaIntroUrl(stationId, index) { return `/radio-api/orbita/intro/${encodeURIComponent(stationId)}/${index}.wav?${q({ lang: getLang() })}`; }
   orbitaNudgeUrl(slug, stationId) { return `/radio-api/orbita/nudge/${encodeURIComponent(slug)}.wav?${q({ station: stationId, lang: getLang() })}`; }
+  createDedication(body) { return post('/radio-api/dedications', { ...body, lang: getLang() }); }
+  getDedication(id) { return req(`/radio-api/dedications/${encodeURIComponent(id)}`).catch(() => null); }
   connectors() { return req('/radio-api/plus/connectors').catch(() => null); }
+  catalog() { return req('/radio-api/catalog').catch(() => null); }
+  ramowkaState() { return req('/radio-api/ramowka/state').catch(() => null); }
+  ramowkaSpotAudio(spotId) { return this.audio(`/radio-api/ramowka/spot/${encodeURIComponent(spotId)}.wav`).catch(() => null); }
+  presence(payload) { return post('/radio-api/presence', payload).catch(() => null); }
   aired = {
     fetchIds: async day => { const r = await fetch(`/radio-api/aired?day=${encodeURIComponent(day)}`, { credentials: 'same-origin' }); return r.ok ? (await r.json()).ids ?? null : null; },
     pushIds: async (day, ids) => { const r = await fetch('/radio-api/aired', { method: 'POST', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ day, ids }) }); return r.ok ? (await r.json()).ids ?? null : null; },
@@ -91,7 +97,16 @@ export class DemoApi {
   async showcase() { return null; }
   orbitaIntroUrl() { return null; }
   orbitaNudgeUrl() { return null; }
+  async createDedication(body) {
+    const id = 'demo' + Math.random().toString(36).slice(2, 8);
+    return { id, ...body, host_name: 'Kuba', script: `Cześć ${body.to_name}! Pozdrowienia od ${body.from_name}${body.message ? ': ' + body.message : ''}.`, audio_url: null, share_url: `?d=${id}` };
+  }
+  async getDedication() { return null; }
   async connectors() { return { gmail: { available: false, demo: true } }; }
+  async catalog() { return null; }
+  async ramowkaState() { return null; }
+  async ramowkaSpotAudio() { return null; }
+  async presence() { return null; }
   aired = null;
   async audio() { throw new Error('demo has no audio files'); }
 }

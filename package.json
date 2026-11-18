@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "node orbita/build.mjs && tsc --noEmit && vite build",
     "build:orbita": "node orbita/build.mjs",
     "preview": "vite preview",
     "test": "vitest run"

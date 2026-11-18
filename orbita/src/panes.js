@@ -1,20 +1,46 @@
 /* Deck panes: Radio, Mine (own sources + Gmail), Podcasts (generate, pills, programme). Plus pane lives in sales.js */
-import { t, topicLabel, intervalText, stationName } from './i18n.js';
-import { TOPIC_IDS, INTERVALS, STATIONS } from './data.js';
+import { t, topicLabel, intervalText, stationName, groupName, groupTag } from './i18n.js';
+import { TOPIC_IDS, INTERVALS, STATIONS, MUSIC_GROUPS, stationsForGroup, byId } from './data.js';
 import { stoicPillTitle } from './content.js';
 
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 // the site's Permissions-Policy may switch these off (nginx sends microphone=(), geolocation=())
 const allows = f => { try { return document.featurePolicy ? document.featurePolicy.allowsFeature(f) : true; } catch { return true; } };
 const lock = app => (app.me?.plus ? '' : `<span class="lock">${t('plusLock')}</span>`);
+const STAR_SVG = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M6 1l1.5 3.1 3.4.5-2.5 2.4.6 3.4L6 8.8 2.9 10.4l.6-3.4L1 4.6l3.5-.5z" fill="currentColor"/></svg>';
+const PLAY_SVG = '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M3 2v8l7-4z" fill="currentColor"/></svg>';
 
 export function radioPane(app) {
   const p = app.prefs;
+  const curSt = byId[p.station] || STATIONS[0];
+  const openGrp = p.activeGroup || curSt?.group || MUSIC_GROUPS[0].id;
+  const groupsHtml = MUSIC_GROUPS.map(g => {
+    const sts = stationsForGroup(g.id);
+    if (!sts.length) return '';
+    const isPlayingGrp = p.playGroup && p.activeGroup === g.id;
+    const isOpen = openGrp === g.id;
+    return `<details class="grp-acc${isPlayingGrp ? ' active' : ''}" data-grp="${g.id}" ${isOpen ? 'open' : ''}>
+      <summary class="grp-sum">
+        <span class="grp-title"><i class="grp-dot" style="background:${g.color}"></i><b>${esc(groupName(g))}</b> <small>(${sts.length})</small></span>
+        <button type="button" class="btn small ${isPlayingGrp ? 'primary' : ''}" data-play-group="${g.id}" aria-pressed="${isPlayingGrp}">${PLAY_SVG}<span>${esc(isPlayingGrp ? t('playingGroup') : t('playGroup'))}</span></button>
+      </summary>
+      <p class="hint grp-tag">${esc(groupTag(g))}</p>
+      <div class="grp-stations">
+        ${sts.map(s => `<button type="button" class="grp-st${s.id === p.station ? ' on' : ''}" data-pick-station="${s.idx}"><span>${esc(stationName(s))}</span><small>${esc(s.host)} · ${s.bpm} BPM</small></button>`).join('')}
+      </div>
+    </details>`;
+  }).join('');
+
   const html = `
+  <section class="group"><h2>${t('autoRamowka')}</h2>
+    <label class="toggle"><input type="checkbox" id="autoRamowkaToggle" ${p.autoRamowka ? 'checked' : ''}> ${t('autoRamowka')}</label>
+    <p class="hint">${esc(t('autoRamowkaHint'))}</p></section>
+  <section class="group"><h2>${t('groupsTitle')}</h2>
+    <div class="grp-tree">${groupsHtml}</div></section>
   <section class="group"><h2>${t('host')} <kbd>H</kbd></h2>
     <div class="seg" role="radiogroup">${['with-host', 'music-only'].map(m => `<button type="button" role="radio" data-host="${m}" aria-checked="${p.hostMode === m}">${m === 'with-host' ? t('withHost') : t('musicOnlyBtn')}</button>`).join('')}</div></section>
   <section class="group"><h2>${t('news')} <span class="hint">${t('orMoons')}</span></h2>
-    <div class="chips">${TOPIC_IDS.map((id, i) => `<button type="button" class="chip" data-topic="${id}" aria-pressed="${p.categories.includes(id)}"><kbd>${i + 1}</kbd>${esc(topicLabel(id))}<span class="star${p.dayTopic === id ? ' on' : ''}" data-star="${id}" title="${esc(t('dayTopic'))}" role="button" aria-label="${esc(t('dayTopic'))}">★</span></button>`).join('')}</div>
+    <div class="chips">${TOPIC_IDS.map((id, i) => `<button type="button" class="chip" data-topic="${id}" aria-pressed="${p.categories.includes(id)}"><kbd>${i + 1}</kbd>${esc(topicLabel(id))}<span class="star${p.dayTopic === id ? ' on' : ''}" data-star="${id}" title="${esc(t('dayTopic'))}" role="button" aria-label="${esc(t('dayTopic'))}">${STAR_SVG}</span></button>`).join('')}</div>
     <div class="ivals" role="group" aria-label="${esc(t('news'))}">${INTERVALS.map(v => `<button type="button" data-iv="${v}" aria-pressed="${p.interval === v}" title="${esc(intervalText(v))}">${v}</button>`).join('')}</div>
     <p class="hint">${esc(t('newsEvery', { x: intervalText(p.interval) }))}</p>
     <label class="toggle"><input type="checkbox" id="hourly" ${p.hourlyBulletin ? 'checked' : ''}> ${t('hourly')}</label>
@@ -25,11 +51,15 @@ export function radioPane(app) {
       <div class="row" style="justify-content:flex-end"><button type="button" id="micBtn" class="btn icon" aria-label="${esc(t('sayMood'))}"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="5.5" y="1.5" width="5" height="8" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M3 7.5a5 5 0 0 0 10 0M8 12.5v2.5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button><button type="submit" class="btn primary">${t('moodGo')}</button></div></form>
     <div class="chips">${t('moods').map((m, i) => `<button type="button" class="chip" data-mood="${i}">${esc(m)}</button>`).join('')}</div></section>
   <section class="group"><h2>${t('mix')}</h2>
-    <label class="field" for="blendSel">${t('mixHint')}<select id="blendSel"><option value="">${t('noMix')}</option>${STATIONS.filter(s => s.id !== p.station).map(s => `<option value="${s.id}" ${p.blend === s.id ? 'selected' : ''}>${esc(stationName(s))} · ${s.bpm} BPM</option>`).join('')}</select></label>
+    <label class="field" for="blendSel">${t('mixHint')}<select id="blendSel"><option value="">${t('noMix')}</option>${STATIONS.filter(s => s.id !== p.station && s.enabled !== false).map(s => `<option value="${s.id}" ${p.blend === s.id ? 'selected' : ''}>${esc(stationName(s))} · ${s.bpm} BPM</option>`).join('')}</select></label>
     <p class="hint">${t('mixShift')}</p></section>`;
   return { html, bind: root => {
+    root.querySelector('#autoRamowkaToggle')?.addEventListener('change', e => app.setAutoRamowka(e.target.checked));
+    root.querySelectorAll('[data-play-group]').forEach(b => b.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); app.playGroup(b.dataset.playGroup); }));
+    root.querySelectorAll('[data-pick-station]').forEach(b => b.addEventListener('click', () => app.selectStationFromGroup(+b.dataset.pickStation)));
+    root.querySelectorAll('details.grp-acc').forEach(d => d.addEventListener('toggle', () => { if (d.open) app.highlightGroup?.(d.dataset.grp); }));
     root.querySelectorAll('[data-host]').forEach(b => b.addEventListener('click', () => app.setHostMode(b.dataset.host)));
-    root.querySelectorAll('[data-topic]').forEach(b => b.addEventListener('click', e => { if (e.target.dataset.star) { app.setDayTopic(e.target.dataset.star); return; } app.toggleTopic(b.dataset.topic); }));
+    root.querySelectorAll('[data-topic]').forEach(b => b.addEventListener('click', e => { const star = e.target.closest('[data-star]'); if (star) { app.setDayTopic(star.dataset.star); return; } app.toggleTopic(b.dataset.topic); }));
     root.querySelectorAll('[data-iv]').forEach(b => b.addEventListener('click', () => app.setInterval(+b.dataset.iv)));
     root.querySelector('#hourly').addEventListener('change', e => app.commit(p => { p.hourlyBulletin = e.target.checked; }, t('hourly')));
     let tm = 0; root.querySelector('#city').addEventListener('input', e => { clearTimeout(tm); tm = setTimeout(() => app.commit(p => { p.weatherCity = e.target.value.trim(); if (p.weatherCity) { p.weatherLat = null; p.weatherLon = null; } }, null, { render: false }), 600); });
@@ -107,7 +137,7 @@ export function podsPane(app) {
   <section class="group"><h2>${t('pillTitle')} ${lock(app)}</h2><p class="lead">${t('pillLead')}</p>
     <form id="pillForm" style="display:grid;gap:8px"><label class="field" for="pillUrl">${t('pillUrl')}<input id="pillUrl" type="url" maxlength="300" placeholder="https://www.youtube.com/watch?v=…"></label>
       <button class="btn" type="submit">${t('pillGo')}</button><p class="hint" id="pillInfo" role="status"></p></form>
-    ${saved.length ? `<h2>${t('myPills')}</h2><ul class="list">${saved.map(p => `<li style="align-items:center"><button class="btn icon" type="button" data-pill="${esc(p.id)}" aria-label="${esc(t('addToProg', { title: p.title }))}">▶</button><span>${esc(p.author ? `${p.title} — ${p.author}` : p.title)}</span></li>`).join('')}</ul>` : ''}
+    ${saved.length ? `<h2>${t('myPills')}</h2><ul class="list">${saved.map(p => `<li style="align-items:center"><button class="btn icon" type="button" data-pill="${esc(p.id)}" aria-label="${esc(t('addToProg', { title: p.title }))}">${PLAY_SVG}</button><span>${esc(p.author ? `${p.title} — ${p.author}` : p.title)}</span></li>`).join('')}</ul>` : ''}
   </section>`;
   return { html, bind: root => {
     const form = root.querySelector('#podForm');
