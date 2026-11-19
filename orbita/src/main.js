@@ -7,6 +7,7 @@ import { createScene, STEP } from './scene.js';
 import { Sales } from './sales.js';
 import { radioPane, minePane, podsPane } from './panes.js';
 import { openDedicationModal, loadIncomingDedication } from './dedication.js';
+import { initOrbitaSocial } from './social.js';
 import { stoicThoughts, stoicPill, stoicPillTitle, toParts, gmailSample } from './content.js';
 
 const $ = s => document.querySelector(s);
@@ -80,17 +81,44 @@ app.setDayTopic = id => app.commit(p => { p.dayTopic = p.dayTopic === id ? null 
 app.setInterval = n => { app.commit(p => { p.interval = n; }, intervalText(n)); app.core.tick(); };
 app.setHostMode = m => app.commit(p => { p.hostMode = m; }, m === 'with-host' ? t('withHost') : t('musicOnlyBtn'), { toast: true });
 
-/* =========================================================  dial physics + input  */
+/* =========================================================  dial physics + input (3-ring 2.5D) */
+const TAU = Math.PI * 2;
+const angDiff = (a, b = 0) => { let d = (a - b) % TAU; if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU; return d; };
+function activeDialStations() {
+  const rf = app.ringFilter || 'all';
+  const pool = STATIONS.filter(s => s.enabled !== false && (
+    rf === 'all' || (rf === 'fav' ? app.favorites?.has(s.id) : s.ring === Number(rf))
+  ));
+  return pool.length ? pool : STATIONS.filter(s => s.enabled !== false);
+}
 const dial = {
   phi: 0, vel: 0, target: 0, dragging: false, seeking: false, lastIdx: -1, settleTimer: 0, userMoved: false,
-  idxAt(phi) { const len = STATIONS.length; return ((Math.round(-phi / STEP) % len) + len) % len; },
-  goTo(idx, instant = false) {
-    const len = STATIONS.length;
-    const cur = -this.phi / STEP; let k = Math.round(cur);
-    const d = ((idx - (((k % len) + len) % len)) % len + len) % len; k += d > len / 2 ? d - len : d;
-    this.target = -k * STEP; if (instant) { this.phi = this.target; this.vel = 0; }
+  idxAt(phi) {
+    const pool = activeDialStations();
+    let best = pool[0] || STATIONS[0], bestD = 999;
+    for (const s of pool) {
+      const d = Math.abs(angDiff((s.ringAngle || 0) + phi, 0));
+      if (d < bestD) { bestD = d; best = s; }
+    }
+    return best ? best.idx : 0;
   },
-  nudge(dir) { this.userMoved = true; this.target = -Math.round(-this.target / STEP + dir) * STEP; },
+  snapPhi(phi) {
+    const s = STATIONS[this.idxAt(phi)] || STATIONS[0];
+    return phi - angDiff((s.ringAngle || 0) + phi, 0);
+  },
+  goTo(idx, instant = false) {
+    const s = STATIONS[idx] || STATIONS[0];
+    this.target = this.phi - angDiff((s.ringAngle || 0) + this.phi, 0);
+    if (instant) { this.phi = this.target; this.vel = 0; }
+  },
+  nudge(dir) {
+    this.userMoved = true;
+    const pool = [...activeDialStations()].sort((a, b) => (a.ringAngle || 0) - (b.ringAngle || 0));
+    const curIdx = this.idxAt(this.target);
+    const pos = Math.max(0, pool.findIndex(s => s.idx === curIdx));
+    const next = pool[(pos + (dir >= 0 ? 1 : -1) + pool.length) % pool.length];
+    if (next) this.goTo(next.idx);
+  },
 };
 app.nudgeDial = () => dial.nudge(1);
 dial.goTo((byId[prefs.station] || STATIONS[0]).idx, true);
@@ -120,14 +148,14 @@ stage.addEventListener('pointerdown', e => {
 const endPress = e => {
   if (!press.active || e.pointerId !== press.id) return;
   press.active = false; clearTimeout(press.hold); stage.releasePointerCapture?.(e.pointerId);
-  if (dial.dragging) { dial.dragging = false; stage.classList.remove('dragging'); dial.target = Math.round((dial.phi + Math.max(-9, Math.min(9, dial.vel)) * 0.22) / STEP) * STEP; }
+  if (dial.dragging) { dial.dragging = false; stage.classList.remove('dragging'); dial.target = dial.snapPhi(dial.phi + Math.max(-9, Math.min(9, dial.vel)) * 0.2); }
   else if (dial.seeking) stopSeek();
   else if (e.type === 'pointerup') handleClick(e);
 };
 stage.addEventListener('pointerup', endPress); stage.addEventListener('pointercancel', endPress);
 stage.addEventListener('wheel', e => { e.preventDefault(); app.ensureEntered(); wheelAcc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY; if (Math.abs(wheelAcc) > 40) { dial.nudge(wheelAcc > 0 ? 1 : -1); wheelAcc = 0; } }, { passive: false });
 function startSeek() { dial.seeking = true; dial.userMoved = true; timeScaleTarget = reduceMotion ? 1.5 : 3.6; }
-function stopSeek() { if (!dial.seeking) return; dial.seeking = false; timeScaleTarget = 1; dial.target = Math.round((dial.phi + dial.vel * 0.25) / STEP) * STEP; }
+function stopSeek() { if (!dial.seeking) return; dial.seeking = false; timeScaleTarget = 1; dial.target = dial.snapPhi(dial.phi + dial.vel * 0.22); }
 function handleClick(e) {
   const lab = press.target?.closest?.('[data-station],[data-topic]');
   const u = lab ? lab.dataset : app.scene.pick(e.clientX, e.clientY);
@@ -191,15 +219,45 @@ function syncLabels() {
 }
 const pt = { x: 0, y: 0, z: 0 };
 function placeLabels() {
-  const w = innerWidth, sc = app.scene;
+  const w = innerWidth, hPx = innerHeight, isMob = w <= 760, sc = app.scene;
+  const rf = app.ringFilter || 'all';
+  const cands = [];
   STATIONS.forEach((s, i) => {
-    const el = satLabels[i], front = Math.cos(i * STEP + dial.phi);
-    const vis = smooth(w < 760 ? 0.975 : 0.5, w < 760 ? 0.995 : 0.82, front) * (1 - sc.hostVisible() * 0.6);
-    if (vis < 0.02) { if (el.style.opacity !== '0') { el.style.opacity = '0'; el.style.pointerEvents = 'none'; } return; }
+    const el = satLabels[i];
+    if (!el) return;
+    if (s.enabled === false) { el.style.opacity = '0'; el.style.pointerEvents = 'none'; return; }
+    const isTuned = s.id === prefs.station;
+    const isFav = !!app.favorites?.has(s.id);
+    const hasFriend = !!app.friendStations?.has(s.id);
+    const passRf = rf === 'all' || (rf === 'fav' ? isFav : s.ring === Number(rf)) || isTuned;
+    const front = Math.cos((s.ringAngle || 0) + dial.phi);
+    const vis = (passRf ? 1 : 0) * smooth(isMob ? 0.35 : 0.05, isMob ? 0.88 : 0.65, front) * (1 - sc.hostVisible() * 0.55);
+    if (vis < 0.04 && !isTuned) {
+      if (el.style.opacity !== '0') { el.style.opacity = '0'; el.style.pointerEvents = 'none'; }
+      return;
+    }
     sc.project(sc.satObj(i), pt);
-    el.style.transform = `translate3d(${pt.x.toFixed(1)}px,${(pt.y + 14).toFixed(1)}px,0) translate(-50%,0) scale(${(0.82 + vis * 0.25).toFixed(3)})`;
-    el.style.opacity = vis.toFixed(3); el.style.pointerEvents = vis > 0.4 ? 'auto' : 'none';
+    if (pt.z > 1 || pt.x < 34 || pt.x > w - 34 || pt.y < 68 || pt.y > hPx - (isMob ? 215 : 185)) {
+      el.style.opacity = '0'; el.style.pointerEvents = 'none'; return;
+    }
+    const prio = (isTuned ? 1000 : 0) + (hasFriend ? 400 : 0) + (isFav ? 200 : 0) + front * 10;
+    cands.push({ i, s, el, x: pt.x, y: pt.y + 13, vis: isTuned ? Math.max(0.95, vis) : vis, prio, isTuned });
   });
+  cands.sort((a, b) => b.prio - a.prio);
+  const placed = [];
+  const bw = isMob ? 108 : 124, bh = isMob ? 30 : 34;
+  const maxShown = isMob ? 8 : 16;
+  for (const c of cands) {
+    const collide = !c.isTuned && (placed.length >= maxShown || placed.some(p => Math.abs(p.x - c.x) < bw && Math.abs(p.y - c.y) < bh));
+    if (collide) {
+      c.el.style.opacity = '0'; c.el.style.pointerEvents = 'none';
+    } else {
+      placed.push(c);
+      c.el.style.transform = `translate3d(${c.x.toFixed(1)}px,${c.y.toFixed(1)}px,0) translate(-50%,0) scale(${(0.84 + c.vis * 0.2).toFixed(3)})`;
+      c.el.style.opacity = c.vis.toFixed(3);
+      c.el.style.pointerEvents = c.vis > 0.35 ? 'auto' : 'none';
+    }
+  }
   const hv = sc.hostVisible();
   moonLabels.forEach((el, i) => { sc.project(sc.moonObj(i), pt); el.style.transform = `translate3d(${(pt.x + 14).toFixed(1)}px,${(pt.y - 10).toFixed(1)}px,0)`; el.style.opacity = ((0.55 + Math.max(0, Math.min(1, (pt.z + 1) / 3)) * 0.45) * (1 - hv * 0.5)).toFixed(2); });
   const h = hostState;
@@ -230,6 +288,7 @@ function renderCard() {
   $('#cardFreq').textContent = base.freq; $('#cardBpm').textContent = base.bpm;
   $('#cardHostLbl').textContent = prefs.hostMode === 'with-host' ? t('hostBy') : t('modeLbl');
   $('#cardHostName').textContent = prefs.hostMode === 'with-host' ? base.host : t('musicOnlyLower');
+  app.syncFavBtn?.();
   $('#freqTop').textContent = `${base.freq} MHz`;
   $('#blendInfo').hidden = !prefs.blend; if (prefs.blend && byId[prefs.blend]) $('#blendName').textContent = stationName(byId[prefs.blend]);
   $('#newsNowBtn').hidden = prefs.hostMode === 'music-only';
@@ -758,10 +817,11 @@ function frame(now) {
   else if (!dial.dragging) { const k = 95, damp = 2 * Math.sqrt(k) * 0.8; dial.vel += ((dial.target - dial.phi) * k - dial.vel * damp) * dt; dial.phi += dial.vel * dt; }
   const idx = dial.idxAt(dial.phi);
   if (idx !== dial.lastIdx) { if (dial.lastIdx !== -1) { app.core.tick(); vibrate(5); } dial.lastIdx = idx; }
-  const off = Math.abs(-dial.phi / STEP - Math.round(-dial.phi / STEP));
+  const idxAngle = STATIONS[idx]?.ringAngle || 0;
+  const off = Math.min(1, Math.abs(angDiff(idxAngle + dial.phi, 0)) / 0.35);
   const moving = dial.dragging || dial.seeking || Math.abs(dial.vel) > 0.05;
   app.core.setStatic(moving && e.playing ? Math.min(1, off * 2 + Math.abs(dial.vel) * 0.04) * 0.2 : 0);
-  if (!moving && off < 0.02 && STATIONS[idx] && STATIONS[idx].id !== prefs.station && !dial.settleTimer) {
+  if (!moving && off < 0.08 && STATIONS[idx] && STATIONS[idx].id !== prefs.station && !dial.settleTimer) {
     dial.settleTimer = setTimeout(() => {
       dial.settleTimer = 0; const s = STATIONS[dial.idxAt(dial.phi)];
       if (!s) return;
@@ -791,6 +851,7 @@ function frame(now) {
     f, kick, timeScale, pointer, phi: dial.phi, playing: !!e?.playing, station: curBase,
     tunedIdx: curBase.idx, needleIdx: idx, blendIdx: prefs.blend && byId[prefs.blend] ? byId[prefs.blend].idx : -1,
     activeGroup: app.highlightedGroup || (prefs.playGroup ? prefs.activeGroup : null),
+    ringFilter: app.ringFilter, favorites: app.favorites, friendStations: app.friendStations, leftHand: app.leftHand,
     topics: prefs.categories, interval: prefs.interval,
     hosts: hostState ? { duo: hostState.duo, who: hostState.who } : null,
   }, dt);
@@ -821,7 +882,9 @@ function frame(now) {
   applyI18n();
   $('#dedicateBtn')?.addEventListener('click', () => openDedicationModal(app, prefs.station));
   await loadIncomingDedication(app, prefs, dial);
+  initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuildSatLabels });
   renderCard();
+  app.syncFavBtn?.();
   if (new URLSearchParams(location.search).get('embed') === '1') {
     entered = true;
     $('#enter')?.classList.add('gone');

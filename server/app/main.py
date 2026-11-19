@@ -42,6 +42,8 @@ from .catalog import CatalogService
 from .telemetry import TelemetryService
 from .auto_ramowka import RamowkaService, build_ramowka_router
 from .admin_api import build_admin_router
+from .custom_radios import CustomRadioService, build_custom_radios_router
+from .social_api import build_social_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("dosradio")
@@ -50,6 +52,7 @@ settings = load_settings()
 db = Database(settings.data_dir / "dosradio.db")
 archives = ArchiveRegistry(settings.data_dir / "archive")
 catalog = CatalogService(db, archives)
+custom_radios = CustomRadioService(db, catalog)
 telemetry = TelemetryService(db)
 ramowka_service = RamowkaService(db, catalog, data_dir=settings.data_dir)
 access = AccessService(db, settings.secret, settings.trial_seconds)
@@ -159,6 +162,16 @@ app.include_router(build_admin_router(
     telemetry=telemetry,
     ramowka_service=ramowka_service,
     recorder=recorder,
+))
+app.include_router(build_custom_radios_router(custom_radios, access=access))
+app.include_router(build_social_router(
+    db=db,
+    access=access,
+    podcasts=podcasts,
+    station_lookup=lambda sid: next(
+        (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
+        ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
+    ),
 ))
 
 # Billing (Stripe) router — optional module, loaded only when present.

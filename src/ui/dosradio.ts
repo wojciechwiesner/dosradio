@@ -35,6 +35,7 @@ import { openOnboarding } from './onboarding';
 import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from './plus';
 import { initProgrammeLine } from './pill';
 import { wireClassicDedications } from './dedicationModal';
+import { wireClassicSocialStudio } from './socialCreatorStudio';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -802,7 +803,9 @@ function switchView(view: ViewMode): void {
     orbitaShell.hidden = false;
     if (!orbitaLoaded) {
       orbitaLoaded = true;
-      orbitaFrame.src = '/orbita.html?embed=1';
+      const fwd = new URLSearchParams(window.location.search);
+      fwd.set('embed', '1');
+      orbitaFrame.src = `/orbita.html?${fwd.toString()}`;
       orbitaFrame.addEventListener(
         'load',
         () => {
@@ -928,6 +931,18 @@ renderHostMode(prefs.hostMode);
 const initialStation = stationById(prefs.station);
 bgAudio.updateMetadata(initialStation.name, 'DOS Radio', initialStation.host);
 wireClassicDedications(
+  engine,
+  (sid) => {
+    const st = stationById(sid);
+    prefs.station = st.id;
+    prefs.playGroup = null;
+    savePrefs();
+    engine.setStation(st);
+    renderStations();
+  },
+  setStatus,
+);
+wireClassicSocialStudio(
   engine,
   (sid) => {
     const st = stationById(sid);

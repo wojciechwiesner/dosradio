@@ -39,7 +39,9 @@ PLUS_MESSAGE = "Ta funkcja jest częścią DOS Radio Plus."
 
 
 class PodcastRequest(BaseModel):
-    topic: Optional[str] = Field(None, max_length=200)
+    topic: Optional[str] = Field(None, max_length=600)
+    source_url: Optional[str] = Field(None, max_length=500)
+    comment: Optional[str] = Field(None, max_length=400)
 
 
 class PillRequest(BaseModel):
@@ -81,6 +83,24 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
         require_plus(request)
         topic = (body.topic or "").strip() or None
         headlines = [story.title for story in news.cache["ai"].stories[:1]]
+        src_url = (body.source_url or "").strip()
+        if not src_url and topic:
+            found_urls = split_links(topic)
+            if found_urls:
+                src_url = found_urls[0]
+        if src_url:
+            from .url_extractor import extract_webpage_content
+            try:
+                site = extract_webpage_content(src_url)
+                site_ctx = f"Strona: {site['title']} ({site['domain']}). Opis: {site['description']}. Treść: {site['text'][:1800]}"
+                topic = f"{topic + ' — ' if topic else ''}{site_ctx}"
+            except ValueError as err:
+                raise HTTPException(422, str(err)) from err
+            except Exception as err:
+                log.warning("website extract failed for %s: %s", src_url, err)
+                raise HTTPException(502, "Nie udało się pobrać treści podanej strony internetowej.") from err
+        if body.comment and body.comment.strip():
+            topic = f"{topic or 'Audycja specjalna'}\nKomentarz/dedykacja do wplecenia na antenie: {body.comment.strip()}"
         try:
             return await podcasts.episode(topic, headlines=headlines)
         except Exception as error:

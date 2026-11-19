@@ -105,7 +105,29 @@ const RAW = [
 export const STATIONS = RAW.map(([id, host, name, bpm, density, brightness, cat, group], idx) => ({
   id, host, name, bpm, density, brightness, cat, group, idx,
   freq: (87.6 + idx * (107.8 - 87.6) / (RAW.length - 1)).toFixed(1),
+  ring: 2,
+  ringAngle: 0,
 }));
+export const RING_RADII = [3.65, 5.05, 6.45];
+const RING_PHASE = [0, 0.23, 0.47];
+export function assignStationRings(list = STATIONS) {
+  const buckets = [[], [], []];
+  for (const s of list) {
+    if (s.enabled === false) continue;
+    const b = Number(s.bpm) || 120;
+    const r = b < 106 ? 1 : b >= 130 ? 3 : 2;
+    s.ring = r;
+    buckets[r - 1].push(s);
+  }
+  buckets.forEach((arr, rIdx) => {
+    const cnt = Math.max(1, arr.length);
+    arr.forEach((s, slot) => {
+      s.ringAngle = (slot / cnt) * Math.PI * 2 + RING_PHASE[rIdx];
+    });
+  });
+  return list;
+}
+assignStationRings(STATIONS);
 export const N = STATIONS.length;
 export const byId = Object.fromEntries(STATIONS.map(s => [s.id, s]));
 export const groupById = id => MUSIC_GROUPS.find(g => g.id === id) || null;
@@ -159,6 +181,7 @@ export function applyCatalog(payload) {
       if (g && !g.stations.includes(st.id)) g.stations.push(st.id);
     }
   }
+  assignStationRings(STATIONS);
   return STATIONS;
 }
 export function computeAutoRamowkaSlot(now = new Date()) {
