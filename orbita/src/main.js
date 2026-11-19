@@ -249,8 +249,8 @@ function placeLabels() {
   });
   cands.sort((a, b) => b.prio - a.prio);
   const placed = [];
-  const bw = isMob ? 108 : 124, bh = isMob ? 30 : 34;
-  const maxShown = isMob ? 8 : 16;
+  const bw = isMob ? 156 : 172, bh = isMob ? 46 : 48;
+  const maxShown = isMob ? 5 : 12;
   for (const c of cands) {
     const collide = !c.isTuned && (placed.length >= maxShown || placed.some(p => Math.abs(p.x - c.x) < bw && Math.abs(p.y - c.y) < bh));
     if (collide) {

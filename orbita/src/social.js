@@ -70,6 +70,10 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuil
       #favStarBtn{width:34px;height:34px;padding:0;border:1px solid rgba(236,232,244,.16);background:rgba(236,232,244,.04);color:rgba(255,255,255,.75);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
       #favStarBtn.on{color:#fbbf24;border-color:rgba(251,191,36,.65);background:rgba(251,191,36,.14)}
       #favStarBtn.on svg{fill:#fbbf24}
+      .sat-label{background:rgba(9,9,15,.82);padding:3px 8px;border-radius:7px;border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(6px)}
+      .sat-label.tuned{border-color:rgba(255,107,61,.75);background:rgba(22,14,16,.92)}
+      @media(max-width:760px){.moon-label{display:none!important}#card{padding:11px 12px;gap:7px}}
+      @media(min-width:761px){#card{bottom:46px;padding:12px 15px;gap:8px}}
       .satLabel .favMark{color:#fbbf24;margin-right:3px}
       .satLabel .frMark{display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981;margin-right:4px;box-shadow:0 0 6px #10b981}
       #socModal{position:fixed;inset:0;z-index:85;background:rgba(5,5,9,.76);backdrop-filter:blur(14px);display:none;align-items:center;justify-content:center;padding:14px}
