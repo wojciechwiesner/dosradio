@@ -7,6 +7,7 @@ is generated and cached under data/podcasts/<episode_id>/.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
@@ -25,7 +26,7 @@ log = logging.getLogger("dosradio.podcast")
 MAX_EPISODES_KEPT = 30
 MIN_TURNS = 4
 MUSIC_SEGMENTS_PER_BREAK = (4, 6)  # 30 s each -> 2-3 minute music interludes
-MANIFEST_VERSION = 3  # v3 = voice-only spoken segments (live radio supplies the background music bed)
+MANIFEST_VERSION = 4  # v4 = 5-act segmented spoken parts (intro, part_1..3, outro) + summary
 
 # Two distinct Polish-speaking hosts: warm curious lead and calm witty co-host.
 PODCAST_HOSTS = (
@@ -44,7 +45,10 @@ _EPISODE_ID_RE = re.compile(r"^[a-z0-9-]+$")
 
 def slugify(text: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-    return slug[:40].rstrip("-")
+    if len(slug) <= 40:
+        return slug.rstrip("-")
+    digest = hashlib.sha256(text.strip().encode("utf-8")).hexdigest()[:8]
+    return f"{slug[:31].rstrip('-')}-{digest}"
 
 
 def intro_bumper_text(title: str) -> str:

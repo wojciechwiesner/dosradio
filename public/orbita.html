@@ -642,10 +642,12 @@ var ti=[{id:"fokus-puls",name:"Fokus i Puls",tagline:"Równy rytm do pracy i sku
     .ai-card{width:min(480px,100%);background:linear-gradient(165deg,#131420,#0b0c13);border:1px solid rgba(255,107,61,.42);border-radius:24px;padding:22px 20px;color:#f4f4f6;box-shadow:0 28px 80px rgba(0,0,0,.78);font-family:system-ui,-apple-system,sans-serif}
     .ai-badge{display:inline-flex;align-items:center;gap:7px;padding:5px 11px;border-radius:999px;background:rgba(255,107,61,.16);border:1px solid rgba(255,107,61,.45);color:#ffb094;font:600 10px/1 'Azeret Mono',monospace;letter-spacing:.08em;text-transform:uppercase}
     .ai-dot{width:7px;height:7px;border-radius:50%;background:#ff6b3d;box-shadow:0 0 8px #ff6b3d}
-    .ai-lead{margin:14px 0 6px;font-size:13px;color:#94a3b8;letter-spacing:.01em}
-    .ai-title{margin:0 0 12px;font-family:'Unbounded',system-ui,sans-serif;font-size:clamp(18px,4.6vw,23px);line-height:1.25;color:#fff}
-    .ai-story{background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.09);border-radius:14px;padding:12px 14px;font-size:13.5px;line-height:1.5;color:#e2e8f0;margin-bottom:10px}
-    .ai-story strong{color:#fff}
+    .ai-lead{margin:12px 0 6px;font-size:13.5px;font-weight:500;color:#e2e8f0;letter-spacing:.01em}
+    .ai-title{margin:0 0 11px;font-family:'Unbounded',system-ui,sans-serif;font-size:clamp(17px,4.4vw,21px);line-height:1.25;color:#fff}
+    .ai-story{background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:11px 13px;font-size:13px;line-height:1.48;color:#f1f5f9;margin-bottom:10px}
+    .ai-story-lbl{color:#94a3b8;font-size:11.5px;display:block;margin-bottom:3px}
+    .ai-story-body{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+    .ai-story-note{display:block;margin-top:7px;padding-top:7px;border-top:1px solid rgba(255,255,255,.08);color:#fda4af;font-size:12px}
     .ai-music{display:flex;align-items:center;gap:10px;background:rgba(167,139,250,.09);border:1px solid rgba(167,139,250,.28);border-radius:13px;padding:10px 13px;font-size:12.5px;color:#ddd6fe;margin-bottom:14px}
     .ai-status{font:500 11px/1.35 'Azeret Mono',monospace;color:#cbd5e1;margin-bottom:14px;opacity:.88}
     .ai-actions{display:grid;gap:8px}
@@ -680,7 +682,9 @@ var ti=[{id:"fokus-puls",name:"Fokus i Puls",tagline:"Równy rytm do pracy i sku
         <p class="ai-lead">${k.to_name?`Cześć ${we(k.to_name)}! `:""}Zapraszamy do wysłuchania audycji w radiu:</p>
         <h2 class="ai-title">„${we(k.title||"Audycja specjalna DOS Radio")}”</h2>
         <div class="ai-story">
-          Audycja opowiada o: <strong>${we(k.about||"wybranym temacie przygotowanym przez prowadzących na żywo")}</strong>${k.comment?`<br><span style="color:#fda4af;font-size:12.5px">Wiadomość na start: „${we(k.comment)}”</span>`:""}
+          <span class="ai-story-lbl">Audycja opowiada o:</span>
+          <span class="ai-story-body">${we(k.about||"wybranym temacie przygotowanym przez prowadzących na żywo")}</span>
+          ${k.comment?`<span class="ai-story-note">Wiadomość od nadawcy: „${we(k.comment)}”</span>`:""}
         </div>
         <div class="ai-music">
           <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 15V5l8-2v10"/><circle cx="6.5" cy="15" r="2.5"/><circle cx="14.5" cy="13" r="2.5"/></svg>
