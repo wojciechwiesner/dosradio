@@ -645,6 +645,12 @@ const bgAudio = initBackgroundAudio(
 initPlus({
   onStatus: (text, isError) => setStatus(text, isError),
   stopRadio: () => { if (engine.isPlaying) engine.stop(); },
+  setVoiceBed: async (active) => {
+    if (active && !engine.isPlaying) {
+      await togglePlay();
+    }
+    engine.setExternalVoiceBed(active);
+  },
   enqueuePill: async (pill) => {
     if (!engine.enqueuePill(pill)) { setStatus('Ta pigułka jest już w programie.'); return; }
     setStatus(`W programie: ${pill.title}. Wejdzie w najbliższej przerwie, po wiadomościach.`);

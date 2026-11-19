@@ -341,21 +341,22 @@ export class RadioEngine {
     return true;
   }
 
-  /* ---------------- podcasts & pills ---------------- */
+  /* ---------------- podcasts & pills (pure spoken parts over ducked live radio bed) ---------------- */
   async playPodcast(pod, { kind = 'podcast' } = {}) {
     if (!this.playing) await this.start({ intro: false });
     this.clearSchedule(); this.core.stopVoice();
     this.speaking = true; this.setMode(kind);
     const hosts = this.hosts; let voiceIdx = 0;
+    const spokenParts = (pod.parts || []).filter(p => p.kind !== 'music');
     this.busy = pod.id;
     try {
-      this.setDuck(0.18, 0.8); await sleep(500);
-      for (let i = 0; i < pod.parts.length; i++) {
+      this.setDuck(this.prefs.duckLevel, 0.55); await sleep(320);
+      for (let i = 0; i < spokenParts.length; i++) {
         if (this.busy !== pod.id || !this.playing) break;
-        const p = pod.parts[i];
+        const p = spokenParts[i];
         // live podcast parts do not say who speaks: alternate voices between the two hosts
         const who = p.who || (p.kind === 'voice' ? (voiceIdx++ % 2 ? 'B' : 'A') : 'A');
-        this.events.onStatus(t('podPlaying', { title: pod.title, i: i + 1, n: pod.parts.length }));
+        this.events.onStatus(t('podPlaying', { title: pod.title, i: i + 1, n: spokenParts.length }));
         await this.say({ ...p, who, caption: p.text || p.caption || pod.title }, { kind, hosts, title: pod.title, index: i });
       }
       if (this.busy === pod.id) this.events.onStatus(t('podDone', { title: pod.title }));

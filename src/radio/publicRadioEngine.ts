@@ -104,6 +104,21 @@ export class PublicRadioEngine {
   setPendingDedication(ded: { audio_url: string; script: string; host_name?: string; to_name?: string; from_name?: string } | null): void {
     this.pendingDedication = ded;
   }
+
+  /** Duck the live radio bed under external spoken segments (e.g. Plus podcast) without stopping the station. */
+  setExternalVoiceBed(active: boolean): void {
+    this.speaking = active;
+    if (!this.playing) return;
+    if (active) {
+      this.stopVoiceSource();
+      this.duck(DUCK_LEVEL, 0.55);
+      this.events.onHostState?.(true, 'host');
+    } else {
+      this.duck(1.0, 1.8);
+      this.lastBreakEndedAt = new Date();
+      this.events.onHostState?.(false, null);
+    }
+  }
   private switchCount = 0;
 
   private startedAt = new Date();

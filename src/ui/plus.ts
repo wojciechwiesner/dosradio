@@ -18,8 +18,10 @@ const MIC_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stro
 
 export interface PlusOptions {
   onStatus: (text: string, isError?: boolean) => void;
-  /** Radio must yield its audio output while a podcast or digest is playing. */
+  /** Radio must yield its audio output while a digest is playing. */
   stopRadio: () => void;
+  /** Ensures the live radio music bed is running and ducked while spoken Plus podcasts play. */
+  setVoiceBed?: (active: boolean) => Promise<void>;
   /** Puts a finished YouTube pill into the radio programme; the radio keeps playing. */
   enqueuePill: (pill: { id: string; title: string; parts: AudioPart[] }) => Promise<void>;
 }
@@ -92,20 +94,24 @@ class SequencePlayer {
   private schedule(buffer: AudioBuffer, kind: string, startAt: number): void {
     const source = this.ctx.createBufferSource();
     source.buffer = buffer;
-    let output: AudioNode = source;
+    const gain = this.ctx.createGain();
+    const peak = 0.42; // matches VOICE_GAIN so spoken turns sit cleanly over the 0.24 ducked radio bed
     if (FADED_KINDS.has(kind)) {
       const fade = Math.min(FADE_SECONDS, buffer.duration / 2);
-      const gain = this.ctx.createGain();
       gain.gain.setValueAtTime(0, startAt);
-      gain.gain.linearRampToValueAtTime(1, startAt + fade);
-      gain.gain.setValueAtTime(1, startAt + buffer.duration - fade);
+      gain.gain.linearRampToValueAtTime(peak, startAt + fade);
+      gain.gain.setValueAtTime(peak, startAt + buffer.duration - fade);
       gain.gain.linearRampToValueAtTime(0, startAt + buffer.duration);
-      source.connect(gain);
-      output = gain;
+    } else {
+      gain.gain.setValueAtTime(peak, startAt);
     }
-    output.connect(this.ctx.destination);
+    source.connect(gain);
+    gain.connect(this.ctx.destination);
     this.sources.add(source);
-    source.onended = () => this.sources.delete(source);
+    source.onended = () => {
+      this.sources.delete(source);
+      try { gain.disconnect(); } catch { /* already disconnected */ }
+    };
     source.start(startAt);
   }
 
@@ -247,20 +253,31 @@ async function handlePodcast(): Promise<void> {
   const button = $<HTMLButtonElement>('podcastBtn');
   if (player.isPlaying) {
     player.stop();
-    options.onStatus('Zatrzymano.');
+    await options.setVoiceBed?.(false);
+    options.onStatus('Zatrzymano podcast — gra Twoja stacja.');
     return;
   }
   const topic = $<HTMLInputElement>('podcastTopic').value.trim();
   button.disabled = true;
   options.onStatus(topic ? `Generuję podcast: ${topic}...` : 'Generuję dzisiejszy podcast...');
+  let bedEngaged = false;
   try {
     const manifest: PodcastManifest = await radioApi.podcast(topic || undefined);
-    options.stopRadio();
+    const spokenParts = manifest.parts.filter((p) => p.kind !== 'music');
+    if (options.setVoiceBed) {
+      await options.setVoiceBed(true);
+      bedEngaged = true;
+      await new Promise((r) => setTimeout(r, 320));
+    } else {
+      options.stopRadio();
+    }
+    button.disabled = false;
     button.innerHTML = `${STOP_SVG} Zatrzymaj`;
-    await player.play(`Podcast: ${manifest.title}`, manifest.parts, options.onStatus);
+    await player.play(`Podcast: ${manifest.title}`, spokenParts, options.onStatus);
   } catch (error) {
     options.onStatus((error as Error).message, true);
   } finally {
+    if (bedEngaged) await options.setVoiceBed?.(false);
     button.disabled = false;
     button.innerHTML = `${MIC_SVG} Wygeneruj podcast`;
   }

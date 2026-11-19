@@ -164,19 +164,13 @@ def test_podcast_generates_voices_with_music_and_caches(plus_client, fake_gemini
     assert manifest["id"].endswith(slugify("Sen i produktywność"))
     kinds = [part["kind"] for part in manifest["parts"]]
     assert kinds.count("voice") == 5
-    assert kinds.count("music") >= 4  # two breaks of continuous archive segments
-    # Radio bumpers: intro, break-out + break-in around each music break, outro; never two music edges bare.
+    assert "music" not in kinds  # v3: spoken parts only; live radio station plays as the background bed
     assert kinds[0] == "bumper" and kinds[-1] == "bumper"
-    assert kinds.count("bumper") == 2 + 2 * 2
-    first_music = kinds.index("music")
-    assert kinds[first_music - 1] == "bumper"
-    assert kinds[len(kinds) - 1 - kinds[::-1].index("music") + 1] == "bumper"
-    assert manifest["version"] >= 2
+    assert kinds.count("bumper") == 2
+    assert manifest["version"] >= 3
     assert fake_gemini["speak"] == 5 + kinds.count("bumper")
     mixes = [args for args in fake_ffmpeg if "-filter_complex" in args]
-    assert len(mixes) == kinds.count("bumper")
-    assert "sidechaincompress" in mixes[0][mixes[0].index("-filter_complex") + 1]
-    assert "afade=t=in" in mixes[0][mixes[0].index("-filter_complex") + 1]
+    assert mixes == []  # bumpers are pure voice without baked-in music
 
     # Every part is served back to a Plus listener.
     for part in manifest["parts"]:

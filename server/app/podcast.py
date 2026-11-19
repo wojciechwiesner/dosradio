@@ -25,7 +25,7 @@ log = logging.getLogger("dosradio.podcast")
 MAX_EPISODES_KEPT = 30
 MIN_TURNS = 4
 MUSIC_SEGMENTS_PER_BREAK = (4, 6)  # 30 s each -> 2-3 minute music interludes
-MANIFEST_VERSION = 2  # v2 = episodes with radio bumpers; older cached episodes regenerate
+MANIFEST_VERSION = 3  # v3 = voice-only spoken segments (live radio supplies the background music bed)
 
 # Two distinct Polish-speaking hosts: warm curious lead and calm witty co-host.
 PODCAST_HOSTS = (
@@ -167,29 +167,19 @@ class PodcastService:
         title, turns = parse_script(reply)
 
         parts: list[dict] = []
-        sections = split_into_sections(turns)
-        music_runs = self._pick_music_runs(len(sections) - 1)
         turn_index = 0
         await self._add_bumper(parts, workdir, intro_bumper_text(title))
-        for section_index, section in enumerate(sections):
-            for turn in section:
-                file_name = f"v{turn_index:02d}.wav"
-                host = PODCAST_HOSTS[turn["speaker"]]
-                try:
-                    audio = await self.client.speak(turn["text"], host["voice"], host["style"])
-                except Exception as error:
-                    log.warning("podcast tts turn %d failed: %s", turn_index, error)
-                    continue  # skip the turn; the conversation stays playable
-                (workdir / file_name).write_bytes(audio)
-                parts.append({"kind": "voice", "file": file_name, "speaker": turn["speaker"]})
-                turn_index += 1
-            if section_index < len(music_runs) and music_runs[section_index]:
-                await self._add_bumper(parts, workdir, BUMPER_TEXTS["break-out"])
-                for segment in music_runs[section_index]:
-                    file_name = f"m{len(parts):02d}.opus"
-                    shutil.copyfile(segment, workdir / file_name)
-                    parts.append({"kind": "music", "file": file_name, "station": self.station_id})
-                await self._add_bumper(parts, workdir, BUMPER_TEXTS["break-in"])
+        for turn in turns:
+            file_name = f"v{turn_index:02d}.wav"
+            host = PODCAST_HOSTS[turn["speaker"]]
+            try:
+                audio = await self.client.speak(turn["text"], host["voice"], host["style"])
+            except Exception as error:
+                log.warning("podcast tts turn %d failed: %s", turn_index, error)
+                continue  # skip the turn; the conversation stays playable
+            (workdir / file_name).write_bytes(audio)
+            parts.append({"kind": "voice", "file": file_name, "speaker": turn["speaker"]})
+            turn_index += 1
         await self._add_bumper(parts, workdir, BUMPER_TEXTS["outro"])
 
         if not any(part["kind"] == "voice" for part in parts):
@@ -221,7 +211,7 @@ class PodcastService:
             return await self.client.speak(line, host["voice"], host["style"])
 
         try:
-            await make_voiced_bumper(speak, self.run, text, self._random_segment(), workdir / file_name)
+            await make_voiced_bumper(speak, self.run, text, None, workdir / file_name)
         except Exception as error:
             log.warning("podcast bumper %r skipped: %s", text, error)
             return

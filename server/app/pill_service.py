@@ -121,7 +121,7 @@ class PillService:
             shutil.rmtree(out_dir, ignore_errors=True)
             out_dir.mkdir(parents=True)
             try:
-                parts = await build_parts(self._speak, self.run, out_dir, source, meta, segments, self._random_segment())
+                parts = await build_parts(self._speak, self.run, out_dir, source, meta, segments, None)
             except Exception:
                 shutil.rmtree(out_dir, ignore_errors=True)
                 raise
