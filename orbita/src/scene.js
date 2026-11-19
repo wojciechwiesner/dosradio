@@ -190,7 +190,7 @@ export function createScene(canvas, cb) {
     const tp = todPalette(st.hour), u = fieldMat.uniforms;
     u.uLine.value.copy(srgb(tp.line)).lerp(palette.cat, 0.22); u.uAccent.value.copy(srgb(tp.accent)).lerp(palette.accent, 0.3); u.uBg.value.copy(srgb(tp.bg));
     u.uPhase.value = st.phase; u.uRing.value = Math.min(st.ringT, 9); u.uLow.value = f.low; u.uMid.value = f.mid; u.uLevel.value = f.level;
-    u.uNA.value = st.a; u.uNB.value = st.b; u.uMorph.value = st.morph; u.uHostMix.value = hostMix; u.uAspect.value = camera.aspect;
+    u.uNA.value = st.a; u.uNB.value = st.b; u.uMorph.value = st.morph; u.uHostMix.value = s.hide3dRings ? 2.2 : hostMix; u.uAspect.value = camera.aspect;
   }
 
   /* ---------- 3-ring 2.5D astrolabe + mobile corner thumb-turntable ---------- */

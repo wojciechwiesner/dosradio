@@ -70,10 +70,11 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
       @media(max-width:760px){
         #ringBar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
         #ringBar::-webkit-scrollbar{display:none}
-        #socialHubBar{display:none!important}.hud-br{display:none!important}.moon-label{display:none!important}#paletteBtn{display:none!important}
+        #socialHubBar{display:none!important}.hud-br,.hud-bl,#modeBadge{display:none!important}.moon-label{display:none!important}#paletteBtn{display:none!important}
         .hud-tl .sep,.hud-tl > span:nth-of-type(2){display:none!important}
-        .hud-tr{gap:5px}
-        .hud-tr .live-pill span:last-child{display:none}
+        .hud-tr{gap:6px}
+        #classicViewBtn span{display:none}
+        #classicViewBtn{width:30px;height:26px;padding:0;justify-content:center}
       }
       .sh-btn{background:rgba(14,12,20,.82);border:1px solid rgba(236,232,244,.16);color:#ece8f4;border-radius:999px;padding:6px 10px;min-height:32px;font:500 10px/1 'Azeret Mono',monospace;display:inline-flex;align-items:center;gap:5px;cursor:pointer;backdrop-filter:blur(12px)}
       .sh-btn:hover{border-color:#ff6b3d;color:#fff}

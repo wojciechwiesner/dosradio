@@ -126,7 +126,7 @@ export function initThumbTurntable({ app, STATIONS, byId, dial }) {
       }
       /* Check if user tapped one of the 3 ring arcs directly to filter/focus it */
       const rightHand = !app.leftHand;
-      const ox = rightHand ? r.width + 24 : -24, oy = r.height + 28;
+      const ox = rightHand ? r.width - 6 : 6, oy = r.height - 14;
       const distSpindle = Math.hypot(mx - ox, (my - oy) / 0.92);
       ringRadiiPx.forEach((rad, idx) => {
         if (Math.abs(distSpindle - rad) < 16) {
@@ -159,20 +159,27 @@ export function initThumbTurntable({ app, STATIONS, byId, dial }) {
     }
 
     const rightHand = !app.leftHand;
-    const ox = rightHand ? w + 24 : -24;
-    const oy = h + 28;
-    const startA = rightHand ? -Math.PI * 0.985 : -Math.PI * 0.515;
-    const endA = rightHand ? -Math.PI * 0.485 : -Math.PI * 0.015;
+    const ox = rightHand ? w - 6 : 6;
+    const oy = h - 14;
+    const startA = rightHand ? -Math.PI * 0.99 : -Math.PI * 0.51;
+    const endA = rightHand ? -Math.PI * 0.49 : -Math.PI * 0.01;
     const needleAngle = rightHand ? -Math.PI * 0.74 : -Math.PI * 0.26;
     const rf = app.ringFilter || 'all';
 
-    /* Subtle corner spindle glow */
-    const grad = ctx.createRadialGradient(ox, oy, 20, ox, oy, ringRadiiPx[2] + 44);
-    grad.addColorStop(0, 'rgba(255,107,61,0.10)');
-    grad.addColorStop(0.65, 'rgba(139,124,248,0.05)');
+    /* Subtle corner spindle glow + vinyl platter hub */
+    const grad = ctx.createRadialGradient(ox, oy, 12, ox, oy, ringRadiiPx[2] + 36);
+    grad.addColorStop(0, 'rgba(255,107,61,0.14)');
+    grad.addColorStop(0.55, 'rgba(16,15,24,0.86)');
     grad.addColorStop(1, 'rgba(7,6,10,0)');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
+    ctx.beginPath();
+    ctx.arc(ox, oy, 18, 0, Math.PI * 2);
+    ctx.fillStyle = '#12131d';
+    ctx.strokeStyle = 'rgba(255,107,61,0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.fill();
+    ctx.stroke();
 
     /* Tuning needle ray across the 1/4-circle 3 orbits */
     ctx.save();
