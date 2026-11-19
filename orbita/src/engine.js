@@ -305,7 +305,7 @@ export class RadioEngine {
         const part = (ded.audio_url && this.api.live)
           ? { kind: 'voice', who: 'A', url: ded.audio_url, text: ded.script }
           : { kind: 'tts', who: 'A', text: ded.script };
-        await this.say(part, { kind, hosts: [ded.host_name || this.hosts[0]] });
+        await this.say(part, { kind: 'dedication', hosts: [ded.host_name || this.hosts[0]] });
       }
     } finally {
       if (myEpoch === this.voiceEpoch && !this.podcastActive) {

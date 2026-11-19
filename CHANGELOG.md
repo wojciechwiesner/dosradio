@@ -39,6 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Admin Cockpit (`/admin.html`) & Admin API** (`public/admin.html`, `server/app/admin_api.py`, `server/app/telemetry.py`): recorded `.opus` track browser/player, interactive A/B DJ Mixer Tester with live WAV synthesis and 64-point envelope plot, token/Lyria usage telemetry, registered & online listener presence, dynamic station/group catalog CRUD, 24h Auto-Ramowka editor, and `zrobi.my` SME lead inbox.
 
 ### Fixed
+- **Orbita: dedications are read again** (`orbita/src/engine.js`): `playDedicationIntro()` passed an undefined
+  `kind` to `say()`, so opening a dedication link threw `ReferenceError: kind is not defined` and the dedication
+  was never voiced. It now airs with `kind: 'dedication'`. Covered by `tests/orbitaDedicationIntro.test.ts`.
 - **Phrase-Long DJ Mixer & Seamless Intra-Session Continuity** (`server/app/mixer.py`, `server/app/stream.py`): fixed short/audible transitions caused by 4-beat (~1.9s) linear fades, 0.5s fallback cuts on syncopated/ambient tracks, and destructive beat-slicing inside continuous 30s Lyria takes. Consecutive 30s intra-session segments now splice via 15 ms equal-power micro-declick (0 dropped beats); inter-session and group transitions use a 16-beat (4-bar, ~7.6-8.0s) beat-matched crossfade with Linkwitz-Riley 150 Hz midpoint bass-swap and 6.5s equal-power crossfade for beatless/ambient genres.
 - **AP newest news in the `ap` feed** (`scripts/publish_feeds.py`): reads ap_improve `GET /api/radio` first (blockers, overdue and just finished company topics, most urgent IT ticket) and puts those lines before the queue signals. Optional: an older ap_improve without the endpoint still publishes the queue signals.
 
