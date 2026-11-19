@@ -96,26 +96,35 @@ export class PublicRadioEngine {
   private silentTicks = 0;
   private recovering = false;
   private speaking = false;
+  private externalPodcastActive = false;
   private playing = false;
   private currentVoiceSource: AudioBufferSourceNode | null = null;
   private welcomeGeneration = 0;
   private pendingDedication: { audio_url: string; script: string; host_name?: string; to_name?: string; from_name?: string } | null = null;
+
+  get isPodcastPlaying(): boolean {
+    return this.externalPodcastActive;
+  }
 
   setPendingDedication(ded: { audio_url: string; script: string; host_name?: string; to_name?: string; from_name?: string } | null): void {
     this.pendingDedication = ded;
   }
 
   /** Duck the live radio bed under external spoken segments (e.g. Plus podcast) without stopping the station. */
-  setExternalVoiceBed(active: boolean): void {
-    this.speaking = active;
+  setExternalVoiceBed(active: boolean, keepPodcastLock = active): void {
+    this.externalPodcastActive = keepPodcastLock;
+    this.speaking = active || keepPodcastLock;
+    if (active || keepPodcastLock) {
+      this.welcomeGeneration++;
+      this.stopVoiceSource();
+    }
     if (!this.playing) return;
     if (active) {
-      this.stopVoiceSource();
       this.duck(DUCK_LEVEL, 0.55);
       this.events.onHostState?.(true, 'host');
     } else {
-      this.duck(1.0, 1.8);
-      this.lastBreakEndedAt = new Date();
+      this.duck(1.0, 1.4);
+      if (!keepPodcastLock) this.lastBreakEndedAt = new Date();
       this.events.onHostState?.(false, null);
     }
   }
@@ -127,7 +136,7 @@ export class PublicRadioEngine {
   private readonly clipPlayer = new HostClipPlayer({
     stationId: () => hostStationId(this.station),
     canPlay: () =>
-      this.playing && this.hostMode === 'with-host' && !this.speaking
+      this.playing && this.hostMode === 'with-host' && !this.speaking && !this.externalPodcastActive
       && canSpeakNow(new Date(), this.lastBreakEndedAt, this.nextSlot),
     play: (url) => this.airHostClip(url),
   });

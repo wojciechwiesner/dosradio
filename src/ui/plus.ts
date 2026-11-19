@@ -21,7 +21,7 @@ export interface PlusOptions {
   /** Radio must yield its audio output while a digest is playing. */
   stopRadio: () => void;
   /** Ensures the live radio music bed is running and ducked while spoken Plus podcasts play. */
-  setVoiceBed?: (active: boolean) => Promise<void>;
+  setVoiceBed?: (active: boolean, keepLock?: boolean) => Promise<void>;
   /** Puts a finished YouTube pill into the radio programme; the radio keeps playing. */
   enqueuePill: (pill: { id: string; title: string; parts: AudioPart[] }) => Promise<void>;
 }
@@ -253,19 +253,19 @@ async function handlePodcast(): Promise<void> {
   const button = $<HTMLButtonElement>('podcastBtn');
   if (player.isPlaying) {
     player.stop();
-    await options.setVoiceBed?.(false);
+    await options.setVoiceBed?.(false, false);
     options.onStatus('Zatrzymano podcast — gra Twoja stacja.');
     return;
   }
   const topic = $<HTMLInputElement>('podcastTopic').value.trim();
   button.disabled = true;
-  options.onStatus(topic ? `Generuję podcast: ${topic}...` : 'Generuję dzisiejszy podcast...');
+  options.onStatus(topic ? `Generuję audycję w częściach: ${topic}...` : 'Generuję dzisiejszą audycję...');
   let bedEngaged = false;
   try {
     const manifest: PodcastManifest = await radioApi.podcast(topic || undefined);
     const spokenParts = manifest.parts.filter((p) => p.kind !== 'music');
     if (options.setVoiceBed) {
-      await options.setVoiceBed(true);
+      await options.setVoiceBed(true, true);
       bedEngaged = true;
       await new Promise((r) => setTimeout(r, 320));
     } else {
@@ -273,11 +273,44 @@ async function handlePodcast(): Promise<void> {
     }
     button.disabled = false;
     button.innerHTML = `${STOP_SVG} Zatrzymaj`;
-    await player.play(`Podcast: ${manifest.title}`, spokenParts, options.onStatus);
+
+    /* Split podcast into Wejście -> Część 1 -> Przerwa muzyczna + Ciekawostka/Spot -> Część 2 -> Finał/Wyjście */
+    if (spokenParts.length <= 3) {
+      await player.play(`Audycja: ${manifest.title}`, spokenParts, options.onStatus);
+    } else {
+      const intro = [spokenParts[0]];
+      const outro = [spokenParts[spokenParts.length - 1]];
+      const mid = spokenParts.slice(1, -1);
+      const half = Math.max(1, Math.ceil(mid.length / 2));
+      const chapters: Array<{ name: string; items: AudioPart[]; breakMs: number; spot?: boolean }> = [
+        { name: 'Wejście', items: intro, breakMs: 2500 },
+        { name: 'Część 1 z 2', items: mid.slice(0, half), breakMs: 7000, spot: true },
+        { name: 'Część 2 i Wyjście', items: [...mid.slice(half), ...outro], breakMs: 0 },
+      ];
+      for (const ch of chapters) {
+        await options.setVoiceBed?.(true, true);
+        await player.play(`${manifest.title} · ${ch.name}`, ch.items, options.onStatus);
+        if (ch.breakMs > 0) {
+          await options.setVoiceBed?.(false, true);
+          options.onStatus(`Przerwa muzyczna w audycji „${manifest.title}”...`);
+          await new Promise((r) => setTimeout(r, ch.breakMs));
+        }
+        if (ch.spot) {
+          try {
+            const sr = await fetch('/radio-api/social/spot', { credentials: 'include' });
+            const sd = (await sr.json()) as { skip?: boolean; spot?: { title?: string; audio_url?: string } };
+            if (!sd.skip && sd.spot?.audio_url) {
+              await options.setVoiceBed?.(true, true);
+              await player.play(sd.spot.title || 'Ciekawostka DOS Radio', [{ kind: 'voice', url: sd.spot.audio_url }], options.onStatus);
+            }
+          } catch { /* non-fatal */ }
+        }
+      }
+    }
   } catch (error) {
     options.onStatus((error as Error).message, true);
   } finally {
-    if (bedEngaged) await options.setVoiceBed?.(false);
+    if (bedEngaged) await options.setVoiceBed?.(false, false);
     button.disabled = false;
     button.innerHTML = `${MIC_SVG} Wygeneruj podcast`;
   }

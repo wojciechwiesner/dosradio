@@ -832,7 +832,7 @@ function frame(now) {
   const idxAngle = STATIONS[idx]?.ringAngle || 0;
   const off = Math.min(1, Math.abs(angDiff(idxAngle + dial.phi, 0)) / 0.35);
   const moving = dial.dragging || dial.seeking || Math.abs(dial.vel) > 0.05;
-  app.core.setStatic(moving && e.playing ? Math.min(1, off * 2 + Math.abs(dial.vel) * 0.04) * 0.2 : 0);
+  app.core.setStatic(0);
   if (!moving && off < 0.08 && STATIONS[idx] && STATIONS[idx].id !== prefs.station && !dial.settleTimer) {
     dial.settleTimer = setTimeout(() => {
       dial.settleTimer = 0; const s = STATIONS[dial.idxAt(dial.phi)];

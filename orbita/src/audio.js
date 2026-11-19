@@ -38,17 +38,26 @@ export class AudioCore {
   get t() { return this.ctx ? this.ctx.currentTime : 0; }
   setVolume(v) { this.master && this.master.gain.setTargetAtTime(Math.max(0, Math.min(1, v)), this.t, 0.05); }
   setVoiceVolume(v) { this.voiceGain && this.voiceGain.gain.setTargetAtTime(Math.max(0, Math.min(1.5, v)) * VOICE_BASE_GAIN, this.t, 0.05); }
-  setStatic(v) {
-    if (!this.ctx || Math.abs(v - (this._sv ?? -1)) < 0.004) return; this._sv = v;
-    this.staticGain.gain.setTargetAtTime(Math.min(0.2, v), this.t, 0.04);
-    this.staticBp.frequency.setTargetAtTime(1800 + v * 5000, this.t, 0.05);
+  setStatic(_v) {
+    /* White-noise radio static disabled — clean studio output only */
+    if (!this.ctx || !this.staticGain) return;
+    this.staticGain.gain.setValueAtTime(0, this.t);
   }
   tick(strong = false) {
+    /* Warm low-end mechanical vinyl detent (<15ms, <=145Hz lowpass, 140ms cooldown — zero square-wave beeps) */
     if (!this.ctx) return;
-    const t = this.t, o = this.ctx.createOscillator(), g = this.ctx.createGain();
-    o.type = 'square'; o.frequency.value = strong ? 1600 : 2600;
-    g.gain.setValueAtTime(strong ? 0.07 : 0.03, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.03);
-    o.connect(g); g.connect(this.master); o.start(t); o.stop(t + 0.04);
+    const nowMs = performance.now();
+    if (!strong && nowMs - (this._lastTickMs || 0) < 140) return;
+    this._lastTickMs = nowMs;
+    const t = this.t, o = this.ctx.createOscillator(), lp = this.ctx.createBiquadFilter(), g = this.ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(strong ? 96 : 78, t);
+    o.frequency.exponentialRampToValueAtTime(38, t + 0.014);
+    lp.type = 'lowpass'; lp.frequency.value = 145;
+    g.gain.setValueAtTime(strong ? 0.016 : 0.007, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.016);
+    o.connect(lp); lp.connect(g); g.connect(this.master);
+    o.start(t); o.stop(t + 0.018);
   }
   duck(level, secs) {
     if (!this.ctx) return;
@@ -62,6 +71,10 @@ export class AudioCore {
     clearInterval(this.pulseTimer); this.ttsActive = false;
   }
   playBuffer(buffer, bus = 'voice') {
+    if (bus === 'voice' && this.voiceSrc) {
+      try { this.voiceSrc.onended = null; this.voiceSrc.stop(); } catch { /* ended */ }
+      this.voiceSrc = null;
+    }
     const src = this.ctx.createBufferSource(); src.buffer = buffer;
     src.connect(bus === 'music' ? this.musicBus : this.voiceGain);
     if (bus === 'voice') this.voiceSrc = src;

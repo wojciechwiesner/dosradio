@@ -110,10 +110,11 @@ export function bindAppBadges(container, onToast) {
   });
 }
 
-export function openQuickShareSheet({ title, subtitle, url, text, onCreateGreetingUrl, onToast }) {
+export function openQuickShareSheet({ title, subtitle, url, text, invite, onCreateGreetingUrl, onToast }) {
   const ov = getOverlay();
   let currentUrl = url;
   let currentText = text;
+  let currentInviteHtml = invite?.html || '';
 
   const render = () => {
     ov.innerHTML = `
@@ -122,10 +123,10 @@ export function openQuickShareSheet({ title, subtitle, url, text, onCreateGreeti
           <span class="qs-title">Udostępnij przez...</span>
           <button type="button" class="qs-close" data-qs-close>Zamknij</button>
         </div>
-        <div class="qs-preview">
+        ${currentInviteHtml || `<div class="qs-preview">
           <div class="qs-pv-name">${esc(title)}</div>
           <div class="qs-pv-sub">${esc(subtitle || currentUrl)}</div>
-        </div>
+        </div>`}
         ${onCreateGreetingUrl ? `
         <form class="qs-greet" id="qsGreetForm">
           <input class="qs-in" name="to_name" placeholder="Dla kogo? (opcjonalnie, np. Klaudia)">
@@ -151,13 +152,14 @@ export function openQuickShareSheet({ title, subtitle, url, text, onCreateGreeti
           if (res?.url) {
             currentUrl = res.url;
             currentText = res.text || currentText;
+            if (res.inviteHtml) currentInviteHtml = res.inviteHtml;
             subtitle = `Z głosowym pozdrowieniem od prowadzącego · ${currentUrl}`;
             onToast?.('Dodano głosowe pozdrowienie do linku!');
             render();
           }
         } catch (err) {
           onToast?.(err.message || 'Nie udało się dodać pozdrowienia');
-          if (btn) { btn.disabled = false; btn.textContent = 'Dodaj głos'; }
+          if (btn) { btn.disabled = false; btn.textContent = 'Dodaj głosowe pozdrowienie do linku'; }
         }
       });
     }

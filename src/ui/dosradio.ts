@@ -646,11 +646,12 @@ const bgAudio = initBackgroundAudio(
 initPlus({
   onStatus: (text, isError) => setStatus(text, isError),
   stopRadio: () => { if (engine.isPlaying) engine.stop(); },
-  setVoiceBed: async (active) => {
+  setVoiceBed: async (active, keepLock = active) => {
+    engine.setExternalVoiceBed(active, keepLock);
     if (active && !engine.isPlaying) {
       await togglePlay();
+      engine.setExternalVoiceBed(active, keepLock);
     }
-    engine.setExternalVoiceBed(active);
   },
   enqueuePill: async (pill) => {
     if (!engine.enqueuePill(pill)) { setStatus('Ta pigułka jest już w programie.'); return; }

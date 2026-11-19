@@ -1,6 +1,7 @@
 /* Mobile Bottom Nav + 1/4-Circle 2.5D Thumb-Turntable + App-Badge Share + PWA + Social/Creator/URL-Podcast (ZERO EMOJI) */
 import { APP_ICONS, buildAppBadgesHtml, bindAppBadges, openQuickShareSheet, isRunningStandalonePwa, triggerPwaInstall } from './shareSheet.js';
 import { initThumbTurntable } from './thumbDial.js';
+import { buildInvitePreviewHtml, formatInviteShareText, openAuditionInvite, createPodcastHud } from './inviteScreen.js';
 
 const FAV_KEY = 'dosradio.favorites.v1';
 const CID_KEY = 'dosradio.client_id.v1';
@@ -196,24 +197,42 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
     renderRingBar();
   });
 
-  /* ---- 5) Simplified "Udostępnij przez..." with Branded App Badges ---- */
+  /* ---- 5) Simplified "Udostępnij przez..." with Invitation Card Preview + Branded App Badges ---- */
+  const stationMetaInvite = (stId, title, about, fromName = '', toName = '', comment = '') => {
+    const st = byId[stId] || byId[app.prefs.station] || STATIONS[0];
+    return {
+      title,
+      about,
+      station_id: st.id,
+      station_name: st.name,
+      station_genre: `${st.sub || st.group || 'elektronika'} · ${st.bpm} BPM`,
+      from_name: fromName,
+      to_name: toName,
+      comment,
+    };
+  };
+
   app.openQuickShareStation = () => {
     const st = byId[app.prefs.station] || STATIONS[0];
     const baseUrl = `${location.origin}/?station=${encodeURIComponent(st.id)}`;
+    const baseInv = stationMetaInvite(st.id, `Antena na żywo · ${st.name}`, `wspólny odsłuch na żywo z prowadzącym ${st.host} i wyselekcjonowanymi pigułkami wiedzy`);
     openQuickShareSheet({
       title: `DOS Radio · ${st.name}`,
       subtitle: `${st.freq} MHz · ${st.bpm} BPM · Prowadzi ${st.host}`,
       url: baseUrl,
-      text: `Posłuchaj ze mną stacji ${st.name} na żywo w DOS Radio:`,
+      text: formatInviteShareText(baseInv),
+      invite: { html: buildInvitePreviewHtml(baseInv) },
       onToast: m => app.toast(m),
       onCreateGreetingUrl: async ({ toName, message }) => {
         const res = await sapi('/social/drops', {
           method: 'POST',
           body: JSON.stringify({ to_name: toName, kind: 'greeting', station_id: st.id, message }),
         });
+        const inv = res.drop?.invite || stationMetaInvite(st.id, `Pozdrowienie na antenie dla: ${toName}`, message, localStorage.getItem(NAME_KEY) || '', toName);
         return {
           url: res.share_url,
-          text: `Cześć ${toName}! Prowadzący stacji ${st.name} ma dla Ciebie pozdrowienie na antenie:`,
+          text: formatInviteShareText(inv),
+          inviteHtml: buildInvitePreviewHtml(inv),
         };
       },
     });
@@ -427,11 +446,13 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
       if (f.id === 'addFriendForm') {
         const res = await sapi('/social/friends', { method: 'POST', body: JSON.stringify({ ...fd, with_greeting: true }) });
         modal.classList.remove('open'); syncMobileNav();
-        openQuickShareSheet({ title: `Zaproszenie dla: ${fd.name}`, subtitle: 'Link automatycznie sparuje Was w znajomych i odtworzy pozdrowienie', url: res.share_url, text: `Cześć ${fd.name}! Mam dla Ciebie pozdrowienie na antenie DOS Radio:`, onToast: m => app.toast(m) });
+        const inv = stationMetaInvite(fd.station_id, `Pozdrowienie dla: ${fd.name}`, fd.greeting_message || 'wspólne słuchanie i głosowe przywitanie na antenie', fd.from_name, fd.name);
+        openQuickShareSheet({ title: inv.title, url: res.share_url, text: formatInviteShareText(inv), invite: { html: buildInvitePreviewHtml(inv) }, onToast: m => app.toast(m) });
       } else if (f.id === 'sendDropForm') {
         const res = await sapi('/social/drops', { method: 'POST', body: JSON.stringify({ ...fd, station_id: app.prefs.station, topic: fd.message }) });
         modal.classList.remove('open'); syncMobileNav();
-        openQuickShareSheet({ title: `Wrzutka na antenę dla: ${fd.to_name}`, url: res.share_url, text: `Wrzucam Ci materiał na antenę DOS Radio:`, onToast: m => app.toast(m) });
+        const inv = res.drop?.invite || stationMetaInvite(app.prefs.station, `Audycja dla: ${fd.to_name}`, fd.message || fd.source_url || 'dedykowany materiał na antenie', localStorage.getItem(NAME_KEY) || '', fd.to_name);
+        openQuickShareSheet({ title: inv.title, url: res.share_url, text: formatInviteShareText(inv), invite: { html: buildInvitePreviewHtml(inv) }, onToast: m => app.toast(m) });
       } else if (f.id === 'createRadioForm') {
         const pills = String(fd.pills_raw || '').split('\n').map(l => l.trim()).filter(Boolean).map(l => {
           const [u, ...rest] = l.split('|');
@@ -439,86 +460,148 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
         });
         const res = await sapi('/custom-radios', { method: 'POST', body: JSON.stringify({ ...fd, pills }) });
         modal.classList.remove('open'); syncMobileNav();
-        activateCustomRadio(res.slug);
-        openQuickShareSheet({ title: `Stacja na żywo: ${fd.name}`, url: res.share_url, text: `Wskakuj na moją stację ${fd.name} w DOS Radio:`, onToast: m => app.toast(m) });
+        activateCustomRadio(res.slug, false);
+        const inv = stationMetaInvite(fd.base_station_id, fd.name, fd.description || 'autorska selekcja pigułek wiedzy i brzmienia na żywo', fd.creator_name);
+        openQuickShareSheet({ title: `Stacja na żywo: ${fd.name}`, url: res.share_url, text: formatInviteShareText(inv), invite: { html: buildInvitePreviewHtml(inv) }, onToast: m => app.toast(m) });
       } else if (f.id === 'outreachForm') {
-        app.toast('Analizuję stronę WWW i przygotowuję podcast...');
+        app.toast('Analizuję stronę WWW i przygotowuję wieloczęściową audycję...');
         const res = await sapi('/social/url-podcast-link', { method: 'POST', body: JSON.stringify(fd) });
         modal.classList.remove('open'); syncMobileNav();
-        openQuickShareSheet({ title: `Audycja o stronie: ${res.site_title}`, subtitle: 'Otwiera stację od razu z podcastem o tej stronie', url: res.share_url, text: `Posłuchaj audycji w DOS Radio na temat ${res.site_title}:`, onToast: m => app.toast(m) });
+        const inv = res.invite || stationMetaInvite(fd.station_id, res.site_title, fd.comment || res.url, fd.from_name, fd.recipient_name, fd.comment);
+        openQuickShareSheet({ title: `Audycja: ${inv.title}`, url: res.share_url, text: formatInviteShareText(inv), invite: { html: buildInvitePreviewHtml(inv) }, onToast: m => app.toast(m) });
       }
     } catch (err) { app.toast(err.message || 'Błąd połączenia'); }
   });
 
-  /* ---- 9) Live Airwave Playback & Deep-Links (?w=, ?p=, ?r=, ?station=) ---- */
+  /* ---- 9) Segmented Podcast HUD + Exclusive Voice Playback & Dedicated Link Invitation Screen ---- */
   const banner = document.createElement('div');
   banner.id = 'hijackBanner';
   document.body.appendChild(banner);
 
-  async function playVoiceSequence(urls, labelText) {
-    banner.textContent = labelText;
-    banner.style.display = 'block';
-    try { app.core?.duck?.(0.24, 0.35); } catch {}
-    for (const u of urls) {
-      await new Promise(res => { const a = new Audio(u); a.onended = res; a.onerror = res; a.play().catch(res); });
-    }
-    try { app.core?.duck?.(1.0, 0.55); } catch {}
-    setTimeout(() => { banner.style.display = 'none'; }, 2500);
-  }
-
-  function playDropWhenReady(drop, prefixLabel) {
-    const run = async () => {
-      await new Promise(r => setTimeout(r, 2400));
-      if (drop.audio_url) await playVoiceSequence([drop.audio_url], `${prefixLabel}: ${drop.from_name || 'Znajomy'} — ${drop.message || drop.pill_text || 'Pozdrowienia!'}`);
-      else if (drop.podcast?.parts?.length) await playVoiceSequence(drop.podcast.parts.map(p => p.url), `${prefixLabel}: ${drop.site_title || drop.podcast.topic || 'Audycja specjalna'}`);
+  const podHud = createPodcastHud({
+    onSkipBreak: () => app.engine?.skipPodcastInterlude?.(),
+    onStop: () => app.engine?.stopPodcast?.(),
+    onOpenPlus: () => app.openTab?.('plus'),
+  });
+  if (app.engine?.events) {
+    app.engine.events.onPodcastHud = state => {
+      if (state) podHud.show(state);
+      else podHud.hide();
     };
-    if (app.engine?.playing) run();
-    else { const iv = setInterval(() => { if (app.engine?.playing) { clearInterval(iv); run(); } }, 600); }
   }
 
-  async function activateCustomRadio(slug) {
+  const tuneStationImmediate = stId => {
+    if (stId && byId[stId]) {
+      app.commit(p => { p.station = stId; p.playGroup = false; });
+      dial.goTo(byId[stId].idx, true);
+      renderCard();
+    }
+  };
+
+  async function runDropExclusive(drop, prefixLabel) {
+    if (drop.station_id) tuneStationImmediate(drop.station_id);
+    if (drop.podcast?.parts?.length) {
+      await app.engine.playPodcast({
+        id: drop.podcast.id || drop.token,
+        title: drop.podcast.title || drop.site_title || 'Audycja specjalna',
+        summary: drop.podcast.summary || drop.message || '',
+        hosts: drop.podcast.hosts,
+        parts: drop.podcast.parts,
+      });
+      return;
+    }
+    if (drop.audio_url) {
+      banner.textContent = `${prefixLabel}: ${drop.from_name || 'Znajomy'} — ${drop.message || drop.pill_text || 'Pozdrowienia!'}`;
+      banner.style.display = 'block';
+      await app.engine.playExclusiveDrop({ urls: [drop.audio_url], caption: drop.message || drop.pill_text || prefixLabel });
+      setTimeout(() => { banner.style.display = 'none'; }, 2400);
+    }
+  }
+
+  async function activateCustomRadio(slug, showInvite = true) {
     const r = await sapi(`/custom-radios/${encodeURIComponent(slug)}`).catch(() => null);
     if (!r?.radio) return;
     const rad = r.radio;
-    if (byId[rad.base_station_id]) {
-      app.commit(p => { p.station = rad.base_station_id; }, `${rad.name} (${rad.creator_name || 'Radio Twórcy'})`);
-      dial.goTo(byId[rad.base_station_id].idx, false);
+    tuneStationImmediate(rad.base_station_id);
+    if (showInvite) {
+      const inv = stationMetaInvite(rad.base_station_id, rad.name, rad.description || 'autorska stacja na żywo wraz z wybranymi pigułkami wiedzy', rad.creator_name);
+      openAuditionInvite({
+        invite: inv,
+        ready: true,
+        ctaLabel: 'Włącz autorską stację i muzykę',
+        onStart: async () => {
+          tuneStationImmediate(rad.base_station_id);
+          app.ensureEntered?.();
+          if (!app.engine.playing) await app.engine.start({ intro: true });
+          for (const pl of (rad.pills || [])) app.engine.enqueuePill({ title: pl.title || rad.name, text: pl.note || pl.title || '' });
+        },
+      });
     }
-    banner.textContent = `STACJA AUTORSKA: ${rad.name}${rad.creator_name ? ' · ' + rad.creator_name : ''}`;
-    banner.style.display = 'block';
-    renderCard();
   }
 
   const sp = new URLSearchParams(location.search);
-  if (sp.get('station') && byId[sp.get('station')]) {
-    app.commit(p => { p.station = sp.get('station'); });
-    dial.goTo(byId[sp.get('station')].idx, true);
-  }
-  if (sp.get('r')) activateCustomRadio(sp.get('r'));
+  if (sp.get('station') && byId[sp.get('station')]) tuneStationImmediate(sp.get('station'));
+  if (sp.get('r')) activateCustomRadio(sp.get('r'), true);
   if (sp.get('w')) {
     sapi(`/social/drops/${encodeURIComponent(sp.get('w'))}/claim`, { method: 'POST', body: '{}' }).then(res => {
       const d = res.drop;
-      if (d?.station_id && byId[d.station_id]) { app.commit(p => { p.station = d.station_id; }); dial.goTo(byId[d.station_id].idx, true); }
-      banner.textContent = `WRZUTKA OD ${d.from_name || 'ZNAJOMEGO'} — kliknij Start!`;
-      banner.style.display = 'block';
-      playDropWhenReady(d, `NA ANTENIE OD ${(d.from_name || 'ZNAJOMEGO').toUpperCase()}`);
+      if (!d) return;
+      tuneStationImmediate(d.station_id);
+      const inv = d.invite || stationMetaInvite(d.station_id, `Audycja od: ${d.from_name || 'Znajomego'}`, d.message || d.pill_text || 'dedykowane wejście na antenie', d.from_name, d.to_name);
+      openAuditionInvite({
+        invite: inv,
+        ready: true,
+        onStart: async () => {
+          tuneStationImmediate(d.station_id);
+          await app.core.unlock();
+          await runDropExclusive(d, `NA ANTENIE OD ${(d.from_name || 'ZNAJOMEGO').toUpperCase()}`);
+        },
+      });
     }).catch(() => {});
   }
   if (sp.get('p')) {
     const ptok = sp.get('p');
     (async () => {
-      for (let i = 0; i < 40; i++) {
+      let inviteHandle = null;
+      let latestDrop = null;
+      let autoStartRequested = false;
+      for (let i = 0; i < 45; i++) {
         const res = await sapi(`/social/url-podcast-link/${encodeURIComponent(ptok)}`).catch(() => null);
         const d = res?.drop;
         if (!d) return;
-        if (i === 0 && d.station_id && byId[d.station_id]) { app.commit(p => { p.station = d.station_id; }); dial.goTo(byId[d.station_id].idx, true); }
-        if (d.podcast?.status === 'ready' && d.podcast.parts?.length) {
-          playDropWhenReady(d, `AUDYCJA O STRONIE ${d.site_title || ''}${d.comment ? ' · ' + d.comment : ''}`);
+        latestDrop = d;
+        if (i === 0 && d.station_id) tuneStationImmediate(d.station_id);
+        const isReady = d.podcast?.status === 'ready' && d.podcast.parts?.length > 0;
+        const inv = d.invite || stationMetaInvite(d.station_id, d.site_title || 'Audycja specjalna', d.message || 'temat ze strony internetowej', d.from_name, d.to_name, d.comment);
+        if (!inviteHandle) {
+          inviteHandle = openAuditionInvite({
+            invite: inv,
+            ready: isReady,
+            statusText: isReady
+              ? 'Audycja podzielona na części z wejściem, przerwami muzycznymi i wyjściem jest gotowa.'
+              : 'Prowadzący właśnie nagrywają w studiu części audycji — za moment startujemy...',
+            onStart: async () => {
+              autoStartRequested = true;
+              tuneStationImmediate(latestDrop.station_id);
+              await app.core.unlock();
+              if (latestDrop.podcast?.parts?.length) await runDropExclusive(latestDrop, 'AUDYCJA SPECJALNA');
+              else if (!app.engine.playing) await app.engine.start({ intro: false });
+            },
+          });
+        } else {
+          inviteHandle.update({
+            invite: inv,
+            ready: isReady,
+            statusText: isReady
+              ? 'Audycja gotowa — kliknij poniżej, aby wystartować wejście i muzykę.'
+              : 'Dogrywamy ostatnie kwestie prowadzących...',
+          });
+        }
+        if (isReady) {
+          if (autoStartRequested) await runDropExclusive(d, 'AUDYCJA SPECJALNA');
           return;
         }
-        banner.textContent = `Przygotowujemy podcast o ${d.site_title || 'stronie'}...`;
-        banner.style.display = 'block';
-        await new Promise(r => setTimeout(r, 2500));
+        await new Promise(r => setTimeout(r, 2200));
       }
     })();
   }
@@ -530,7 +613,11 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
     app.friendStations = new Set(app.onlineFriends.map(f => f.station_id).filter(Boolean));
     renderHub();
     syncMobileNav();
-    for (const d of (res.incoming_live_drops || [])) playDropWhenReady(d, 'WEJŚCIE NA ŻYWO');
+    for (const d of (res.incoming_live_drops || [])) {
+      /* Never interrupt an active podcast — runDropExclusive queues or waits cleanly */
+      if (!app.engine.isPodcastPlaying()) runDropExclusive(d, 'WEJŚCIE NA ŻYWO');
+      else if (d.audio_url) app.engine.playExclusiveDrop({ urls: [d.audio_url], caption: d.message || 'Wejście znajomego' });
+    }
   };
   beatPresence();
   setInterval(beatPresence, 22000);

@@ -17,6 +17,7 @@ from .dedications import DedicationStore, build_dedication_script
 from .hosts import host_for
 from .podcast import PodcastService
 from .social import SocialService, build_share_links
+from .spots import SpotService
 from .url_extractor import extract_webpage_content
 
 log = logging.getLogger("dosradio.social")
@@ -73,6 +74,7 @@ def build_social_router(
     router = APIRouter(prefix="/radio-api/social", tags=["social"])
     social = SocialService(db)
     ded_store = DedicationStore(db.path)
+    spots_svc = SpotService(podcasts.client, db.path.parent / "spots")
     bg_tasks: set[asyncio.Task[Any]] = set()
 
     def _caller_name(request: Request, explicit: str = "") -> str:
@@ -105,29 +107,42 @@ def build_social_router(
 
     def _enrich_drop(drop: dict[str, Any]) -> dict[str, Any]:
         out = dict(drop)
+        st_info = station_lookup(str(out.get("station_id") or "dos-groove")) or {"id": "dos-groove", "name": "DOS Groove"}
+        st_name = str(st_info.get("name") or out.get("station_id") or "DOS Groove")
+        st_genre = str(st_info.get("genre") or st_info.get("subtitle") or st_info.get("vibe") or "klubowa elektronika i groove")
         if out.get("dedication_token"):
             ded = ded_store.get(out["dedication_token"])
             if ded:
                 out["dedication"] = ded
                 out["audio_url"] = ded["audio_url"]
         pid = out.get("podcast_id") or ""
+        pod_title = str(out.get("site_title") or "")
+        pod_summary = str(out.get("message") or out.get("pill_text") or out.get("comment") or "")
         if pid:
             mf = podcasts.load_manifest(pid)
             if mf:
                 tok = out["token"]
+                pod_title = str(mf.get("title") or pod_title or mf.get("topic") or "Audycja specjalna")
+                pod_summary = str(mf.get("summary") or pod_summary or mf.get("topic") or "")[:260]
                 parts = []
                 for p in mf.get("parts", []):
+                    if p.get("kind") not in ("voice", "bumper", None):
+                        continue
                     fname = str(p.get("file") or str(p.get("url", "")).rsplit("/", 1)[-1])
                     if fname:
                         parts.append({
                             "kind": p.get("kind", "voice"),
+                            "section": p.get("section", "part_1"),
                             "speaker": p.get("speaker"),
+                            "text": p.get("text", ""),
                             "file": fname,
                             "url": f"/radio-api/social/drops/{tok}/parts/{fname}",
                         })
                 out["podcast"] = {
                     "id": pid,
                     "status": "ready",
+                    "title": pod_title,
+                    "summary": pod_summary,
                     "topic": mf.get("topic", ""),
                     "hosts": mf.get("hosts", []),
                     "parts": parts,
@@ -141,6 +156,18 @@ def build_social_router(
                 "error": out.get("podcast_error", ""),
                 "parts": [],
             }
+        inv_title = pod_title or (f"Pozdrowienie dla: {out.get('to_name')}" if out.get("kind") == "greeting" else "Audycja specjalna DOS Radio")
+        inv_about = pod_summary or "wyjątkowe wejście prowadzących przygotowane specjalnie dla Ciebie"
+        out["invite"] = {
+            "title": inv_title[:140],
+            "about": inv_about[:260],
+            "station_id": str(st_info.get("id") or out.get("station_id") or "dos-groove"),
+            "station_name": st_name,
+            "station_genre": st_genre,
+            "from_name": str(out.get("from_name") or ""),
+            "to_name": str(out.get("to_name") or ""),
+            "comment": str(out.get("comment") or ""),
+        }
         return out
 
     async def _generate_drop_podcast_bg(token: str, topic_prompt: str) -> None:
@@ -273,22 +300,50 @@ def build_social_router(
             f"Omówcie ciekawie i konkretnie stronę internetową '{site['title']}' ({site['domain']}). "
             f"Opis: {site['description']}. Treść ze strony: {site['text'][:2000]}\n{intro_note}"
         )
+        site_about = (site["description"] or site["text"][:220]).strip()[:260]
         drop = social.create_drop(
             prefix="p", from_key=actor, from_name=sender,
             to_name=recip or site["domain"], kind="podcast", station_id=body.station_id,
+            message=site_about,
             source_url=site["url"], site_title=site["title"], comment=body.comment.strip(),
             podcast_status="generating",
         )
         background_tasks.add_task(_generate_drop_podcast_bg, drop["token"], topic_prompt)
-        inv = f"Posłuchaj audycji na żywo w DOS Radio na temat {site['title']}" + (f" ({body.comment.strip()})" if body.comment.strip() else "") + ":"
+        st_meta = station_lookup(body.station_id) or {"name": body.station_id}
+        st_label = str(st_meta.get("name") or body.station_id)
+        inv = (
+            f"Zapraszam do wysłuchania audycji w radiu pt. „{site['title']}”, "
+            f"która opowiada o: {site_about[:120]} — przy muzyce {st_label}:"
+        )
         links = build_share_links("p", drop["token"], inv)
+        enriched = _enrich_drop(drop)
         return {
             "token": drop["token"],
             "site_title": site["title"],
             "station_id": body.station_id,
-            "drop": _enrich_drop(drop),
+            "drop": enriched,
+            "invite": enriched["invite"],
             **links,
         }
+
+    @router.get("/spot")
+    async def get_promo_spot(request: Request, station: str = "dos-groove") -> dict[str, Any]:
+        ip = request.client.host if request.client else "0.0.0.0"
+        cur = access.resolve(request.cookies, ip)
+        return spots_svc.pick_for_access(cur, station_id=station)
+
+    @router.get("/spots")
+    async def list_promo_spots() -> dict[str, Any]:
+        return {"spots": spots_svc.list_all()}
+
+    @router.get("/spot/{spot_id}.wav")
+    async def get_promo_spot_audio(spot_id: str, station: str = "dos-groove") -> FileResponse:
+        safe_id = "".join(c for c in spot_id if c.isalnum() or c == "_")
+        try:
+            wav_path = await spots_svc.render_wav(safe_id, station_id=station)
+        except KeyError as err:
+            raise HTTPException(404, "Nieznany spot") from err
+        return FileResponse(wav_path, media_type="audio/wav")
 
     @router.get("/url-podcast-link/{token}")
     async def get_url_podcast_link(token: str) -> dict[str, Any]:

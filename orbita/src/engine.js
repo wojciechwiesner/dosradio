@@ -39,15 +39,22 @@ export class RadioEngine {
     this.liveMusic = new LiveMusic(core, { onTrialEnded: () => this.endTrial(), onError: () => this.recover() });
     this.aired = new AiredStore(api.live ? api.aired : null);
     this.pills = new PillQueue();
-    this.queue = []; this.timers = []; this.playing = false; this.speaking = false; this.busy = null;
+    this.queue = []; this.timers = []; this.playing = false; this.speaking = false; this.podcastActive = false; this.voiceEpoch = 0; this.busy = null;
+    this._skipInterlude = null; this._deferredDrops = [];
     this.headlined = new Set(); this.lastFormat = null; this.lastHourlyKey = null;
     this.mode = 'idle'; // idle | music | news | host | podcast | pill | intro
+    if (typeof window !== 'undefined') {
+      window.__dosAudioState = { isPodcastPlaying: () => this.isPodcastPlaying(), isVoiceBusy: () => this.isVoiceBusy() };
+    }
     this.applyPrefs(prefs);
     this.station = prefs.stationObj;
     this.firstBreakMs = FIRST_BREAK;
     this.introDone = false;
     this.clipTimer = 0;
   }
+  isPodcastPlaying() { return !!this.podcastActive; }
+  isVoiceBusy() { return !!(this.podcastActive || this.speaking); }
+  skipPodcastInterlude() { if (this._skipInterlude) { const fn = this._skipInterlude; this._skipInterlude = null; fn(); } }
   applyPrefs(p) {
     this.prefs = p; this.interval = p.interval; this.hostMode = p.hostMode; this.categories = p.categories; this.newsEnabled = p.newsEnabled;
     this.dayTopic = p.dayTopic; this.hourlyEnabled = p.hourlyBulletin;
@@ -73,22 +80,25 @@ export class RadioEngine {
     this.events.onState('playing'); this.setMode('music');
     if (this.hostMode === 'with-host') {
       this.refreshNews(); this.newsTimer = setInterval(() => this.refreshNews(), NEWS_REFRESH);
-      if (dedication) await this.playDedicationIntro(dedication);
-      else if (intro) await this.playIntro();
-      this.scheduleNextBreak(); this.scheduleClip();
-    } else if (dedication) {
+      if (!this.podcastActive) {
+        if (dedication) await this.playDedicationIntro(dedication);
+        else if (intro) await this.playIntro();
+      }
+      if (!this.podcastActive) { this.scheduleNextBreak(); this.scheduleClip(); }
+    } else if (dedication && !this.podcastActive) {
       await this.playDedicationIntro(dedication);
       this.events.onNextBreak(null);
     } else this.events.onNextBreak(null);
   }
   stop() {
+    this.voiceEpoch++;
     this.clearSchedule(); clearInterval(this.newsTimer); clearTimeout(this.clipTimer);
     this.synth.stop(); this.liveMusic.stop(); this.core.stopVoice();
-    this.playing = false; this.speaking = false; this.busy = null; this.setMode('idle');
-    this.events.onState('paused'); this.events.onHost(null);
+    this.playing = false; this.speaking = false; this.podcastActive = false; this.busy = null; this.setMode('idle');
+    this.events.onState('paused'); this.events.onHost(null); this.events.onPodcastHud?.(null);
   }
   async startMusic() {
-    this.core.duck(1, 0.3);
+    this.core.duck(this.podcastActive && this.speaking ? (this.prefs?.duckLevel || 0.24) : 1, 0.3);
     if (!this.api.live) { this.synth.start(this.station); return true; }
     this.core.onsetLive = true;
     return this.liveMusic.start(this.station, this.prefs?.playGroup ? this.prefs?.activeGroup : null);
@@ -97,10 +107,10 @@ export class RadioEngine {
     this.station = st;
     if (!this.playing) return;
     if (!this.api.live) this.synth.set(st); else await this.liveMusic.setStation(st, this.prefs?.playGroup ? this.prefs?.activeGroup : null);
-    if (!this.speaking) this.events.onStatus(t('st_playing', { name: stationName(st) }));
+    if (!this.speaking && !this.podcastActive) this.events.onStatus(t('st_playing', { name: stationName(st) }));
   }
   async playRamowkaSpot(spotId, caption = '') {
-    if (!this.playing || this.speaking || this.hostMode === 'music-only') return false;
+    if (!this.playing || this.speaking || this.podcastActive || this.hostMode === 'music-only') return false;
     const url = this.api.ramowkaSpotUrl ? this.api.ramowkaSpotUrl(spotId) : `/radio-api/ramowka/spot/${encodeURIComponent(spotId)}.wav`;
     const part = this.api.live
       ? { kind: 'voice', url, caption: caption || t('autoRamowkaLive') }
@@ -174,7 +184,7 @@ export class RadioEngine {
     return parts;
   }
   async airBreak(at, forced = false) {
-    if ((this.speaking && !forced) || (!this.playing && !forced) || this.hostMode === 'music-only') return;
+    if (this.podcastActive || (this.speaking && !forced) || (!this.playing && !forced) || this.hostMode === 'music-only') return;
     if (forced && this.speaking) this.core.stopVoice();
     this.lastBreakAt = new Date();
     let plan = this.newsEnabled || forced ? planBreak(this.ctx(this.lastBreakAt)) : { empty: true, headlines: [], full: [] };
@@ -270,30 +280,45 @@ export class RadioEngine {
     catch (e) { if (e instanceof TrialEnded) throw e; return null; }
   }
   async hostMoment(part, kind) {
-    if (this.speaking) return;
+    if (this.speaking || this.podcastActive) return;
+    const myEpoch = this.voiceEpoch;
     this.speaking = true; this.setMode('host');
-    try { await sleep(400); await this.say(part, { kind, hosts: [this.hosts[0]] }); }
-    finally { this.speaking = false; this.events.onHost(null); if (this.playing) { this.core.duck(1, 1.6); this.setMode('music'); } }
+    try {
+      await sleep(400);
+      if (myEpoch !== this.voiceEpoch || this.podcastActive || !this.playing) return;
+      await this.say(part, { kind, hosts: [this.hosts[0]] });
+    } finally {
+      if (myEpoch === this.voiceEpoch && !this.podcastActive) {
+        this.speaking = false; this.events.onHost(null);
+        if (this.playing) { this.core.duck(1, 1.6); this.setMode('music'); }
+      }
+    }
   }
   async playDedicationIntro(ded) {
+    if (this.podcastActive) return;
+    const myEpoch = this.voiceEpoch;
     this.introDone = true;
     this.speaking = true; this.setMode('intro');
     try {
-      await sleep(2200);
-      if (this.speaking && this.playing) {
+      await sleep(1600);
+      if (this.speaking && this.playing && !this.podcastActive && myEpoch === this.voiceEpoch) {
         const part = (ded.audio_url && this.api.live)
           ? { kind: 'voice', who: 'A', url: ded.audio_url, text: ded.script }
           : { kind: 'tts', who: 'A', text: ded.script };
-        await this.say(part, { kind: 'intro', hosts: [ded.host_name || this.hosts[0]] });
+        await this.say(part, { kind, hosts: [ded.host_name || this.hosts[0]] });
       }
     } finally {
-      this.speaking = false; this.events.onHost(null); this.events.onIntroDone();
-      if (this.playing) { this.core.duck(1, 1.8); this.setMode('music'); }
-      this.lastBreakAt = null; this.startedAt = new Date();
+      if (myEpoch === this.voiceEpoch && !this.podcastActive) {
+        this.speaking = false; this.events.onHost(null); this.events.onIntroDone();
+        if (this.playing) { this.core.duck(1, 1.8); this.setMode('music'); }
+        this.lastBreakAt = null; this.startedAt = new Date();
+      }
     }
   }
   /* The opening: host explains what the radio is and can do. Live renders & caches station host recordings. */
   async playIntro() {
+    if (this.podcastActive) return;
+    const myEpoch = this.voiceEpoch;
     this.introDone = true;
     this.speaking = true; this.setMode('intro');
     try {
@@ -304,7 +329,7 @@ export class RadioEngine {
         fetch(this.api.orbitaIntroUrl(stId, 1), { credentials: 'same-origin' }).catch(() => {});
       }
       for (let i = 0; i < lines.length; i++) {
-        if (!this.speaking || !this.playing) break;
+        if (!this.speaking || !this.playing || this.podcastActive || myEpoch !== this.voiceEpoch) break;
         if (this.api.live && i + 2 < lines.length && typeof fetch === 'function') {
           fetch(this.api.orbitaIntroUrl(stId, i + 2), { credentials: 'same-origin' }).catch(() => {});
         }
@@ -314,60 +339,218 @@ export class RadioEngine {
         await this.say(part, { kind: 'intro', hosts: [this.hosts[0]] });
       }
     } finally {
-      this.speaking = false; this.events.onHost(null); this.events.onIntroDone();
-      if (this.playing) { this.core.duck(1, 1.8); this.setMode('music'); }
-      this.lastBreakAt = null; this.startedAt = new Date();
+      if (myEpoch === this.voiceEpoch && !this.podcastActive) {
+        this.speaking = false; this.events.onHost(null); this.events.onIntroDone();
+        if (this.playing) { this.core.duck(1, 1.8); this.setMode('music'); }
+        this.lastBreakAt = null; this.startedAt = new Date();
+      }
     }
   }
   scheduleClip() {
     clearTimeout(this.clipTimer);
     const wait = (6 + Math.random() * 6) * MIN;
     this.clipTimer = setTimeout(async () => {
-      if (this.playing && this.hostMode === 'with-host' && !this.speaking) {
+      if (this.playing && this.hostMode === 'with-host' && !this.speaking && !this.podcastActive) {
         const clips = this.api.live ? await this.api.hostClips(this.station.id) : null;
         const urls = clips ? [...clips.jingles, ...clips.chatter] : [];
         const part = urls.length ? { kind: 'voice', url: urls[(Math.random() * urls.length) | 0], caption: t('tts_jingle') }
           : { kind: 'tts', who: 'A', text: Math.random() < 0.4 ? t('tts_jingle') : t('tts_chatter')[(Math.random() * 3) | 0] };
         await this.hostMoment(part, 'host');
       }
-      if (this.playing) this.scheduleClip();
+      if (this.playing && !this.podcastActive) this.scheduleClip();
     }, wait);
   }
   /* a spoken line outside the schedule (sales nudges, thought of the day) */
   async announce(text, kind = 'host', url = null) {
-    if (!this.playing || this.speaking) return false;
+    if (!this.playing || this.speaking || this.podcastActive) return false;
     const part = (url && this.api.live) ? { kind: 'voice', who: 'A', url, text } : { kind: 'tts', who: 'A', text };
     await this.hostMoment(part, kind);
     return true;
   }
 
-  /* ---------------- podcasts & pills (pure spoken parts over ducked live radio bed) ---------------- */
-  async playPodcast(pod, { kind = 'podcast' } = {}) {
+  /* Exclusive single-voice drop (friend greeting / pill) — waits if podcast or host is currently speaking */
+  async playExclusiveDrop({ urls = [], caption = '', hosts = [this.hosts[0]] }) {
+    if (this.podcastActive || this.speaking) {
+      this._deferredDrops.push({ urls, caption, hosts });
+      return false;
+    }
     if (!this.playing) await this.start({ intro: false });
-    this.clearSchedule(); this.core.stopVoice();
+    const myEpoch = ++this.voiceEpoch;
+    this.speaking = true; this.setMode('host');
+    try {
+      this.setDuck(this.prefs.duckLevel, 0.45); await sleep(280);
+      for (const u of urls) {
+        if (myEpoch !== this.voiceEpoch || this.podcastActive || !this.playing) break;
+        await this.say({ kind: 'voice', who: 'A', url: u, caption }, { kind: 'host', hosts, title: caption });
+      }
+    } finally {
+      if (myEpoch === this.voiceEpoch && !this.podcastActive) {
+        this.speaking = false; this.lastSpokeEnd = new Date(); this.events.onHost(null);
+        if (this.playing) { this.core.duck(1, 1.5); this.setMode('music'); }
+        this._drainDeferredDrops();
+      }
+    }
+    return true;
+  }
+  _drainDeferredDrops() {
+    if (!this.podcastActive && !this.speaking && this._deferredDrops.length) {
+      const next = this._deferredDrops.shift();
+      setTimeout(() => this.playExclusiveDrop(next), 1200);
+    }
+  }
+
+  /* ---------------- Segmented Podcast Radio Show (Wejście -> Części + Muzyka -> Ciekawostka/Spot -> Wyjście) ---------------- */
+  async _musicInterlude(ms, label, title, myEpoch) {
+    this.speaking = false;
+    this.events.onHost(null);
+    this.core.duck(1, 0.9);
+    this.setMode('music');
+    this.events.onPodcastHud?.({ phase: label, title, subtitle: `Gramy muzykę ze stacji ${stationName(this.station)} przed kolejną częścią audycji`, canSkipBreak: true });
+    await new Promise(res => {
+      const tm = setTimeout(res, ms);
+      this._skipInterlude = () => { clearTimeout(tm); res(); };
+    });
+    this._skipInterlude = null;
+    if (myEpoch !== this.voiceEpoch || !this.podcastActive || !this.playing) return false;
+    this.speaking = true;
+    this.setDuck(this.prefs.duckLevel, 0.55);
+    await sleep(320);
+    return myEpoch === this.voiceEpoch && this.podcastActive && this.playing;
+  }
+
+  _segmentPodcastParts(spokenParts) {
+    if (spokenParts.length <= 2) return [{ phase: 'AUDYCJA NA ANTENIE', key: 'full', items: spokenParts }];
+    const hasExplicit = spokenParts.some(p => p.section && p.section !== 'part_1');
+    if (hasExplicit) {
+      const buckets = [
+        ['WEJŚCIE NA ANTENĘ', 'intro', spokenParts.filter(p => p.section === 'intro')],
+        ['CZĘŚĆ 1 Z 3', 'part_1', spokenParts.filter(p => p.section === 'part_1' || !p.section)],
+        ['CZĘŚĆ 2 Z 3', 'part_2', spokenParts.filter(p => p.section === 'part_2')],
+        ['CZĘŚĆ 3 Z 3', 'part_3', spokenParts.filter(p => p.section === 'part_3')],
+        ['WYJŚCIE RADIOWE', 'outro', spokenParts.filter(p => p.section === 'outro')],
+      ].filter(([, , arr]) => arr.length > 0);
+      if (buckets.length >= 3) return buckets.map(([phase, key, items]) => ({ phase, key, items }));
+    }
+    const intro = [spokenParts[0]];
+    const outro = [spokenParts[spokenParts.length - 1]];
+    const body = spokenParts.slice(1, -1);
+    const c1 = Math.max(1, Math.ceil(body.length / 3));
+    const c2 = Math.max(1, Math.ceil((body.length - c1) / 2));
+    return [
+      { phase: 'WEJŚCIE NA ANTENĘ', key: 'intro', items: intro },
+      { phase: 'CZĘŚĆ 1 Z 3', key: 'part_1', items: body.slice(0, c1) },
+      { phase: 'CZĘŚĆ 2 Z 3', key: 'part_2', items: body.slice(c1, c1 + c2) },
+      { phase: 'CZĘŚĆ 3 I WYJŚCIE', key: 'outro', items: [...body.slice(c1 + c2), ...outro] },
+    ].filter(s => s.items.length > 0);
+  }
+
+  async _playMidShowSpotIfEligible(podTitle, myEpoch) {
+    if (!this.api.live || typeof fetch !== 'function') return;
+    try {
+      const r = await fetch(`/radio-api/social/spot?station=${encodeURIComponent(this.station.id)}`, { credentials: 'include' });
+      if (!r.ok) return;
+      const data = await r.json();
+      if (data.skip || !data.spot) return;
+      if (myEpoch !== this.voiceEpoch || !this.podcastActive || !this.playing) return;
+      const sp = data.spot;
+      this.events.onPodcastHud?.({
+        phase: sp.kind === 'ciekawostka' ? 'CIEKAWOSTKA DOS RADIO' : 'SPOT DOS RADIO',
+        title: sp.title,
+        subtitle: sp.text,
+        ctaLabel: sp.cta_label || 'Sprawdź Plus',
+      });
+      await this.say(
+        { kind: 'voice', who: 'A', url: sp.audio_url, text: sp.text, caption: sp.text },
+        { kind: 'host', hosts: [this.hosts[0]], title: sp.title },
+      );
+    } catch { /* network error never breaks the show */ }
+  }
+
+  async playPodcast(pod, { kind = 'podcast' } = {}) {
+    const myEpoch = ++this.voiceEpoch;
+    this.podcastActive = true;
+    this.clearSchedule();
+    clearTimeout(this.clipTimer);
+    this.core.stopVoice();
+    if (!this.playing) await this.start({ intro: false });
     this.speaking = true; this.setMode(kind);
-    const hosts = this.hosts; let voiceIdx = 0;
+    const hosts = pod.hosts?.length >= 2 ? pod.hosts : this.hosts;
+    let voiceIdx = 0;
     const spokenParts = (pod.parts || []).filter(p => p.kind !== 'music');
-    this.busy = pod.id;
+    const segments = this._segmentPodcastParts(spokenParts);
+    this.busy = pod.id || `pod_${Date.now()}`;
+    const activeId = this.busy;
+    let spotPlayed = false;
+
     try {
       this.setDuck(this.prefs.duckLevel, 0.55); await sleep(320);
-      for (let i = 0; i < spokenParts.length; i++) {
-        if (this.busy !== pod.id || !this.playing) break;
-        const p = spokenParts[i];
-        // live podcast parts do not say who speaks: alternate voices between the two hosts
-        const who = p.who || (p.kind === 'voice' ? (voiceIdx++ % 2 ? 'B' : 'A') : 'A');
-        this.events.onStatus(t('podPlaying', { title: pod.title, i: i + 1, n: spokenParts.length }));
-        await this.say({ ...p, who, caption: p.text || p.caption || pod.title }, { kind, hosts, title: pod.title, index: i });
+      let globalIdx = 0;
+      for (let sIdx = 0; sIdx < segments.length; sIdx++) {
+        if (this.busy !== activeId || myEpoch !== this.voiceEpoch || !this.playing) break;
+        const seg = segments[sIdx];
+        this.setMode(kind);
+        for (const p of seg.items) {
+          if (this.busy !== activeId || myEpoch !== this.voiceEpoch || !this.playing) break;
+          globalIdx++;
+          const who = p.who || (p.kind === 'voice' ? (voiceIdx++ % 2 ? 'B' : 'A') : 'A');
+          const lineCaption = p.text || p.caption || pod.summary || pod.title;
+          this.events.onPodcastHud?.({
+            phase: `${seg.phase} · (${globalIdx}/${spokenParts.length})`,
+            title: pod.title || 'Audycja specjalna',
+            subtitle: lineCaption,
+          });
+          this.events.onStatus(`${seg.phase}: ${pod.title}`);
+          await this.say({ ...p, who, caption: lineCaption }, { kind, hosts, title: pod.title, index: globalIdx - 1 });
+        }
+
+        if (this.busy !== activeId || myEpoch !== this.voiceEpoch || !this.playing) break;
+
+        /* Musical breathers + Ciekawostka/Spot between show chapters */
+        if (seg.key === 'intro' && segments.length > 2) {
+          const ok = await this._musicInterlude(2800, 'WEJŚCIE MUZYCZNE', pod.title, myEpoch);
+          if (!ok) break;
+        } else if (seg.key === 'part_1' && sIdx < segments.length - 1) {
+          const ok = await this._musicInterlude(7500, 'PRZERWA MUZYCZNA · PO CZĘŚCI 1', pod.title, myEpoch);
+          if (!ok) break;
+          if (!spotPlayed) {
+            spotPlayed = true;
+            await this._playMidShowSpotIfEligible(pod.title, myEpoch);
+          }
+        } else if (seg.key === 'part_2' && sIdx < segments.length - 1) {
+          const ok = await this._musicInterlude(6500, 'PRZERWA MUZYCZNA · PRZED FINAŁEM', pod.title, myEpoch);
+          if (!ok) break;
+        }
       }
-      if (this.busy === pod.id) this.events.onStatus(t('podDone', { title: pod.title }));
+      if (this.busy === activeId) this.events.onStatus(t('podDone', { title: pod.title }));
     } finally {
-      const finished = this.busy === pod.id; this.busy = null;
-      this.speaking = false; this.events.onHost(null);
-      if (this.playing) { this.core.duck(1, 1.8); this.setMode('music'); if (this.hostMode === 'with-host') this.scheduleNextBreak(); }
+      const finished = this.busy === activeId;
+      if (myEpoch === this.voiceEpoch) {
+        this.busy = null;
+        this.podcastActive = false;
+        this.speaking = false;
+        this._skipInterlude = null;
+        this.events.onHost(null);
+        this.events.onPodcastHud?.(null);
+        if (this.playing) {
+          this.core.duck(1, 1.8);
+          this.setMode('music');
+          if (this.hostMode === 'with-host') { this.scheduleNextBreak(); this.scheduleClip(); }
+        }
+        this._drainDeferredDrops();
+      }
       this.events.onPodcastEnd(pod, finished);
     }
   }
-  stopPodcast() { this.busy = null; this.core.stopVoice(); }
+  stopPodcast() {
+    this.voiceEpoch++;
+    this.busy = null;
+    this.podcastActive = false;
+    this.speaking = false;
+    this.skipPodcastInterlude();
+    this.core.stopVoice();
+    this.events.onPodcastHud?.(null);
+    if (this.playing) { this.core.duck(1, 1.0); this.setMode('music'); }
+  }
   enqueuePill(p, front = false) {
     const ok = this.pills.enqueue(p, front);
     if (ok && this.playing && this.hostMode === 'with-host' && !this.speaking) { this.clearSchedule(); this.scheduleNextBreak(); }

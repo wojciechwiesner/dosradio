@@ -228,3 +228,20 @@ def test_url_podcast_outreach_link_generates_and_serves_public_parts(tmp_path: P
     seg_res = client.get(parts[0]["url"])
     assert seg_res.status_code == 200
     assert len(seg_res.content) > 40
+    # Verify structured sections (intro -> part_1..3 -> outro) & rich invite metadata
+    sections = [p["section"] for p in parts]
+    assert sections[0] == "intro"
+    assert sections[-1] == "outro"
+    assert poll["invite"]["title"]
+    assert "automatyzacji" in poll["invite"]["about"] or poll["invite"]["about"]
+    assert poll["invite"]["station_name"] == "Dos Groove"
+
+    # Verify Guest gets a DOS Radio ciekawostka/spot + playable WAV
+    spot_res = client.get("/radio-api/social/spot?station=dos-groove").json()
+    assert spot_res["skip"] is False
+    assert spot_res["tier"] == "guest"
+    assert spot_res["spot"]["id"].startswith("guest_")
+    wav_res = client.get(spot_res["spot"]["audio_url"])
+    assert wav_res.status_code == 200
+    assert len(wav_res.content) > 40
+
