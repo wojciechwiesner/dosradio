@@ -7,3 +7,4 @@ pytest>=8
 psutil>=5.9.0
 yt-dlp[default]>=2026.10
 numpy>=2.0,<3
+Pillow>=10.0

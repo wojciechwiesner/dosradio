@@ -43,6 +43,7 @@ from .telemetry import TelemetryService
 from .auto_ramowka import RamowkaService, build_ramowka_router
 from .admin_api import build_admin_router
 from .custom_radios import CustomRadioService, build_custom_radios_router
+from .og_preview import build_og_router
 from .social_api import build_social_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -172,6 +173,20 @@ app.include_router(build_social_router(
         (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
         ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
     ),
+))
+app.include_router(build_og_router(
+    db=db,
+    podcasts=podcasts,
+    custom_radios=custom_radios,
+    station_lookup=lambda sid: next(
+        (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
+        ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
+    ),
+    html_candidates=[
+        Path("/var/www/dosradio.theones.io/index.html"),
+        Path(__file__).resolve().parents[2] / "dist" / "index.html",
+        Path(__file__).resolve().parents[2] / "index.html",
+    ],
 ))
 
 # Billing (Stripe) router — optional module, loaded only when present.

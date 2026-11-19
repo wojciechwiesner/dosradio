@@ -63,9 +63,9 @@ export function buildInvitePreviewHtml(inv) {
 export function formatInviteShareText(inv) {
   const title = inv?.title || 'Audycja specjalna';
   const about = String(inv?.about || '').trim();
-  const stName = inv?.station_name || inv?.stationName || 'DOS Radio';
+  const stName = inv?.station_name || inv?.stationName || 'heloradio.com';
   const stGenre = inv?.station_genre || inv?.stationGenre || '';
-  return `Zapraszamy do wysłuchania audycji w radiu pt. „${title}”${about ? `, która opowiada o: ${about.slice(0, 120)}` : ''} — przy muzyce ${stName}${stGenre ? ` (${stGenre})` : ''}:`;
+  return `${title} — audycja w radiu heloradio.com. Zapraszamy do wysłuchania${about ? ` (opowiada o: ${about.slice(0, 110)})` : ''} — przy muzyce ${stName}${stGenre ? ` (${stGenre})` : ''}:`;
 }
 
 export function openAuditionInvite({ invite, ready = true, statusText = '', ctaLabel = 'Włącz audycję i muzykę', onStart, onDismiss }) {

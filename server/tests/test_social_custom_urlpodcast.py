@@ -13,6 +13,7 @@ from app import url_extractor
 from app.auth import AccessService
 from app.custom_radios import CustomRadioService, build_custom_radios_router
 from app.db import Database
+from app.og_preview import build_og_router
 from app.podcast import PodcastService
 from app.social_api import build_social_router
 
@@ -60,6 +61,15 @@ def _build_test_app(tmp_path: Path) -> tuple[TestClient, PodcastService]:
             access=access,
             podcasts=podcasts,
             station_lookup=lambda sid: {"id": sid, "name": sid.replace("-", " ").title()},
+        )
+    )
+    app.include_router(
+        build_og_router(
+            db=db,
+            podcasts=podcasts,
+            custom_radios=custom_svc,
+            station_lookup=lambda sid: {"id": sid, "name": sid.replace("-", " ").title()},
+            html_candidates=[Path(__file__).resolve().parents[2] / "index.html"],
         )
     )
     return TestClient(app), podcasts
@@ -244,4 +254,16 @@ def test_url_podcast_outreach_link_generates_and_serves_public_parts(tmp_path: P
     wav_res = client.get(spot_res["spot"]["audio_url"])
     assert wav_res.status_code == 200
     assert len(wav_res.content) > 40
+
+    # Verify Dynamic OpenGraph HTML + 1200x630 PNG Miniature with title & "audycja w radiu heloradio.com"
+    og_html = client.get(f"/radio-api/og/share-html?p={tok}").text
+    assert "audycja w radiu heloradio.com" in og_html
+    assert poll["invite"]["title"] in og_html
+    assert f"/radio-api/og/card.png?p={tok}" in og_html
+    og_png = client.get(f"/radio-api/og/card.png?p={tok}")
+    assert og_png.status_code == 200
+    assert og_png.headers["content-type"] == "image/png"
+    assert og_png.content[:8] == b"\x89PNG\r\n\x1a\n"
+    assert len(og_png.content) > 4000
+
 
