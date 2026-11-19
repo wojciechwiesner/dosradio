@@ -237,9 +237,11 @@ function placeLabels() {
       return;
     }
     sc.project(sc.satObj(i), pt);
-    const cardTop = document.getElementById('card')?.getBoundingClientRect().top || (hPx - 230);
-    const topSafe = isMob ? 148 : 62;
-    if (pt.behind || pt.x < 28 || pt.x > w - 28 || pt.y < topSafe || pt.y > cardTop - 26) {
+    const cr = document.getElementById('card')?.getBoundingClientRect();
+    const inCard = cr && pt.x < cr.right + 44 && pt.x > cr.left - 44 && pt.y > cr.top - 24;
+    const inDeck = !isMob && pt.x > w - 355 && pt.y < hPx - 80;
+    const topSafe = isMob ? 150 : 58;
+    if (pt.behind || inCard || inDeck || pt.x < 32 || pt.x > w - 32 || pt.y < topSafe || pt.y > hPx - 38) {
       el.style.opacity = '0'; el.style.pointerEvents = 'none'; return;
     }
     const prio = (isTuned ? 1000 : 0) + (hasFriend ? 400 : 0) + (isFav ? 200 : 0) + front * 10;

@@ -194,7 +194,7 @@ export function createScene(canvas, cb) {
   }
 
   /* ---------- 3-ring 2.5D astrolabe + mobile corner thumb-turntable ---------- */
-  const ring = new THREE.Group(); ring.position.set(0, -1.9, 0); ring.rotation.x = 0.42; bgScene.add(ring);
+  const ring = new THREE.Group(); ring.position.set(0, -1.55, 0); ring.rotation.x = -0.14; bgScene.add(ring);
   const dialG = new THREE.Group(); ring.add(dialG);
   const ringColors = ['#35d0b5', '#8b7cf8', '#ff6b3d'];
   const ringLines = RING_RADII.map((R, ri) => {
@@ -336,7 +336,7 @@ export function createScene(canvas, cb) {
     comp.uniforms.uCat.value.copy(palette.cat); comp.uniforms.uHost.value.copy(palette.host); comp.uniforms.uHot.value.copy(palette.hot);
     sMat.uniforms.uHue.value = (h - hsl.h) * Math.PI * 2 + hueDrift; sMat.uniforms.uTint.value.copy(palette.cat);
     needleMat.color.copy(palette.accent).multiplyScalar(3); arcMat.color.copy(palette.accent).multiplyScalar(2.2);
-    ringMat.color.copy(palette.cat).multiplyScalar(0.28);
+    ringLines.forEach((rl, ri) => rl.mat.color.copy(C(ringColors[ri])).lerp(palette.cat, 0.35).multiplyScalar(0.95));
     cssTimer += dt;
     if (cssTimer > 0.1) { cssTimer = 0; const r = document.documentElement.style; r.setProperty('--accent', '#' + palette.accent.getHexString(THREE.SRGBColorSpace)); r.setProperty('--live', '#' + palette.cat.getHexString(THREE.SRGBColorSpace)); }
   }
@@ -387,11 +387,11 @@ export function createScene(canvas, cb) {
     /* satellites + 2.5D hybrid / mobile corner thumb-turntable */
     if (sats.length !== STATIONS.length) rebuildSats();
     const isMob = innerWidth <= 760;
-    const targetX = isMob ? (s.leftHand ? -1.15 : 1.15) : 0;
-    const targetY = isMob ? -1.25 : -1.75;
-    const targetZ = isMob ? -0.4 : 0;
-    const targetRx = isMob ? 0.46 : 0.38;
-    const targetRz = isMob ? (s.leftHand ? 0.1 : -0.1) : 0;
+    const targetX = isMob ? (s.leftHand ? -0.85 : 0.85) : 0;
+    const targetY = isMob ? -0.75 : -1.55;
+    const targetZ = 0;
+    const targetRx = isMob ? -0.16 : -0.14;
+    const targetRz = isMob ? (s.leftHand ? -0.08 : 0.08) : 0;
     const kLerp = Math.min(1, dt * 7);
     ring.position.x += (targetX - ring.position.x) * kLerp;
     ring.position.y += (targetY - ring.position.y) * kLerp;

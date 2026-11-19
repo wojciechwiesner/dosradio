@@ -108,7 +108,7 @@ export const STATIONS = RAW.map(([id, host, name, bpm, density, brightness, cat,
   ring: 2,
   ringAngle: 0,
 }));
-export const RING_RADII = [3.65, 5.05, 6.45];
+export const RING_RADII = [3.1, 4.15, 5.2];
 const RING_PHASE = [0, 0.23, 0.47];
 export function assignStationRings(list = STATIONS) {
   const buckets = [[], [], []];

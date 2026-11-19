@@ -57,7 +57,7 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuil
     const st = document.createElement('style');
     st.id = 'orbSocialCss';
     st.textContent = `
-      #ringBar{display:flex;gap:4px;padding:3px 4px;margin-bottom:2px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.11);max-width:100%;overflow-x:auto;scrollbar-width:none}
+      #ringBar{display:flex;flex-wrap:wrap;gap:4px;padding:4px 5px;margin-bottom:2px;border-radius:10px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.11);max-width:100%}
       #ringBar::-webkit-scrollbar{display:none}
       .rb-pill{border:0;background:transparent;color:rgba(244,242,238,.72);font:500 9.5px/1 'Azeret Mono',monospace;padding:5px 8px;border-radius:999px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;transition:.16s}
       .rb-pill.on{background:rgba(255,107,61,.22);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,107,61,.6)}
