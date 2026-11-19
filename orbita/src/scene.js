@@ -359,8 +359,11 @@ export function createScene(canvas, cb) {
     hostMix += ((s.hosts ? 1 : 0) - hostMix) * Math.min(1, dt * 2.6);
     duo += ((s.hosts?.duo ? 1 : 0) - duo) * Math.min(1, dt * 3);
     const e = hostMix * hostMix * (3 - 2 * hostMix);
-    speakerGroup.scale.setScalar(1 - e * 0.5);
-    speakerGroup.position.set(0, 0.15 + Math.sin(elapsed * 0.6) * 0.05 + e * 1.35, -e * 2.4);
+    const spkScale = (s.hide3dRings ? 0.52 : 1) * (1 - e * 0.5);
+    speakerGroup.scale.setScalar(spkScale);
+    const spkX = s.hide3dRings ? (s.leftHand ? 1.45 : -1.45) : 0;
+    const spkY = (s.hide3dRings ? 1.55 : 0.15) + Math.sin(elapsed * 0.6) * 0.05 + e * 1.35;
+    speakerGroup.position.set(spkX, spkY, -e * 2.4);
     speakerGroup.rotation.y += ((-0.42 + pointer.nx * 0.28 + Math.sin(elapsed * 0.3) * 0.06) - speakerGroup.rotation.y) * Math.min(1, dt * 2.5);
     speakerGroup.rotation.x += ((0.12 - pointer.ny * 0.2) - speakerGroup.rotation.x) * Math.min(1, dt * 2.5);
     ripple += dt * (3 + f.level * 5) * timeScale;

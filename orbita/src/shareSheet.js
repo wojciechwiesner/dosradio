@@ -129,10 +129,8 @@ export function openQuickShareSheet({ title, subtitle, url, text, onCreateGreeti
         ${onCreateGreetingUrl ? `
         <form class="qs-greet" id="qsGreetForm">
           <input class="qs-in" name="to_name" placeholder="Dla kogo? (opcjonalnie, np. Klaudia)">
-          <div style="display:flex;gap:6px">
-            <input class="qs-in" name="msg" placeholder="Dopisz pozdrowienie głosowe na start...">
-            <button type="submit" class="qs-close" style="background:#ff6b3d;color:#09090d;border-color:#ff6b3d;font-weight:700;white-space:nowrap">Dodaj głos</button>
-          </div>
+          <input class="qs-in" name="msg" placeholder="Dopisz pozdrowienie głosowe na start...">
+          <button type="submit" class="qs-close" style="background:#ff6b3d;color:#09090d;border-color:#ff6b3d;font-weight:700;width:100%;min-height:38px">Dodaj głosowe pozdrowienie do linku</button>
         </form>` : ''}
         <div id="qsBadgesMount">${buildAppBadgesHtml({ url: currentUrl, text: currentText, title })}</div>
       </div>`;

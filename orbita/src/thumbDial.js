@@ -11,11 +11,11 @@ export function initThumbTurntable({ app, STATIONS, byId, dial }) {
     const st = document.createElement('style');
     st.id = 'thumbDialCss';
     st.textContent = `
-      #thumbStage{position:fixed;left:0;right:0;top:116px;bottom:192px;z-index:8;display:none;touch-action:none;user-select:none;-webkit-user-select:none}
+      #thumbStage{position:fixed;left:0;right:0;top:126px;bottom:238px;z-index:8;display:none;touch-action:none;user-select:none;-webkit-user-select:none}
       body.mode-25d #thumbStage{display:block}
       @media(min-width:761px){body.mode-25d #thumbStage{left:320px;right:345px;top:64px;bottom:56px}}
       #thumbCv{width:100%;height:100%;display:block}
-      .td-hint{position:absolute;left:14px;bottom:8px;font:500 10px/1.35 'Azeret Mono',monospace;color:rgba(226,232,240,.52);pointer-events:none;max-width:210px}
+      .td-hint{position:absolute;left:14px;top:6px;font:500 9.5px/1.35 'Azeret Mono',monospace;color:rgba(226,232,240,.54);pointer-events:none;max-width:195px}
       body.mode-25d .td-right .td-hint{left:14px;right:auto;text-align:left}
       body.mode-25d .td-left .td-hint{right:14px;left:auto;text-align:right}
       body.mode-25d #labels .sat-label{display:none!important}

@@ -63,11 +63,18 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
     const st = document.createElement('style');
     st.id = 'orbSocialCss';
     st.textContent = `
-      #ringBar{display:flex;flex-wrap:wrap;gap:4px;padding:4px 5px;border-radius:10px;background:rgba(12,12,18,.82);border:1px solid rgba(255,255,255,.12);max-width:100%;backdrop-filter:blur(10px)}
-      .rb-pill{border:0;background:transparent;color:rgba(244,242,238,.74);font:500 9.5px/1 'Azeret Mono',monospace;padding:6px 8px;min-height:28px;border-radius:999px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+      #ringBar{display:flex;flex-wrap:wrap;gap:4px;padding:4px 5px;border-radius:10px;background:rgba(12,12,18,.86);border:1px solid rgba(255,255,255,.12);max-width:100%;backdrop-filter:blur(10px)}
+      .rb-pill{border:0;background:transparent;color:rgba(244,242,238,.74);font:500 9.5px/1 'Azeret Mono',monospace;padding:6px 8px;min-height:28px;border-radius:999px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;flex:none}
       .rb-pill.on{background:rgba(255,107,61,.24);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,107,61,.65)}
       #socialHubBar{display:flex;gap:5px;flex-wrap:wrap}
-      @media(max-width:760px){#socialHubBar{display:none!important}.hud-br{display:none!important}.moon-label{display:none!important}#paletteBtn{display:none!important}}
+      @media(max-width:760px){
+        #ringBar{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+        #ringBar::-webkit-scrollbar{display:none}
+        #socialHubBar{display:none!important}.hud-br{display:none!important}.moon-label{display:none!important}#paletteBtn{display:none!important}
+        .hud-tl .sep,.hud-tl > span:nth-of-type(2){display:none!important}
+        .hud-tr{gap:5px}
+        .hud-tr .live-pill span:last-child{display:none}
+      }
       .sh-btn{background:rgba(14,12,20,.82);border:1px solid rgba(236,232,244,.16);color:#ece8f4;border-radius:999px;padding:6px 10px;min-height:32px;font:500 10px/1 'Azeret Mono',monospace;display:inline-flex;align-items:center;gap:5px;cursor:pointer;backdrop-filter:blur(12px)}
       .sh-btn:hover{border-color:#ff6b3d;color:#fff}
       .sh-dot,.frMark{display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981}
