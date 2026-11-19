@@ -176,9 +176,9 @@ $('#logout').onclick=function(){sessionStorage.removeItem(TOKEN_KEY);fetch(API+'
 /* ---------- tabs ---------- */
 var TABS=[
  {id:'dash',t:'Pulpit i Aktywni',i:'home',f:tDash},
- {id:'tracks',t:'Nagrane Kawałki',i:'disc',f:tTracks},
+ {id:'tracks',t:'Muzyka (Kawałki i Prompty)',i:'disc',f:tTracks},
  {id:'mixer',t:'Tester Miksera DJ',i:'sliders',f:tMixer},
- {id:'catalog',t:'Rodzaje Muzyki (Grupy i Podgrupy)',i:'tree',f:tCatalog},
+ {id:'catalog',t:'Rodzaje Muzyki (Grupy i Prompty)',i:'tree',f:tCatalog},
  {id:'tokens',t:'Zużycie Tokenów',i:'coin',f:tTokens},
  {id:'people',t:'Użytkownicy, Auto-Ramówka i Leady',i:'users',f:tPeople}
 ];
@@ -232,36 +232,75 @@ function tDash(v){
 var decks={a:null,b:null};
 var PAGE=80;
 function tTracks(v){
-  var st={station:'',offset:0};
+  var st={station:'',offset:0,showAllPrompts:false};
   return api('/admin/catalog').then(function(c){return c.stations||[]},function(){return []}).then(function(stations){
+    function findSt(sid){return stations.filter(function(s){return String(s.id)===String(sid)})[0]||null}
+    function promptCardHtml(){
+      var sel=st.station?findSt(st.station):null;
+      if(sel){
+        var pr=pick(sel,'prompt','lyria_prompt')||'';
+        return '<div class="card stack" id="mpCard" style="margin-bottom:14px"><h2>Prompt muzyki: '+esc(sel.name||sel.id)+' <span class="muted">('+esc(sel.id)+')</span></h2>'+
+          '<textarea id="mpTxt" rows="3" placeholder="Prompt Lyria dla tej muzyki..." style="width:100%;font-size:13px">'+esc(pr)+'</textarea>'+
+          '<div class="row"><label>BPM <input id="mpBpm" type="number" min="40" max="220" value="'+esc(sel.bpm||'')+'" style="width:84px"></label>'+
+          '<label>Gęstość (0-1) <input id="mpDen" type="number" step="0.05" min="0" max="1" value="'+esc(sel.density??'')+'" style="width:92px"></label>'+
+          '<label>Jasność (0-1) <input id="mpBri" type="number" step="0.05" min="0" max="1" value="'+esc(sel.brightness??'')+'" style="width:92px"></label>'+
+          '<button class="btn pri" id="mpSave">'+ic('save')+' Zapisz prompt dla '+esc(sel.id)+'</button>'+
+          '<button class="btn" id="mpToggleAll">'+(st.showAllPrompts?'Ukryj listę wszystkich promptów':'Pokaż wszystkie prompty ('+stations.length+')')+'</button></div></div>';
+      }
+      return '<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between"><div><b>Edycja promptów muzyki (Lyria)</b><div class="muted">Wybierz stację poniżej lub kliknij „Prompt” przy dowolnym nagraniu, aby od razu poprawić prompt generowania muzyki.</div></div>'+
+        '<button class="btn pri" id="mpToggleAll">'+(st.showAllPrompts?'Ukryj wszystkie prompty':'Edytuj prompty wszystkich stacji ('+stations.length+')')+'</button></div>'+
+        (st.showAllPrompts?'<div class="stack" style="margin-top:12px;max-height:420px;overflow:auto">'+stations.map(function(s){
+          var pr=pick(s,'prompt','lyria_prompt')||'';
+          return '<div class="st" data-mpid="'+esc(s.id)+'" style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--bd)"><div style="min-width:190px"><b>'+esc(s.name||s.id)+'</b><div class="muted" style="font-size:11px">'+esc(s.id)+' · BPM '+esc(s.bpm||'-')+'</div></div><textarea data-mpt rows="2" style="flex:1;font-size:12px">'+esc(pr)+'</textarea><button class="btn pri" data-mps="'+esc(s.id)+'">'+ic('save')+' Zapisz</button></div>';
+        }).join('')+'</div>':'')+'</div>';
+    }
     function draw(){
       var q='?station_id='+encodeURIComponent(st.station)+'&limit='+PAGE+'&offset='+st.offset;
       return api('/admin/tracks'+q).then(function(d){
         var tr=d.tracks||[],total=num(d.total,tr.length);
         var rows=tr.map(function(t,i){
           var src=t.audio_url||(API+'/admin/tracks/'+encodeURIComponent(t.station_id)+'/'+encodeURIComponent(t.filename)+'/audio');
-          return '<tr data-i="'+i+'"><td>'+esc(t.station_id)+'</td><td>'+esc(t.filename)+(t.is_session_start?' <span class="pill ac">start sesji</span>':'')+'</td><td class="muted">'+fdate(t.recorded_at)+'</td><td>'+fdur(t.duration_s)+'</td><td>'+fsize(t.size_bytes)+'</td>'+
+          return '<tr data-i="'+i+'"><td><b>'+esc(t.station_id)+'</b></td><td>'+esc(t.filename)+(t.is_session_start?' <span class="pill ac">start sesji</span>':'')+'</td><td class="muted">'+fdate(t.recorded_at)+'</td><td>'+fdur(t.duration_s)+'</td><td>'+fsize(t.size_bytes)+'</td>'+
           '<td><audio controls preload="none" style="height:32px;width:220px" data-src="'+esc(src)+'"></audio></td>'+
-          '<td><div class="row"><button class="btn" data-a="a">Załaduj jako Deck A</button><button class="btn" data-a="b">Załaduj jako Deck B</button><button class="btn bad" data-a="del">'+ic('trash')+' Usuń</button></div></td></tr>'}).join('')||'<tr><td colspan="7" class="muted">Brak nagrań</td></tr>';
-        v.innerHTML=head('Nagrane Kawałki','Archiwum nagrań .opus. Deck A: '+(decks.a?decks.a.filename:'-')+' | Deck B: '+(decks.b?decks.b.filename:'-'))+
-        '<div class="card"><div class="row" style="margin-bottom:12px"><label>Stacja<select id="fs"><option value="">Wszystkie</option>'+stations.map(function(s){return '<option value="'+esc(s.id)+'"'+(String(s.id)===st.station?' selected':'')+'>'+esc(s.name||s.id)+'</option>'}).join('')+'</select></label>'+
+          '<td><div class="row"><button class="btn" data-a="pr">Prompt</button><button class="btn" data-a="a">Deck A</button><button class="btn" data-a="b">Deck B</button><button class="btn bad" data-a="del">'+ic('trash')+'</button></div></td></tr>'}).join('')||'<tr><td colspan="7" class="muted">Brak nagrań</td></tr>';
+        v.innerHTML=head('Muzyka — Nagrane Kawałki i Prompty Lyria','Odsłuchuj nagrania .opus i na żywo poprawiaj prompt każdej stacji. Deck A: '+(decks.a?decks.a.filename:'-')+' | Deck B: '+(decks.b?decks.b.filename:'-'))+
+        promptCardHtml()+
+        '<div class="card"><div class="row" style="margin-bottom:12px"><label>Stacja<select id="fs"><option value="">Wszystkie ('+stations.length+')</option>'+stations.map(function(s){return '<option value="'+esc(s.id)+'"'+(String(s.id)===st.station?' selected':'')+'>'+esc(s.name||s.id)+'</option>'}).join('')+'</select></label>'+
         '<span class="muted">'+(total?(st.offset+1)+'-'+Math.min(st.offset+PAGE,total):0)+' z '+total+'</span><button class="btn" id="pv"'+(st.offset<=0?' disabled':'')+'>Poprzednia</button><button class="btn" id="nx"'+(st.offset+PAGE>=total?' disabled':'')+'>Następna</button></div>'+
-        '<div class="scroll"><table><tr><th>Stacja</th><th>Plik</th><th>Nagrano</th><th>Czas</th><th>Rozmiar</th><th>Odtwarzacz</th><th></th></tr>'+rows+'</table></div></div>';
+        '<div class="scroll"><table><tr><th>Stacja</th><th>Plik</th><th>Nagrano</th><th>Czas</th><th>Rozmiar</th><th>Odtwarzacz</th><th>Akcje</th></tr>'+rows+'</table></div></div>';
         $$('audio',v).forEach(function(a){a.addEventListener('play',function(){
-          if(!a.src){ // authenticated fetch so header token works
+          if(!a.src){
             fetch(a.dataset.src,{headers:authHeaders(),credentials:'include'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.blob()}).then(function(b){a.src=URL.createObjectURL(b);a.play()}).catch(function(e){toast('Audio: '+e.message,true)});
           }
         },{once:false})});
         $('#fs',v).onchange=function(){st.station=this.value;st.offset=0;draw()};
         $('#pv',v).onclick=function(){st.offset=Math.max(0,st.offset-PAGE);draw()};
         $('#nx',v).onclick=function(){st.offset+=PAGE;draw()};
+        var tgAll=$('#mpToggleAll',v);if(tgAll)tgAll.onclick=function(){st.showAllPrompts=!st.showAllPrompts;if(st.showAllPrompts)st.station='';draw()};
+        var mpSave=$('#mpSave',v);if(mpSave)mpSave.onclick=function(){
+          var sel=findSt(st.station);if(!sel)return;
+          var body={prompt:($('#mpTxt',v).value||'').trim()};
+          var bv=$('#mpBpm',v).value,dv=$('#mpDen',v).value,brv=$('#mpBri',v).value;
+          if(bv!=='')body.bpm=num(bv);if(dv!=='')body.density=num(dv);if(brv!=='')body.brightness=num(brv);
+          busy(mpSave,api('/admin/catalog/stations/'+encodeURIComponent(sel.id),{method:'PATCH',body:body})).then(function(){
+            Object.assign(sel,body);toast('Zapisano prompt muzyki: '+sel.id);
+          });
+        };
+        $$('button[data-mps]',v).forEach(function(b){b.onclick=function(){
+          var sid=b.dataset.mps,row=b.closest('[data-mpid]'),txt=($('textarea[data-mpt]',row).value||'').trim();
+          var sel=findSt(sid);
+          busy(b,api('/admin/catalog/stations/'+encodeURIComponent(sid),{method:'PATCH',body:{prompt:txt}})).then(function(){
+            if(sel)sel.prompt=txt;toast('Zapisano prompt: '+sid);
+          });
+        }});
         $$('tr[data-i] button',v).forEach(function(b){b.onclick=function(){
           var t=tr[num(b.closest('tr').dataset.i)];
+          if(b.dataset.a==='pr'){st.station=t.station_id;st.offset=0;draw();return}
           if(b.dataset.a==='del'){
             if(!confirm('Usunąć '+t.filename+'?'))return;
             busy(b,api('/admin/tracks/'+encodeURIComponent(t.station_id)+'/'+encodeURIComponent(t.filename),{method:'DELETE'})).then(function(){toast('Usunięto');draw()});
           }else{decks[b.dataset.a]={station_id:t.station_id,filename:t.filename};toast('Deck '+b.dataset.a.toUpperCase()+': '+t.filename);
-            var s=$('.sub',v);if(s)s.textContent='Archiwum nagrań .opus. Deck A: '+(decks.a?decks.a.filename:'-')+' | Deck B: '+(decks.b?decks.b.filename:'-')}
+            var s=$('.sub',v);if(s)s.textContent='Odsłuchuj nagrania .opus i na żywo poprawiaj prompt każdej stacji. Deck A: '+(decks.a?decks.a.filename:'-')+' | Deck B: '+(decks.b?decks.b.filename:'-')}
         }});
       });
     }
@@ -279,27 +318,28 @@ function tMixer(v){
     v.innerHTML=head('Tester Miksera DJ','Wybierz dwa nagrania, ustaw parametry i odsłuchaj przejście.')+
     '<div class="grid g2"><div class="card stack"><h2>Decki</h2>'+
       '<label>Deck A<select id="da">'+opts('a')+'</select></label><label>Deck B<select id="db">'+opts('b')+'</select></label>'+
-      sl('cb','crossfade_beats (4..32)',4,32,1,num(cfg.crossfade_beats,16))+
-      sl('ff','fallback_fade_seconds (0.5..12)',0.5,12,0.5,num(cfg.fallback_fade_seconds,4))+
-      sl('bs','bass_swap_position (0..1)',0,1,0.05,num(cfg.bass_swap_position,0.5))+
+      '<label>Technika DJ<select id="tc"><option value="auto"'+(cfg.technique==='auto'||!cfg.technique?' selected':'')+'>Auto (wg gatunku i ±12% BPM)</option><option value="eq_blend"'+(cfg.technique==='eq_blend'?' selected':'')+'>3-Band Isolator EQ + Bass Swap (Techno/House)</option><option value="filter_sweep"'+(cfg.technique==='filter_sweep'?' selected':'')+'>Dual DJ Filter Sweep LPF/HPF (Trance/Rave/Grupy)</option><option value="echo_out"'+(cfg.technique==='echo_out'?' selected':'')+'>Dub Echo-Out 3/4 + Drop na 1 (Hip-Hop/Dub/&gt;12% BPM)</option><option value="velvet_fade"'+(cfg.technique==='velvet_fade'?' selected':'')+'>Velvet Fade 3-Band (Ambient/Jazz/B2B)</option></select></label>'+
+      sl('cb','Długość frazy DJ w beatach (32=8 taktów, 64=16 taktów)',8,64,4,num(cfg.crossfade_beats,32))+
+      sl('ff','Velvet fade bez bitu (s)',2,22,0.5,num(cfg.fallback_fade_seconds,12))+
+      sl('bs','Punkt podmiany basu (Bass Swap 0..1)',0,1,0.05,num(cfg.bass_swap_position,0.5))+
       '<label class="chk"><input type="checkbox" id="eq"'+(cfg.equal_power_highs?' checked':'')+'> equal_power_highs</label>'+
-      '<label class="chk"><input type="checkbox" id="tl"'+(cfg.tempo_lock?' checked':'')+'> tempo_lock</label>'+
+      '<label class="chk"><input type="checkbox" id="tl"'+(cfg.tempo_lock?' checked':'')+'> Master Tempo WSOLA (±12% BPM match)</label>'+
       '<div class="row"><button class="btn pri" id="gen">'+ic('play')+' Wygeneruj i odsłuchaj przejście</button><button class="btn ok" id="sv">'+ic('save')+' Zapisz jako domyślne ustawienia miksera</button></div></div>'+
     '<div class="card stack"><h2>Wynik</h2><audio id="pl" controls style="width:100%"></audio><canvas id="cv" width="800" height="300"></canvas><div id="rep" class="scroll"></div></div></div>';
     ['cb','ff','bs'].forEach(function(id){var e=$('#'+id,v);e.oninput=function(){$('#'+id+'v',v).textContent=e.value}});
-    function params(){return {crossfade_beats:num($('#cb',v).value),fallback_fade_seconds:num($('#ff',v).value),bass_swap_position:num($('#bs',v).value),equal_power_highs:$('#eq',v).checked,tempo_lock:$('#tl',v).checked}}
+    function params(){return {technique:$('#tc',v).value||'auto',crossfade_beats:num($('#cb',v).value),fallback_fade_seconds:num($('#ff',v).value),bass_swap_position:num($('#bs',v).value),equal_power_highs:$('#eq',v).checked,tempo_lock:$('#tl',v).checked}}
     function split(s){var i=s.indexOf('|');return [s.slice(0,i),s.slice(i+1)]}
     var last=null;
-    $('#sv',v).onclick=function(){var b=this;var p=params();p.intra_declick_ms=num(cfg.intra_declick_ms,5);busy(b,api('/admin/mixer/config',{method:'PUT',body:p})).then(function(){toast('Zapisano ustawienia miksera')})};
+    $('#sv',v).onclick=function(){var b=this;var p=params();p.intra_declick_ms=num(cfg.intra_declick_ms,15);busy(b,api('/admin/mixer/config',{method:'PUT',body:p})).then(function(){toast('Zapisano ustawienia miksera')})};
     $('#gen',v).onclick=function(){
       var b=this,a=$('#da',v).value,c=$('#db',v).value;
       if(!a||!c){toast('Wybierz Deck A i Deck B',true);return}
       var A=split(a),B=split(c);decks.a={station_id:A[0],filename:A[1]};decks.b={station_id:B[0],filename:B[1]};
-      var body=Object.assign({station_a:A[0],segment_a:A[1],station_b:B[0],segment_b:B[1],context_seconds:12},params());
+      var body=Object.assign({station_a:A[0],segment_a:A[1],station_b:B[0],segment_b:B[1],context_seconds:18},params());
       busy(b,api('/admin/mixer/preview',{method:'POST',body:body})).then(function(d){
         last=d;var rp=d.report||{};
         var pl=$('#pl',v);pl.src='data:audio/wav;base64,'+d.audio_wav_base64;pl.play().catch(function(){});
-        var keys=['mode','overlap_seconds','beats_mixed','bass_swap_seconds','tail_bpm','head_bpm','peak_dbfs','sub_rms_db','mid_rms_db'];
+        var keys=['mode','technique','overlap_seconds','beats_mixed','bass_swap_seconds','tail_bpm','head_bpm','bpm_delta_pct','pitch_locked','peak_dbfs','sub_rms_db','mid_rms_db'];
         $('#rep',v).innerHTML='<table>'+keys.map(function(k){var x=rp[k];return '<tr><td class="muted">'+k+'</td><td>'+esc(typeof x==='number'?Math.round(x*100)/100:(x==null?'-':x))+'</td></tr>'}).join('')+'<tr><td class="muted">duration_seconds</td><td>'+esc(d.duration_seconds)+'</td></tr></table>';
         plot($('#cv',v),rp);
       });

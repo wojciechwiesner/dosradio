@@ -106,8 +106,8 @@ def test_misaligned_recordings_keep_one_beat_across_the_seam():
     joined, report = mix_with_report(tail, head)
     intervals = kick_intervals(joined.mean(axis=1))
     assert report.mode == "beatmatched_bass_swap"
-    assert report.beats_mixed == CROSSFADE_BEATS == 16
-    assert report.overlap_seconds > 7.0
+    assert report.beats_mixed == CROSSFADE_BEATS == 32
+    assert report.overlap_seconds > 14.5
     assert len(intervals) > 35
     assert np.max(np.abs(intervals - period)) < 0.015, intervals.round(3)
 
@@ -138,8 +138,8 @@ def test_the_mix_never_gets_louder_than_its_inputs():
 
 def test_audio_without_a_kick_gets_a_lush_multi_second_equal_power_crossfade():
     rng = np.random.default_rng(1)
-    tail = stereo((rng.standard_normal(RATE * 20) * 0.05).astype(np.float32))
-    head = stereo((rng.standard_normal(RATE * 20) * 0.05).astype(np.float32))
+    tail = stereo((rng.standard_normal(RATE * 32) * 0.05).astype(np.float32))
+    head = stereo((rng.standard_normal(RATE * 32) * 0.05).astype(np.float32))
     joined, report = mix_with_report(tail, head)
     shared_s = (len(tail) + len(head) - len(joined)) / RATE
     assert report.mode == "equal_power_fallback"

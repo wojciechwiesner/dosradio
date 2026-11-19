@@ -106,10 +106,10 @@ def test_main_app_wires_catalog_ramowka_leads_and_admin_endpoints(monkeypatch):
         assert lead.status_code in (200, 201)
         assert lead.json()["ok"] is True
 
-        # Admin mixer config reflects upgraded 16-beat phrase mix defaults
+        # Admin mixer config reflects upgraded 32-beat DJ phrase mix defaults
         adm = client.get("/radio-api/admin/mixer/config", headers={"X-Admin-Token": INTEGRATION_ADMIN_TOKEN})
         assert adm.status_code == 200
         cfg = adm.json()
-        assert cfg["crossfade_beats"] == 16
+        assert cfg["crossfade_beats"] == 32
         assert cfg["bass_swap_position"] == 0.5
         assert cfg["equal_power_highs"] is True

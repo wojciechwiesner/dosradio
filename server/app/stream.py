@@ -31,7 +31,7 @@ log = logging.getLogger("dosradio.stream")
 READ_CHUNK = 16 * 1024
 MAX_QUEUE_CHUNKS = 16  # ~256 KB; a listener falling behind is dropped
 SAMPLE_RATE = 48000
-MIX_RESERVE_SECONDS = 18.0
+MIX_RESERVE_SECONDS = 26.0
 CHUNK_FRAMES = 24000  # 0.5s of audio per write to encoder.stdin
 MIN_INTRA_GAP_NS = 15 * 1_000_000_000
 SESSION_GAP_NS = 45 * 1_000_000_000  # same gap rule as scripts/scan_steady_tones.py
@@ -307,7 +307,9 @@ class StationStream:
                             elif same_take:
                                 buffer = await asyncio.to_thread(join_intra_session, buffer, new_pcm)
                             else:
-                                buffer = await asyncio.to_thread(join_recordings, buffer, new_pcm)
+                                buffer = await asyncio.to_thread(
+                                    join_recordings, buffer, new_pcm, None, prev_arch_id, archive.station_id
+                                )
                             prev_stamp = stamp
                             prev_arch_id = archive.station_id
                             segments_on_current += 1

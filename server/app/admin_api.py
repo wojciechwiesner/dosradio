@@ -38,12 +38,13 @@ SESSION_GAP_S = 45.0
 ADMIN_TOKEN_DERIVATION_LABEL = b"dosradio-admin-token-v1"
 
 DEFAULT_MIXER_CONFIG: dict[str, Any] = {
-    "crossfade_beats": 16,
-    "fallback_fade_seconds": 6.5,
+    "crossfade_beats": 32,
+    "fallback_fade_seconds": 12.0,
     "bass_swap_position": 0.5,
     "equal_power_highs": True,
     "tempo_lock": True,
     "intra_declick_ms": 15.0,
+    "technique": "auto",
 }
 
 
@@ -123,12 +124,15 @@ def _envelope_60_points(audio: np.ndarray) -> list[float]:
 def run_builtin_mixer_preview(
     path_a: Path,
     path_b: Path,
-    crossfade_beats: int = 4,
-    fallback_fade_seconds: float = 0.5,
-    bass_swap_position: float = 0.0,
-    equal_power_highs: bool = False,
+    crossfade_beats: int = 32,
+    fallback_fade_seconds: float = 12.0,
+    bass_swap_position: float = 0.5,
+    equal_power_highs: bool = True,
     tempo_lock: bool = True,
-    context_seconds: float = 6.0,
+    context_seconds: float = 16.0,
+    technique: str = "auto",
+    station_a: str | None = None,
+    station_b: str | None = None,
 ) -> dict[str, Any]:
     if shutil.which("ffmpeg") is None:
         raise HTTPException(503, "ffmpeg niedostępny na serwerze")
@@ -140,13 +144,14 @@ def run_builtin_mixer_preview(
     tail_period = mixer.steady_period(tail_onsets)
     head_period = mixer.steady_period(head_onsets)
     cfg = mixer.MixerConfig(
-        crossfade_beats=max(2, min(32, int(crossfade_beats))),
-        fallback_fade_seconds=max(0.2, min(15.0, float(fallback_fade_seconds))),
+        crossfade_beats=max(2, min(64, int(crossfade_beats))),
+        fallback_fade_seconds=max(0.2, min(22.0, float(fallback_fade_seconds))),
         bass_swap_position=max(0.0, min(1.0, float(bass_swap_position))),
         equal_power_highs=bool(equal_power_highs),
         tempo_lock=bool(tempo_lock),
+        technique=technique,
     )
-    joined, rep = mixer.mix_with_report(tail, head, cfg)
+    joined, rep = mixer.mix_with_report(tail, head, cfg, station_a=station_a, station_b=station_b)
     rep_dict = rep.to_dict()
 
     lost_frames = max(0, len(tail) + len(head) - len(joined))
@@ -212,12 +217,13 @@ class AdminLoginRequest(BaseModel):
 
 
 class MixerConfigPayload(BaseModel):
-    crossfade_beats: int = Field(default=16, ge=2, le=32)
-    fallback_fade_seconds: float = Field(default=6.5, ge=0.1, le=15.0)
+    crossfade_beats: int = Field(default=32, ge=2, le=64)
+    fallback_fade_seconds: float = Field(default=12.0, ge=0.1, le=22.0)
     bass_swap_position: float = Field(default=0.5, ge=0.0, le=1.0)
     equal_power_highs: bool = True
     tempo_lock: bool = True
     intra_declick_ms: float = Field(default=15.0, ge=0.0, le=250.0)
+    technique: str = Field(default="auto", max_length=24)
 
 
 class MixerPreviewRequest(BaseModel):
@@ -225,12 +231,13 @@ class MixerPreviewRequest(BaseModel):
     segment_a: str | None = None
     station_b: str | None = None
     segment_b: str | None = None
-    crossfade_beats: int = Field(default=16, ge=2, le=32)
-    fallback_fade_seconds: float = Field(default=6.5, ge=0.1, le=15.0)
+    crossfade_beats: int = Field(default=32, ge=2, le=64)
+    fallback_fade_seconds: float = Field(default=12.0, ge=0.1, le=22.0)
     bass_swap_position: float = Field(default=0.5, ge=0.0, le=1.0)
     equal_power_highs: bool = True
     tempo_lock: bool = True
-    context_seconds: float = Field(default=10.0, ge=1.0, le=25.0)
+    context_seconds: float = Field(default=16.0, ge=1.0, le=28.0)
+    technique: str = Field(default="auto", max_length=24)
 
 
 class UserPatchRequest(BaseModel):
@@ -353,12 +360,13 @@ def build_admin_router(
         if mixer_config_holder is not None:
             mixer_config_holder.update(cfg)
         mixer.set_default_mixer_config(mixer.MixerConfig(
-            crossfade_beats=max(2, min(32, int(cfg.get("crossfade_beats", 16)))),
-            fallback_fade_seconds=max(0.2, min(15.0, float(cfg.get("fallback_fade_seconds", 6.5)))),
+            crossfade_beats=max(2, min(64, int(cfg.get("crossfade_beats", 32)))),
+            fallback_fade_seconds=max(0.2, min(22.0, float(cfg.get("fallback_fade_seconds", 12.0)))),
             bass_swap_position=max(0.0, min(1.0, float(cfg.get("bass_swap_position", 0.5)))),
             equal_power_highs=bool(cfg.get("equal_power_highs", True)),
             tempo_lock=bool(cfg.get("tempo_lock", True)),
             intra_declick_ms=max(0.0, min(250.0, float(cfg.get("intra_declick_ms", 15.0)))),
+            technique=str(cfg.get("technique", "auto")),
         ))
         try:
             tmp = mixer_config_path.with_suffix(".tmp")
@@ -660,6 +668,9 @@ def build_admin_router(
             equal_power_highs=body.equal_power_highs,
             tempo_lock=body.tempo_lock,
             context_seconds=body.context_seconds,
+            technique=body.technique,
+            station_a=sid_a,
+            station_b=sid_b,
         )
 
     @router.get("/tokens")

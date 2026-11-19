@@ -16,6 +16,16 @@ import threading
 
 import numpy as np
 
+from .dj_dsp import tempogram_beat_grid, wsola_stretch, wsola_tempo_glide
+from .dj_genres import (
+    TECHNIQUES,
+    profile_for_stations,
+    render_echo_out,
+    render_eq_blend,
+    render_filter_sweep,
+    render_velvet_fade,
+)
+
 RATE = 48000
 CHANNELS = 2
 
@@ -34,11 +44,12 @@ PERIOD_TOLERANCE = 0.12            # a gap within 12 % of the median is a beat; 
 MIN_STEADY_GAPS = 6
 MIN_STEADY_SHARE = 0.5
 
-ANALYSIS_SECONDS = 24.0
-CROSSFADE_BEATS = 16               # 4 bars (~7.6s at 126 BPM) — full DJ phrase mix
+ANALYSIS_SECONDS = 28.0
+CROSSFADE_BEATS = 32               # 8 bars (~15.2s at 126 BPM) — real club DJ phrase transition
 SWAP_RAMP_SECONDS = 0.008          # 8 ms coherent downbeat bass swap
-FALLBACK_FADE_SECONDS = 6.5        # smooth equal-power transition for ambient/classical/folk/jazz
+FALLBACK_FADE_SECONDS = 12.0       # 12s velvet transition for ambient/classical/folk/jazz/B2B
 INTRA_DECLICK_MS = 15.0            # 15 ms micro-splice for consecutive slices of the same session
+MAX_BPM_DIFF_RATIO = 0.12          # +/- 12% standard Technics/CDJ beatmatch pitch range
 
 
 @dataclass
@@ -49,6 +60,7 @@ class MixerConfig:
     equal_power_highs: bool = True
     tempo_lock: bool = True
     intra_declick_ms: float = INTRA_DECLICK_MS
+    technique: str = "auto"  # auto | eq_blend | filter_sweep | echo_out | velvet_fade
 
 
 @dataclass
@@ -63,6 +75,9 @@ class MixReport:
     sub_rms_db: float
     mid_rms_db: float
     envelope_db: list[float]
+    technique: str = "eq_blend"
+    bpm_delta_pct: float | None = None
+    pitch_locked: bool = True
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -79,13 +94,15 @@ def get_default_mixer_config() -> MixerConfig:
 
 def set_default_mixer_config(cfg: MixerConfig) -> MixerConfig:
     global _default_config
+    tech = cfg.technique if cfg.technique in TECHNIQUES else "auto"
     clamped = MixerConfig(
-        crossfade_beats=max(4, min(32, int(cfg.crossfade_beats))),
-        fallback_fade_seconds=max(0.5, min(14.0, float(cfg.fallback_fade_seconds))),
+        crossfade_beats=max(4, min(64, int(cfg.crossfade_beats))),
+        fallback_fade_seconds=max(0.5, min(22.0, float(cfg.fallback_fade_seconds))),
         bass_swap_position=max(0.0, min(1.0, float(cfg.bass_swap_position))),
         equal_power_highs=bool(cfg.equal_power_highs),
         tempo_lock=bool(cfg.tempo_lock),
         intra_declick_ms=max(2.0, min(80.0, float(cfg.intra_declick_ms))),
+        technique=tech,
     )
     with _config_lock:
         _default_config = clamped
@@ -396,33 +413,47 @@ def _bass_swap_phrase(
         t_swap = int(round(tail_rel_kicks[swap_beat] * RATE))
         h_swap = int(round(head_rel_kicks[swap_beat] * RATE))
         ratio = (t_swap / max(1, h_swap)) if h_swap > 0 else 1.0
-        if 0.90 <= ratio <= 1.10 and 0 < t_swap < fade_target and 0 < h_swap < len(head_slice):
+        if 0.875 <= ratio <= 1.143 and 0 < t_swap < fade_target and 0 < h_swap < len(head_slice):
             rem_tail = fade_target - t_swap
             rem_head = min(len(head_slice) - h_swap, int(round(rem_tail / ratio)))
             if rem_tail > RATE // 4 and rem_head > RATE // 4:
-                # Before swap: tail is unwarped master (lows + highs), head_high warps to match tail's swap kick
+                # Pitch-preserving Master Tempo WSOLA: before swap head locks to tail; after swap tail locks to head
                 tail_pre = tail_slice[:t_swap]
-                head_pre_warped = _resample_stereo(head_slice[:h_swap], t_swap)
-                # After swap: head is unwarped master (lows + highs), tail_high warps to match head's tempo
-                head_post = head_slice[h_swap:h_swap + rem_head]
-                tail_post_warped = _resample_stereo(tail_slice[t_swap:t_swap + rem_tail], rem_head)
+                head_pre_warped = wsola_stretch(head_slice[:h_swap], t_swap)
+                head_post = head_slice[h_swap : h_swap + rem_head]
+                tail_post_warped = wsola_stretch(tail_slice[t_swap : t_swap + rem_tail], rem_head)
 
                 t_aligned = np.concatenate([tail_pre, tail_post_warped], axis=0)
                 h_aligned = np.concatenate([head_pre_warped, head_post], axis=0)
 
-                t_low, t_high = _split_bands(t_aligned)
-                h_low, h_high = _split_bands(h_aligned)
-                highs = _crossfade(t_high, h_high, equal_power=cfg.equal_power_highs)
+                _, high_probe = _split_bands(t_aligned[: min(len(t_aligned), RATE)])
+                has_musical_top = float(np.sqrt(np.mean(high_probe**2))) > 1e-3
+                beat_frames = max(1, len(t_aligned) // max(1, pair_count))
+                tech = cfg.technique if cfg.technique != "auto" else "eq_blend"
 
-                lows = np.empty_like(t_low)
-                lows[:t_swap] = t_low[:t_swap]
-                lows[t_swap:] = h_low[t_swap:]
-                ramp = min(int(SWAP_RAMP_SECONDS * RATE), len(lows) - t_swap)
-                if ramp > 1:
-                    w = np.linspace(0.0, 1.0, ramp, dtype=np.float32)[:, None]
-                    lows[t_swap:t_swap + ramp] = t_low[t_swap:t_swap + ramp] * (1.0 - w) + h_low[t_swap:t_swap + ramp] * w
+                if has_musical_top and tech == "filter_sweep":
+                    raw_mix = render_filter_sweep(t_aligned, h_aligned, t_swap, beat_frames)
+                elif has_musical_top and tech == "echo_out":
+                    period_s = (len(t_aligned) / RATE) / max(1, pair_count)
+                    raw_mix = render_echo_out(t_aligned, h_aligned, period_s)
+                elif has_musical_top and tech == "velvet_fade":
+                    raw_mix = render_velvet_fade(t_aligned, h_aligned)
+                elif has_musical_top and tech == "eq_blend":
+                    raw_mix = render_eq_blend(t_aligned, h_aligned, t_swap, beat_frames)
+                else:
+                    t_low, t_high = _split_bands(t_aligned)
+                    h_low, h_high = _split_bands(h_aligned)
+                    highs = _crossfade(t_high, h_high, equal_power=cfg.equal_power_highs)
+                    lows = np.empty_like(t_low)
+                    lows[:t_swap] = t_low[:t_swap]
+                    lows[t_swap:] = h_low[t_swap:]
+                    ramp = min(int(SWAP_RAMP_SECONDS * RATE), len(lows) - t_swap)
+                    if ramp > 1:
+                        w = np.linspace(0.0, 1.0, ramp, dtype=np.float32)[:, None]
+                        lows[t_swap : t_swap + ramp] = t_low[t_swap : t_swap + ramp] * (1.0 - w) + h_low[t_swap : t_swap + ramp] * w
+                    raw_mix = lows + highs
 
-                mixed = _apply_ceiling(lows + highs, ceiling)
+                mixed = _apply_ceiling(raw_mix, ceiling)
                 return mixed, h_swap + rem_head, t_swap
 
     # Fallback frame-0 aligned bass-swap (used when swap_position == 0 or kicks are sparse)
@@ -478,38 +509,99 @@ def mix_with_report(
     tail: np.ndarray,
     head: np.ndarray,
     config: MixerConfig | None = None,
+    station_a: str | None = None,
+    station_b: str | None = None,
 ) -> tuple[np.ndarray, MixReport]:
-    """Join two recordings and return both the joined stereo float32 audio and DSP telemetry."""
-    cfg = config or get_default_mixer_config()
+    """Join two recordings using +/-12% pitch-locked WSOLA beatmatching and genre-aware DJ transitions."""
+    base_cfg = config or get_default_mixer_config()
+    prof = profile_for_stations(station_a, station_b)
+    resolved_tech = base_cfg.technique if base_cfg.technique != "auto" else prof.technique
+    target_beats = (
+        prof.phrase_beats
+        if (config is None and (station_a or station_b))
+        else base_cfg.crossfade_beats
+    )
+    cfg = MixerConfig(
+        crossfade_beats=target_beats,
+        fallback_fade_seconds=prof.velvet_seconds if (config is None and (station_a or station_b)) else base_cfg.fallback_fade_seconds,
+        bass_swap_position=base_cfg.bass_swap_position,
+        equal_power_highs=base_cfg.equal_power_highs,
+        tempo_lock=base_cfg.tempo_lock,
+        intra_declick_ms=base_cfg.intra_declick_ms,
+        technique=resolved_tech,
+    )
+
     tail_raw_onsets = _onsets_of(tail, from_end=True)
     head_raw_onsets = _onsets_of(head, from_end=False)
     tail_period = steady_period(tail_raw_onsets)
     head_period = steady_period(head_raw_onsets)
 
-    if (
-        tail_period is None
-        or head_period is None
-        or abs(tail_period - head_period) > 0.12 * min(tail_period, head_period)
-    ):
-        joined, fade = _fallback_join(tail, head, cfg.fallback_fade_seconds)
-        seam = joined[len(tail) - fade:len(tail)] if fade > 0 else joined[:0]
-        return joined, _compute_report(seam, "equal_power_fallback", 0, 0, tail_period, head_period)
+    tail_from_tg = False
+    head_from_tg = False
+    if tail_period is None and resolved_tech != "velvet_fade":
+        tail_period, tg_tail = tempogram_beat_grid(tail, from_end=True, analysis_seconds=ANALYSIS_SECONDS)
+        if tail_period is not None:
+            tail_raw_onsets = tg_tail
+            tail_from_tg = True
+    if head_period is None and resolved_tech != "velvet_fade":
+        head_period, tg_head = tempogram_beat_grid(head, from_end=False, analysis_seconds=ANALYSIS_SECONDS)
+        if head_period is not None:
+            head_raw_onsets = tg_head
+            head_from_tg = True
 
-    tail_chain = _extract_beat_chain(tail_raw_onsets, tail_period)
-    head_chain = _extract_beat_chain(head_raw_onsets, head_period)
-    if len(tail_chain) < 2:
+    bpm_delta_pct: float | None = None
+    within_12pct = False
+    if tail_period is not None and head_period is not None:
+        tail_bpm_val = 60.0 / tail_period
+        head_bpm_val = 60.0 / head_period
+        rel_diff = abs(head_bpm_val - tail_bpm_val) / max(1e-6, tail_bpm_val)
+        bpm_delta_pct = round(((head_bpm_val - tail_bpm_val) / max(1e-6, tail_bpm_val)) * 100.0, 2)
+        within_12pct = rel_diff <= MAX_BPM_DIFF_RATIO
+
+    # Outside +/-12% BPM or beatless: use Dub Echo-Out + Drop for rhythmic transitions, Velvet Fade for atmospheric
+    if tail_period is None or head_period is None or not within_12pct or resolved_tech == "velvet_fade":
+        mismatch_tech = (
+            base_cfg.technique
+            if base_cfg.technique in ("echo_out", "velvet_fade")
+            else (prof.mismatch_technique if (tail_period is not None and (station_a or station_b)) else "velvet_fade")
+        )
+        if mismatch_tech == "echo_out" and tail_period is not None and len(tail) >= 4 * RATE and len(head) >= 4 * RATE:
+            fade = min(int(round(16 * tail_period * RATE)), len(tail) * 2 // 5, len(head) * 2 // 5)
+            ceiling = max(float(np.max(np.abs(tail[-fade:]))), float(np.max(np.abs(head[:fade]))), 1e-6)
+            mixed = _apply_ceiling(render_echo_out(tail[-fade:], head[:fade], tail_period), ceiling)
+            joined = np.concatenate([tail[:-fade], mixed, head[fade:]])
+            rep = _compute_report(mixed, "dj_echo_out_drop", 16, int(fade * 0.45), tail_period, head_period)
+            rep.technique = "echo_out"
+            rep.bpm_delta_pct = bpm_delta_pct
+            rep.pitch_locked = True
+            return joined, rep
+
+        joined, fade = _fallback_join(tail, head, cfg.fallback_fade_seconds)
+        seam = joined[len(tail) - fade : len(tail)] if fade > 0 else joined[:0]
+        rep = _compute_report(seam, "equal_power_fallback", 0, fade // 2, tail_period, head_period)
+        rep.technique = "velvet_fade"
+        rep.bpm_delta_pct = bpm_delta_pct
+        rep.pitch_locked = True
+        return joined, rep
+
+    tail_chain = tail_raw_onsets if tail_from_tg else _extract_beat_chain(tail_raw_onsets, tail_period)
+    head_chain = head_raw_onsets if head_from_tg else _extract_beat_chain(head_raw_onsets, head_period)
+    if len(tail_chain) < 4:
         tail_chain = tail_raw_onsets
-    if len(head_chain) < 2:
+    if len(head_chain) < 4:
         head_chain = head_raw_onsets
 
     head_kick = _first_steady_kick(head_chain, head_period)
     if head_kick is None:
         joined, fade = _fallback_join(tail, head, cfg.fallback_fade_seconds)
-        seam = joined[len(tail) - fade:len(tail)] if fade > 0 else joined[:0]
-        return joined, _compute_report(seam, "equal_power_fallback", 0, 0, tail_period, head_period)
+        seam = joined[len(tail) - fade : len(tail)] if fade > 0 else joined[:0]
+        rep = _compute_report(seam, "equal_power_fallback", 0, fade // 2, tail_period, head_period)
+        rep.technique = "velvet_fade"
+        rep.bpm_delta_pct = bpm_delta_pct
+        return joined, rep
 
-    # Pick the longest bar-aligned crossfade up to cfg.crossfade_beats that fits both recordings
-    candidate_beats = sorted({cfg.crossfade_beats, 16, 12, 8, 4}, reverse=True)
+    # Pick the longest bar-aligned DJ phrase crossfade up to cfg.crossfade_beats that fits both recordings
+    candidate_beats = sorted({cfg.crossfade_beats, 48, 32, 24, 16, 12, 8, 4}, reverse=True)
     candidate_beats = [b for b in candidate_beats if b <= cfg.crossfade_beats] or [cfg.crossfade_beats]
 
     chosen_beats = 0
@@ -531,26 +623,38 @@ def mix_with_report(
 
     if chosen_beats == 0 or fade <= 0:
         joined, fb_fade = _fallback_join(tail, head, cfg.fallback_fade_seconds)
-        seam = joined[len(tail) - fb_fade:len(tail)] if fb_fade > 0 else joined[:0]
-        return joined, _compute_report(seam, "equal_power_fallback", 0, 0, tail_period, head_period)
+        seam = joined[len(tail) - fb_fade : len(tail)] if fb_fade > 0 else joined[:0]
+        rep = _compute_report(seam, "equal_power_fallback", 0, fb_fade // 2, tail_period, head_period)
+        rep.technique = "velvet_fade"
+        rep.bpm_delta_pct = bpm_delta_pct
+        return joined, rep
 
     head_span = min(len(head) - head_cut, max(fade, int(round(chosen_beats * head_period * RATE)) + RATE // 2))
-    t_rel = tail_chain[tail_chain >= tail_cut / RATE - 1e-4] - tail_cut / RATE
-    h_rel = head_chain[head_chain >= head_cut / RATE - 1e-4] - head_cut / RATE
+    t_rel = tail_chain[(tail_chain >= tail_cut / RATE - 1e-4) & (tail_chain <= (tail_cut + fade) / RATE - 1e-3)] - tail_cut / RATE
+    h_rel = head_chain[(head_chain >= head_cut / RATE - 1e-4) & (head_chain <= (head_cut + head_span) / RATE - 1e-3)] - head_cut / RATE
 
     mixed, head_consumed, swap_frame = _bass_swap_phrase(
-        tail[tail_cut:tail_cut + fade],
-        head[head_cut:head_cut + head_span],
+        tail[tail_cut : tail_cut + fade],
+        head[head_cut : head_cut + head_span],
         t_rel,
         h_rel,
         cfg,
     )
-    joined = np.concatenate([tail[:tail_cut], mixed, head[head_cut + head_consumed:]])
+    joined = np.concatenate([tail[:tail_cut], mixed, head[head_cut + head_consumed :]])
     report = _compute_report(mixed, "beatmatched_bass_swap", chosen_beats, swap_frame, tail_period, head_period)
+    report.technique = cfg.technique
+    report.bpm_delta_pct = bpm_delta_pct
+    report.pitch_locked = cfg.tempo_lock
     return joined, report
 
 
-def join_recordings(tail: np.ndarray, head: np.ndarray, config: MixerConfig | None = None) -> np.ndarray:
-    """Append `head` to `tail` using phrase-length beatmatched bass-swap or lush equal-power crossfade."""
-    joined, _ = mix_with_report(tail, head, config=config)
+def join_recordings(
+    tail: np.ndarray,
+    head: np.ndarray,
+    config: MixerConfig | None = None,
+    station_a: str | None = None,
+    station_b: str | None = None,
+) -> np.ndarray:
+    """Append `head` to `tail` using +/-12% pitch-locked DJ beatmatching and genre-aware transitions."""
+    joined, _ = mix_with_report(tail, head, config=config, station_a=station_a, station_b=station_b)
     return joined
