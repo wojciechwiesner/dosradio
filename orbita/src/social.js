@@ -57,19 +57,18 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuil
     const st = document.createElement('style');
     st.id = 'orbSocialCss';
     st.textContent = `
-      #ringBar{position:fixed;left:50%;transform:translateX(-50%);bottom:164px;z-index:26;display:flex;gap:5px;padding:4px 6px;border-radius:999px;background:rgba(10,10,15,.82);border:1px solid rgba(255,255,255,.11);backdrop-filter:blur(14px);max-width:calc(100vw - 18px);overflow-x:auto;scrollbar-width:none}
+      #ringBar{display:flex;gap:4px;padding:3px 4px;margin-bottom:2px;border-radius:999px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.11);max-width:100%;overflow-x:auto;scrollbar-width:none}
       #ringBar::-webkit-scrollbar{display:none}
-      .rb-pill{border:0;background:transparent;color:rgba(244,242,238,.72);font:500 10.5px/1 'Azeret Mono',monospace;padding:6px 10px;border-radius:999px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px;transition:.16s}
-      .rb-pill.on{background:rgba(255,107,61,.2);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,107,61,.55)}
+      .rb-pill{border:0;background:transparent;color:rgba(244,242,238,.72);font:500 9.5px/1 'Azeret Mono',monospace;padding:5px 8px;border-radius:999px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;transition:.16s}
+      .rb-pill.on{background:rgba(255,107,61,.22);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,107,61,.6)}
       .rb-hand{display:none}
-      @media(max-width:760px){#ringBar{bottom:192px}.rb-hand{display:inline-flex}}
-      #socialHubBar{position:fixed;right:18px;top:62px;z-index:28;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-      @media(max-width:760px){#socialHubBar{top:52px;right:10px;left:10px;justify-content:space-between}}
-      .sh-btn{background:rgba(12,12,18,.86);border:1px solid rgba(255,255,255,.14);color:#f3f1ed;border-radius:999px;padding:7px 11px;font:500 11px/1 'Azeret Mono',monospace;display:inline-flex;align-items:center;gap:6px;cursor:pointer;backdrop-filter:blur(12px)}
+      @media(max-width:760px){.rb-hand{display:inline-flex}}
+      #socialHubBar{display:flex;gap:5px;flex-wrap:wrap}
+      .sh-btn{background:rgba(14,12,20,.78);border:1px solid rgba(236,232,244,.16);color:#ece8f4;border-radius:999px;padding:6px 9px;font:500 10px/1 'Azeret Mono',monospace;display:inline-flex;align-items:center;gap:5px;cursor:pointer;backdrop-filter:blur(12px)}
       .sh-btn:hover{border-color:#ff6b3d;color:#fff}
-      .sh-dot{width:7px;height:7px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981}
-      #favStarBtn{background:transparent;border:1px solid rgba(255,255,255,.16);color:rgba(255,255,255,.7);border-radius:999px;width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;margin-left:6px;vertical-align:middle}
-      #favStarBtn.on{color:#fbbf24;border-color:rgba(251,191,36,.6);background:rgba(251,191,36,.12)}
+      .sh-dot{width:6px;height:6px;border-radius:50%;background:#10b981;box-shadow:0 0 8px #10b981}
+      #favStarBtn{width:34px;height:34px;padding:0;border:1px solid rgba(236,232,244,.16);background:rgba(236,232,244,.04);color:rgba(255,255,255,.75);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;flex:none}
+      #favStarBtn.on{color:#fbbf24;border-color:rgba(251,191,36,.65);background:rgba(251,191,36,.14)}
       #favStarBtn.on svg{fill:#fbbf24}
       .satLabel .favMark{color:#fbbf24;margin-right:3px}
       .satLabel .frMark{display:inline-block;width:6px;height:6px;border-radius:50%;background:#10b981;margin-right:4px;box-shadow:0 0 6px #10b981}
@@ -90,25 +89,27 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuil
     document.head.appendChild(st);
   }
 
-  /* ---- 1) Favorite Star inside #card ---- */
-  const cardTop = document.querySelector('#card .cardTop') || document.getElementById('cardName')?.parentElement;
+  /* ---- 1) Favorite Star inline in #card action row ---- */
+  const cardEl = document.getElementById('card');
+  const dedRow = document.getElementById('dedicateBtn')?.parentElement || cardEl;
   const favBtn = document.createElement('button');
   favBtn.id = 'favStarBtn';
   favBtn.type = 'button';
   favBtn.title = 'Dodaj / usuń z ulubionych';
   favBtn.innerHTML = SVG_STAR;
-  cardTop?.appendChild(favBtn);
+  dedRow?.appendChild(favBtn);
   const syncFavBtn = () => favBtn.classList.toggle('on', app.favorites.has(app.prefs.station));
   favBtn.addEventListener('click', () => {
     const sid = app.prefs.station;
     if (app.favorites.has(sid)) app.favorites.delete(sid); else app.favorites.add(sid);
     saveFavorites(app.favorites);
     syncFavBtn();
+    renderRingBar();
     app.toast(app.favorites.has(sid) ? 'Dodano do ulubionych' : 'Usunięto z ulubionych');
   });
   app.syncFavBtn = syncFavBtn;
 
-  /* ---- 2) 3-Ring 2.5D Filter Bar + Mobile Hand Toggle ---- */
+  /* ---- 2) 3-Ring 2.5D Filter Bar cleanly docked at top of #card ---- */
   const ringBar = document.createElement('div');
   ringBar.id = 'ringBar';
   const renderRingBar = () => {
@@ -123,7 +124,7 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuil
       `<button type="button" class="rb-pill${app.ringFilter === k ? ' on' : ''}" data-rf="${k}">${lbl}</button>`
     ).join('') + `<button type="button" class="rb-pill rb-hand" id="rbHandBtn">${app.leftHand ? 'Lewy kciuk' : 'Prawy kciuk'}</button>`;
   };
-  document.body.appendChild(ringBar);
+  if (cardEl) cardEl.prepend(ringBar); else document.body.appendChild(ringBar);
   renderRingBar();
   ringBar.addEventListener('click', ev => {
     const hb = ev.target.closest('#rbHandBtn');
@@ -141,7 +142,7 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuil
     renderRingBar();
   });
 
-  /* ---- 3) Top-Right Social / Creator / URL-Podcast Hub ---- */
+  /* ---- 3) Social / Creator / URL-Podcast Hub docked inside #leftCol ---- */
   const hub = document.createElement('div');
   hub.id = 'socialHubBar';
   const renderHub = () => {
@@ -152,7 +153,10 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuil
       <button type="button" class="sh-btn" data-open="outreach">${SVG_LINK}<span>Podcast z WWW</span></button>
     `;
   };
-  document.body.appendChild(hub);
+  const leftCol = document.getElementById('leftCol');
+  const onairSec = document.getElementById('onair');
+  if (leftCol && onairSec) onairSec.insertAdjacentElement('afterend', hub);
+  else document.body.appendChild(hub);
   renderHub();
 
   const banner = document.createElement('div');

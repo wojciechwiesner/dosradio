@@ -19,6 +19,7 @@ export function createScene(canvas, cb) {
   let dpr = Math.min(devicePixelRatio || 1, 1.75);
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
   const camBase = new THREE.Vector3(0, 3.0, 13), lookAt = new THREE.Vector3(0, -1.1, 0);
+  camera.position.copy(camBase); camera.lookAt(lookAt);
   const bgScene = new THREE.Scene(), coreScene = new THREE.Scene();
 
   /* ---------- fluid (velocity rg, density b), one pass ---------- */
@@ -202,7 +203,7 @@ export function createScene(canvas, cb) {
       const a = (i / 192) * Math.PI * 2;
       pts.push(new THREE.Vector3(Math.sin(a) * R, 0, Math.cos(a) * R));
     }
-    const mat = new THREE.LineBasicMaterial({ color: C(ringColors[ri]).multiplyScalar(0.55), transparent: true, opacity: 0.72 });
+    const mat = new THREE.LineBasicMaterial({ color: C(ringColors[ri]).multiplyScalar(1.15), transparent: true, opacity: 0.85 });
     const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
     ring.add(ln);
     const tk = [], ticksN = 48 + ri * 16;
@@ -210,7 +211,7 @@ export function createScene(canvas, cb) {
       const a = (i / ticksN) * Math.PI * 2, l = i % 4 ? 0.08 : 0.22;
       tk.push(new THREE.Vector3(Math.sin(a) * (R - l), 0, Math.cos(a) * (R - l)), new THREE.Vector3(Math.sin(a) * R, 0, Math.cos(a) * R));
     }
-    const tickSeg = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(tk), new THREE.LineBasicMaterial({ color: C('#5a5270'), transparent: true, opacity: 0.45 }));
+    const tickSeg = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(tk), new THREE.LineBasicMaterial({ color: C('#7a7096'), transparent: true, opacity: 0.6 }));
     dialG.add(tickSeg);
     return { line: ln, mat, tickSeg };
   });
@@ -386,11 +387,11 @@ export function createScene(canvas, cb) {
     /* satellites + 2.5D hybrid / mobile corner thumb-turntable */
     if (sats.length !== STATIONS.length) rebuildSats();
     const isMob = innerWidth <= 760;
-    const targetX = isMob ? (s.leftHand ? -2.05 : 2.05) : 0;
-    const targetY = isMob ? -2.45 : -1.85;
-    const targetZ = isMob ? 1.05 : 0;
-    const targetRx = isMob ? 0.52 : 0.42;
-    const targetRz = isMob ? (s.leftHand ? 0.12 : -0.12) : 0;
+    const targetX = isMob ? (s.leftHand ? -1.15 : 1.15) : 0;
+    const targetY = isMob ? -1.25 : -1.75;
+    const targetZ = isMob ? -0.4 : 0;
+    const targetRx = isMob ? 0.46 : 0.38;
+    const targetRz = isMob ? (s.leftHand ? 0.1 : -0.1) : 0;
     const kLerp = Math.min(1, dt * 7);
     ring.position.x += (targetX - ring.position.x) * kLerp;
     ring.position.y += (targetY - ring.position.y) * kLerp;
@@ -475,7 +476,7 @@ export function createScene(canvas, cb) {
   }
 
   /* projection helpers for DOM labels */
-  function project(obj, out) { obj.getWorldPosition(tmpV); const z = tmpV.z; tmpV.project(camera); out.x = (tmpV.x * 0.5 + 0.5) * innerWidth; out.y = (-tmpV.y * 0.5 + 0.5) * innerHeight; out.z = z; return out; }
+  function project(obj, out) { obj.getWorldPosition(tmpV); const z = tmpV.z; tmpV.project(camera); out.x = (tmpV.x * 0.5 + 0.5) * innerWidth; out.y = (-tmpV.y * 0.5 + 0.5) * innerHeight; out.z = z; out.behind = tmpV.z > 1; return out; }
   function pick(clientX, clientY) {
     raycaster.setFromCamera(new THREE.Vector2(clientX / innerWidth * 2 - 1, -(clientY / innerHeight) * 2 + 1), camera);
     const hits = raycaster.intersectObjects([...sats.map(o => o.hit), ...moons.map(m => m.mesh.children[0])], false);

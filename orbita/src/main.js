@@ -231,13 +231,15 @@ function placeLabels() {
     const hasFriend = !!app.friendStations?.has(s.id);
     const passRf = rf === 'all' || (rf === 'fav' ? isFav : s.ring === Number(rf)) || isTuned;
     const front = Math.cos((s.ringAngle || 0) + dial.phi);
-    const vis = (passRf ? 1 : 0) * smooth(isMob ? 0.35 : 0.05, isMob ? 0.88 : 0.65, front) * (1 - sc.hostVisible() * 0.55);
+    const vis = (passRf ? 1 : 0) * smooth(isMob ? 0.12 : -0.1, isMob ? 0.72 : 0.55, front) * (1 - sc.hostVisible() * 0.55);
     if (vis < 0.04 && !isTuned) {
       if (el.style.opacity !== '0') { el.style.opacity = '0'; el.style.pointerEvents = 'none'; }
       return;
     }
     sc.project(sc.satObj(i), pt);
-    if (pt.z > 1 || pt.x < 34 || pt.x > w - 34 || pt.y < 68 || pt.y > hPx - (isMob ? 215 : 185)) {
+    const cardTop = document.getElementById('card')?.getBoundingClientRect().top || (hPx - 230);
+    const topSafe = isMob ? 148 : 62;
+    if (pt.behind || pt.x < 28 || pt.x > w - 28 || pt.y < topSafe || pt.y > cardTop - 26) {
       el.style.opacity = '0'; el.style.pointerEvents = 'none'; return;
     }
     const prio = (isTuned ? 1000 : 0) + (hasFriend ? 400 : 0) + (isFav ? 200 : 0) + front * 10;
