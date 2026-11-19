@@ -5,6 +5,18 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="manifest" href="/manifest.webmanifest">
 <link rel="apple-touch-icon" href="/icon-192.png">
+<script>
+  window.__pwaPrompt = null;
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    window.__pwaPrompt = e;
+    window.dispatchEvent(new Event('dos-pwa-ready'));
+  });
+  window.addEventListener('appinstalled', function () {
+    window.__pwaPrompt = null;
+    window.dispatchEvent(new Event('dos-pwa-installed'));
+  });
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Azeret+Mono:wght@400;500;700&family=Unbounded:wght@500;700&display=swap">
@@ -244,13 +256,14 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 @media (max-width: 1100px) { #leftCol { width: 250px; } #stoic { display: none; } }
 @media (max-width: 760px) {
   .mobile-only { display: inline-flex; }
-  #leftCol { left: var(--gl); right: var(--gr); width: auto; top: calc(var(--gt) + 30px); }
+  #leftCol { left: var(--gl); right: var(--gr); width: auto; top: calc(var(--gt) + 28px); gap: 5px; }
   #sched, #storyBox { display: none !important; }
-  #onair { padding: 8px 10px; }
-  #deck { top: auto; left: 0; right: 0; bottom: 0; width: auto; height: 76vh; transform: translateY(105%); transition: transform .35s cubic-bezier(.2,.8,.2,1); z-index: 12; border-left: 0; border-right: 0; padding-bottom: env(safe-area-inset-bottom, 0px); }
+  #onair { padding: 6px 10px; }
+  #deck { top: auto; left: 0; right: 0; bottom: calc(58px + env(safe-area-inset-bottom, 0px)); width: auto; height: calc(100dvh - 104px - env(safe-area-inset-bottom, 0px)); transform: translateY(115%); transition: transform .28s cubic-bezier(.2,.8,.2,1); z-index: 30; border-left: 0; border-right: 0; padding-bottom: 12px; }
   #deck.open { transform: none; }
+  #deckBtn { display: none !important; }
   .group { padding-left: var(--gl); padding-right: var(--gr); }
-  #card { left: var(--gl); right: var(--gr); width: auto; bottom: calc(var(--gb) + 24px); padding: 11px 13px; }
+  #card { left: var(--gl); right: var(--gr); width: auto; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); padding: 10px 12px; }
   #captions { bottom: auto; top: 46%; }
   .host-label { display: none; }
   .hud-br .hold-txt, .hud-tr .freq-top, .hud-tl .howto-wrap { display: none; }
@@ -307,7 +320,7 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
     <button id="prevBtn" class="btn icon" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
     <button id="nextBtn" class="btn icon" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
     <button id="newsNowBtn" class="btn" type="button" data-i18n="newsNow"></button>
-    <button id="dedicateBtn" class="btn" type="button" title="Udostępnij stację z dedykacją"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 2.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-7 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM6.3 7.1l3.4-1.7M6.3 8.9l3.4 1.7" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span id="dedicateTxt">Dedykuj</span></button>
+    <button id="dedicateBtn" class="btn" type="button" title="Udostępnij przez wybraną aplikację lub wyślij głosowe pozdrowienie"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 2.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-7 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM6.3 7.1l3.4-1.7M6.3 8.9l3.4 1.7" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span id="dedicateTxt">Udostępnij</span></button>
     <button id="paletteBtn" class="btn" type="button" aria-label="Ctrl+K"><kbd>Ctrl+K</kbd></button>
     <button id="deckBtn" class="btn icon mobile-only" type="button" aria-controls="deck" aria-expanded="false" aria-label="Radio"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
   </div>

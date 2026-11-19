@@ -385,6 +385,7 @@ export function createScene(canvas, cb) {
     }
 
     /* satellites + 2.5D hybrid / mobile corner thumb-turntable */
+    ring.visible = !s.hide3dRings;
     if (sats.length !== STATIONS.length) rebuildSats();
     const isMob = innerWidth <= 760;
     const targetX = isMob ? (s.leftHand ? -0.85 : 0.85) : 0;

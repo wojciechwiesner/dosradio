@@ -496,13 +496,21 @@ app.renderPane = name => {
 };
 const renderPanes = () => ['radio', 'mine', 'pods', 'plus'].forEach(app.renderPane);
 app.openTab = (name, focusSel) => {
+  app.activeDeckTab = name;
   document.querySelectorAll('.tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === name));
   ['radio', 'mine', 'pods', 'plus'].forEach(n => { $(`#pane-${n}`).hidden = n !== name; });
   setSheet(true);
+  app.onNavSync?.();
   if (focusSel) setTimeout(() => { const el = $(focusSel); el?.scrollIntoView({ block: 'center' }); el?.focus(); }, 60);
 };
 document.querySelectorAll('.tabs [data-tab]').forEach(b => b.addEventListener('click', () => app.openTab(b.dataset.tab)));
-function setSheet(open) { if (innerWidth > 760) return; $('#deck').classList.toggle('open', open); $('#deckBtn').setAttribute('aria-expanded', open); }
+function setSheet(open) {
+  if (innerWidth > 900) return;
+  $('#deck').classList.toggle('open', open);
+  $('#deckBtn').setAttribute('aria-expanded', open);
+  app.onNavSync?.();
+}
+app.closeSheet = () => setSheet(false);
 $('#deckBtn').addEventListener('click', () => setSheet(!$('#deck').classList.contains('open')));
 $('#deckClose').addEventListener('click', () => setSheet(false));
 
@@ -855,7 +863,7 @@ function frame(now) {
     f, kick, timeScale, pointer, phi: dial.phi, playing: !!e?.playing, station: curBase,
     tunedIdx: curBase.idx, needleIdx: idx, blendIdx: prefs.blend && byId[prefs.blend] ? byId[prefs.blend].idx : -1,
     activeGroup: app.highlightedGroup || (prefs.playGroup ? prefs.activeGroup : null),
-    ringFilter: app.ringFilter, favorites: app.favorites, friendStations: app.friendStations, leftHand: app.leftHand,
+    ringFilter: app.ringFilter, favorites: app.favorites, friendStations: app.friendStations, leftHand: app.leftHand, hide3dRings: !!app.hide3dRings,
     topics: prefs.categories, interval: prefs.interval,
     hosts: hostState ? { duo: hostState.duo, who: hostState.who } : null,
   }, dt);
@@ -884,9 +892,14 @@ function frame(now) {
   dial.goTo((byId[prefs.station] || STATIONS[0]).idx, true);
   try { app.connectors = await app.api.connectors(); } catch { app.connectors = null; }
   applyI18n();
-  $('#dedicateBtn')?.addEventListener('click', () => openDedicationModal(app, prefs.station));
   await loadIncomingDedication(app, prefs, dial);
   initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuildSatLabels });
+  $('#dedicateBtn')?.addEventListener('click', () => {
+    if (app.openQuickShareStation) app.openQuickShareStation();
+    else openDedicationModal(app, prefs.station);
+  });
+  const dedLbl = document.getElementById('dedicateTxt');
+  if (dedLbl) dedLbl.textContent = 'Udostępnij';
   renderCard();
   app.syncFavBtn?.();
   if (new URLSearchParams(location.search).get('embed') === '1') {

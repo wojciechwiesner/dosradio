@@ -14,6 +14,18 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="DOS Radio" />
   <link rel="apple-touch-icon" href="/icon-192.png" />
+  <script>
+    window.__pwaPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      window.__pwaPrompt = e;
+      window.dispatchEvent(new Event('dos-pwa-ready'));
+    });
+    window.addEventListener('appinstalled', function () {
+      window.__pwaPrompt = null;
+      window.dispatchEvent(new Event('dos-pwa-installed'));
+    });
+  </script>
   <link rel="stylesheet" href="/src/ui/dosradio.css" />
   <style>
     /* DOS Radio Plus panel ("Twoje źródła" + duet podcast) — scoped styles for the Plus section. */
@@ -260,7 +272,7 @@
   <div class="modal" id="onboardModal" role="dialog" aria-modal="true" aria-label="Co chcesz usłyszeć"></div>
 
   <div id="orbitaShell" class="orbita-shell" hidden>
-    <iframe id="orbitaFrame" class="orbita-frame" title="DOS Radio Orbita 3D" allow="autoplay"></iframe>
+    <iframe id="orbitaFrame" class="orbita-frame" title="DOS Radio Orbita 2.5D" allow="autoplay; web-share; clipboard-write"></iframe>
   </div>
 
   <script type="module" src="/src/ui/dosradio.ts"></script>
