@@ -43,6 +43,12 @@ CREATE TABLE IF NOT EXISTS user_pills (
     added_at REAL NOT NULL,
     PRIMARY KEY (user_id, video_id)
 );
+CREATE TABLE IF NOT EXISTS user_podcasts (
+    user_id INTEGER NOT NULL,
+    episode_id TEXT NOT NULL,
+    added_at REAL NOT NULL,
+    PRIMARY KEY (user_id, episode_id)
+);
 CREATE TABLE IF NOT EXISTS aired_items (
     user_id INTEGER NOT NULL REFERENCES users(id),
     day TEXT NOT NULL,
@@ -193,6 +199,28 @@ class Database:
                 (user_id, limit),
             ).fetchall()
         return [row["video_id"] for row in rows]
+
+    # --- podcasts generated from the Plus panel ---------------------------------
+    def save_user_podcast(self, user_id: int, episode_id: str) -> None:
+        """Remember an episode on the listener's account (re-adding just refreshes the date)."""
+        with self.connect() as conn:
+            conn.execute(
+                "INSERT INTO user_podcasts (user_id, episode_id, added_at) VALUES (?, ?, ?) "
+                "ON CONFLICT(user_id, episode_id) DO UPDATE SET added_at=excluded.added_at",
+                (user_id, episode_id, time.time()),
+            )
+
+    def user_podcast_ids(self, user_id: int, limit: int = 30) -> list[str]:
+        return [episode_id for episode_id, _ in self.user_podcasts(user_id, limit)]
+
+    def user_podcasts(self, user_id: int, limit: int = 30) -> list[tuple[str, float]]:
+        """(episode_id, added_at), newest first."""
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT episode_id, added_at FROM user_podcasts WHERE user_id = ? ORDER BY added_at DESC LIMIT ?",
+                (user_id, limit),
+            ).fetchall()
+        return [(row["episode_id"], float(row["added_at"])) for row in rows]
 
     def all_news_preferences(self) -> list[tuple[int, dict]]:
         """Every stored preference row (for the hourly personalized digest cycle)."""

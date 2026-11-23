@@ -19,6 +19,7 @@ from .db import Database
 from .news import NewsService
 from .personal_news import PersonalNews, PreferenceError, validate_preferences
 from .pill_service import PillService
+from .podcast_list import list_user_podcasts
 from .podcast import PodcastService
 from .youtube_pill import PillError, extract_video_id
 
@@ -80,7 +81,7 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
     # --- podcasts ---------------------------------------------------------------
     @router.post("/podcast")
     async def create_podcast(body: PodcastRequest, request: Request) -> dict:
-        require_plus(request)
+        user_id = require_plus(request)
         topic = (body.topic or "").strip() or None
         headlines = [story.title for story in news.cache["ai"].stories[:1]]
         src_url = (body.source_url or "").strip()
@@ -102,10 +103,17 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
         if body.comment and body.comment.strip():
             topic = f"{topic or 'Audycja specjalna'}\nKomentarz/dedykacja do wplecenia na antenie: {body.comment.strip()}"
         try:
-            return await podcasts.episode(topic, headlines=headlines)
+            manifest = await podcasts.episode(topic, headlines=headlines)
         except Exception as error:
             log.warning("podcast generation failed: %s: %s", type(error).__name__, error)
             raise HTTPException(502, "Nie udało się wygenerować podcastu. Spróbuj ponownie za chwilę.") from error
+        db.save_user_podcast(user_id, manifest["id"])  # also when served from cache
+        return manifest
+
+    @router.get("/podcasts")
+    def my_podcasts(request: Request) -> dict:
+        """The caller's podcasts (Plus panel + website links), newest first."""
+        return {"podcasts": list_user_podcasts(db, podcasts, require_plus(request))}
 
     @router.get("/podcast/{episode_id}")
     def get_podcast(episode_id: str, request: Request) -> dict:

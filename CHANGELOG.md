@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **"Moje podcasty" list in the Plus panel** (`GET /radio-api/plus/podcasts`, `server/app/podcast_list.py`,
+  `src/ui/podcastList.ts`): podcasts a Plus listener generated (now recorded in the new `user_podcasts`
+  table) merged with podcasts made from website links (Orbita drops), newest first, with title, Polish
+  date, summary, a play button sharing `playManifest` with the generator, and the share link for link
+  podcasts. Link podcasts still generating or failed show their status instead of a play button.
 - **LLM and TTS fallback when Gemini fails** (`server/app/gemini_client.py`, `llm_fallback.py`, `llm_breaker.py`):
   text goes Gemini direct -> `DOSRADIO_LLM_FALLBACK_MODELS` on an OpenAI-compatible endpoint
   (`DOSRADIO_LLM_FALLBACK_URL`, default `https://llm.borg.tools/v1`, token `DOSRADIO_LLM_FALLBACK_TOKEN`).

@@ -5,8 +5,9 @@
  * every /radio-api/plus route anyway.
  */
 import { getSharedAudioContext } from '../audio/iosAudioUnlock';
-import { radioApi, type DigestStory, type PodcastManifest } from '../radio/radioApi';
+import { radioApi, type DigestStory, type PodcastListItem, type PodcastManifest } from '../radio/radioApi';
 import { initPill } from './pill';
+import { renderPodcastList } from './podcastList';
 
 const MAX_KEYWORDS = 20;
 const MAX_RSS_FEEDS = 10;
@@ -165,6 +166,7 @@ export async function refreshPlusPanel(plus: boolean): Promise<void> {
   } catch (error) {
     options.onStatus((error as Error).message, true);
   }
+  await refreshPodcastList();
 }
 
 // --- preferences ------------------------------------------------------------------
@@ -260,9 +262,29 @@ async function handlePodcast(): Promise<void> {
   const topic = $<HTMLInputElement>('podcastTopic').value.trim();
   button.disabled = true;
   options.onStatus(topic ? `Generuję audycję w częściach: ${topic}...` : 'Generuję dzisiejszą audycję...');
-  let bedEngaged = false;
   try {
     const manifest: PodcastManifest = await radioApi.podcast(topic || undefined);
+    void refreshPodcastList();
+    await playManifest(manifest, () => {
+      button.disabled = false;
+      button.innerHTML = `${STOP_SVG} Zatrzymaj`;
+    });
+  } catch (error) {
+    options.onStatus((error as Error).message, true);
+  } finally {
+    button.disabled = false;
+    button.innerHTML = `${MIC_SVG} Wygeneruj podcast`;
+  }
+}
+
+/**
+ * Plays a podcast manifest on the shared player: voice bed up, chapters with music breaks and a
+ * spot between them. Used by the generator form and by the "Moje podcasty" list.
+ * `onStarted` fires once the radio yielded and playback is about to begin.
+ */
+async function playManifest(manifest: Pick<PodcastManifest, 'title' | 'parts'>, onStarted?: () => void): Promise<void> {
+  let bedEngaged = false;
+  try {
     const spokenParts = manifest.parts.filter((p) => p.kind !== 'music');
     if (options.setVoiceBed) {
       await options.setVoiceBed(true, true);
@@ -271,8 +293,7 @@ async function handlePodcast(): Promise<void> {
     } else {
       options.stopRadio();
     }
-    button.disabled = false;
-    button.innerHTML = `${STOP_SVG} Zatrzymaj`;
+    onStarted?.();
 
     /* Split podcast into Wejście -> Część 1 -> Przerwa muzyczna + Ciekawostka/Spot -> Część 2 -> Finał/Wyjście */
     if (spokenParts.length <= 3) {
@@ -307,11 +328,31 @@ async function handlePodcast(): Promise<void> {
         }
       }
     }
-  } catch (error) {
-    options.onStatus((error as Error).message, true);
   } finally {
     if (bedEngaged) await options.setVoiceBed?.(false, false);
-    button.disabled = false;
-    button.innerHTML = `${MIC_SVG} Wygeneruj podcast`;
+  }
+}
+
+// --- "Moje podcasty" ---------------------------------------------------------------
+
+async function refreshPodcastList(): Promise<void> {
+  try {
+    renderPodcastList($('myPodcasts'), await radioApi.myPodcasts(), (item) => void playListed(item));
+  } catch (error) {
+    options.onStatus((error as Error).message, true);
+  }
+}
+
+async function playListed(item: PodcastListItem): Promise<void> {
+  if (player.isPlaying) {
+    player.stop();
+    await options.setVoiceBed?.(false, false);
+    options.onStatus('Zatrzymano podcast — gra Twoja stacja.');
+    return;
+  }
+  try {
+    await playManifest(item, undefined);
+  } catch (error) {
+    options.onStatus((error as Error).message, true);
   }
 }
