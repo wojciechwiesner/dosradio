@@ -19,7 +19,7 @@ from pathlib import Path
 
 from .archive import ArchiveRegistry
 from .bumpers import Runner, make_voiced_bumper, subprocess_runner
-from .news import GeminiClient
+from .gemini_client import GeminiClient
 
 log = logging.getLogger("dosradio.podcast")
 

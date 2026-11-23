@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **LLM and TTS fallback when Gemini fails** (`server/app/gemini_client.py`, `llm_fallback.py`, `llm_breaker.py`):
+  text goes Gemini direct -> `DOSRADIO_LLM_FALLBACK_MODELS` on an OpenAI-compatible endpoint
+  (`DOSRADIO_LLM_FALLBACK_URL`, default `https://llm.borg.tools/v1`, token `DOSRADIO_LLM_FALLBACK_TOKEN`).
+  Podcasts, YouTube pills, spots, voice greetings, ramówka spots, Orbita voice and the mood station
+  (no longer calling `gemini._call` directly) all use the chain. Every served call logs provider and model;
+  `on_usage` telemetry records the real fallback model.
+- **Circuit breaker**: after a 429 the Gemini model is skipped for `retryDelay`/`Retry-After` (else 10 min,
+  doubling on consecutive quota failures, max 1 h); after a 401 or invalid key the whole Gemini key is skipped
+  for 30 min. Stops the ~180 failing calls per hour seen in production.
+- **Sourced news fallback** (`server/app/news_fallback.py`): when grounded Gemini search fails, each category is
+  rebuilt from fresh real RSS items (The Verge, TechCrunch, Antyweb, Elle.pl, Vogue, Polsat Sport,
+  SportoweFakty, BBC Sport, Daily Stoic, Oddity Central, Sky News Strange) rewritten by the fallback LLM.
+  Every story keeps the link of the item it cites; a category without a fresh described item fails loudly.
+- **Grok TTS fallback** (`server/app/tts_fallback.py`): Gemini TTS -> `grok-tts`, one table mapping every
+  Gemini voice to a same-gender Grok voice (gender measured by pitch), MP3 decoded to 24 kHz mono WAV before
+  `normalize_loudness`. Gemini `style` is never sent or read aloud.
+
 ### Security
 - Require a verified email for admin password login and issue only the session cookie, not the shared admin token.
 - **Admin token no longer exposes secret material** (`server/app/admin_api.py`): without a dedicated
@@ -17,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it no longer depends on which test module set `DOSRADIO_SECRET` first.
 
 ### Changed
+- `GeminiClient` moved from `server/app/news.py` to `server/app/gemini_client.py` (news.py 427 -> 354 lines).
 - **Safer deploy** (`deploy.sh`): refuses to ship uncommitted deploy inputs (`ALLOW_DIRTY=1` overrides), builds
   with `npm run build` (Orbita bundle, type check, Vite) and checks `orbita.html` and `admin.html` in `dist/`,
   keeps `feeds/` and `share-*` in the web root during `--delete`, no longer uploads `.venv312` or

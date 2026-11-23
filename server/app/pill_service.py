@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .archive import ArchiveRegistry
 from .bumpers import Runner, subprocess_runner
-from .news import GeminiClient
+from .gemini_client import GeminiClient
 from .podcast import PODCAST_HOSTS
 from .youtube_pill import (
     NO_SUBTITLES_MESSAGE, PillError, build_parts, download_audio, extract_video_id, fetch_metadata,

@@ -22,7 +22,8 @@ from pydantic import BaseModel, Field
 from .auth import AccessService, build_router, client_ip
 from .config import load_settings
 from .db import Database
-from .news import CATEGORIES, GeminiClient, NewsService
+from .gemini_client import build_gemini_client
+from .news import CATEGORIES, NewsService
 from .archive import ArchiveRegistry
 from .stream import build_stream_router
 from .recorder import StationRecorder, STATION_SPECS
@@ -57,7 +58,7 @@ custom_radios = CustomRadioService(db, catalog)
 telemetry = TelemetryService(db)
 ramowka_service = RamowkaService(db, catalog, data_dir=settings.data_dir)
 access = AccessService(db, settings.secret, settings.trial_seconds)
-gemini = GeminiClient(
+gemini = build_gemini_client(
     settings.gemini_api_key,
     settings.news_model,
     settings.tts_model,
@@ -273,9 +274,7 @@ async def generate_mood_station(body: MoodRequest, request: Request) -> dict:
         "Zwróć WYŁĄCZNIE czysty JSON: {\"name\": \"...\", \"tagline\": \"...\", \"prompt\": \"...\", \"bpm\": 120, \"density\": 0.5, \"brightness\": 0.5}"
     )
     try:
-        data = await gemini._call(settings.news_model, {"contents": [{"parts": [{"text": prompt}]}]})
-        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-        raw = "".join(p.get("text", "") for p in parts)
+        raw = await gemini.generate_text(prompt, feature="mood")
         s, e = raw.find("{"), raw.rfind("}")
         parsed = json.loads(raw[s:e+1])
         # Validate and clamp

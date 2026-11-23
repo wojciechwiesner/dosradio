@@ -618,7 +618,7 @@ def build_ramowka_router(
             est_prompt_tokens = max(10, len(spot["script"].split()) * 2)
             est_audio_s = max(3.0, len(spot["script"].split()) / 2.3)
             telemetry.record_tokens(
-                model=getattr(gemini, "tts_model", "gemini-tts"),
+                model=getattr(gemini, "last_tts_model", None) or getattr(gemini, "tts_model", "gemini-tts"),
                 feature="spot",
                 prompt_tokens=est_prompt_tokens,
                 output_tokens=int(est_audio_s * 32),
