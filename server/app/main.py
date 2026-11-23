@@ -32,6 +32,7 @@ from .notifier import trigger_telegram_alert
 from .hosts import BORROWED_HOSTS, HOSTS, host_for
 from .personal_news import PersonalNews
 from .podcast import PodcastService
+from .podcast_quota import PodcastQuota
 from .plus_api import build_plus_router
 from .host_clips import build_router as build_host_clips_router
 from .weather import WeatherService
@@ -77,6 +78,7 @@ recorder = StationRecorder(
 )
 mood_recorder = MoodRecorder(settings.gemini_api_key)
 podcasts = PodcastService(gemini, settings.data_dir / "podcasts", archives)
+podcast_quota = PodcastQuota(db)  # one daily limit shared by the Plus panel and website links
 personal = PersonalNews(db, news)
 news.on_personal_refresh = personal.refresh_all
 weather = WeatherService()
@@ -134,7 +136,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url=None)
 app.include_router(build_router(access))
-app.include_router(build_plus_router(access, db, news, podcasts, personal))
+app.include_router(build_plus_router(access, db, news, podcasts, personal, quota=podcast_quota))
 app.include_router(build_host_clips_router(gemini.speak, static_audio_dir))
 app.include_router(build_orbita_voice_router(gemini.speak, static_audio_dir))
 app.include_router(
@@ -170,6 +172,7 @@ app.include_router(build_social_router(
     db=db,
     access=access,
     podcasts=podcasts,
+    quota=podcast_quota,
     station_lookup=lambda sid: next(
         (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
         ({"id": sid, "name": sid} if sid in STATION_SPECS else None),

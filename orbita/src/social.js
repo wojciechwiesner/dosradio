@@ -56,7 +56,11 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
       },
     });
     const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error(j.detail || `HTTP ${r.status}`);
+    if (!r.ok) {
+      const err = new Error(j.detail || `HTTP ${r.status}`);
+      err.status = r.status; // 429 = daily podcast limit (message is Polish, shown as-is)
+      throw err;
+    }
     return j;
   };
 
@@ -470,7 +474,10 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
         const inv = res.invite || stationMetaInvite(fd.station_id, res.site_title, fd.comment || res.url, fd.from_name, fd.recipient_name, fd.comment);
         openQuickShareSheet({ title: `Audycja: ${inv.title}`, url: res.share_url, text: formatInviteShareText(inv), invite: { html: buildInvitePreviewHtml(inv) }, onToast: m => app.toast(m) });
       }
-    } catch (err) { app.toast(err.message || 'Błąd połączenia'); }
+    } catch (err) {
+      if (err.status === 429) { app.toast(err.message, { error: true, long: true }); return; } // daily podcast limit
+      app.toast(err.message || 'Błąd połączenia');
+    }
   });
 
   /* ---- 9) Segmented Podcast HUD + Exclusive Voice Playback & Dedicated Link Invitation Screen ---- */

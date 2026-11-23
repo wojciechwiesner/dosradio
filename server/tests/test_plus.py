@@ -41,13 +41,13 @@ def client(tmp_path, monkeypatch):
 
 @pytest.fixture()
 def plus_client(client, monkeypatch):
-    """Verified, logged-in listener with an active Plus plan."""
+    """Verified, logged-in listener with an active *paid* Plus plan (no daily podcast limit)."""
     from app import mailer
     monkeypatch.setattr(mailer, "send_verification_email", lambda *a, **k: None)
     client.post("/radio-api/register", json={"email": "ola@example.com", "password": "dlugiehaslo1"})
     from app.main import db
     with db.connect() as conn:
-        conn.execute("UPDATE users SET email_verified = 1, plan = 'plus' WHERE email = 'ola@example.com'")
+        conn.execute("UPDATE users SET email_verified = 1, plan = 'plus', plus_paid_until = strftime('%s','now') + 86400 * 30 WHERE email = 'ola@example.com'")
     client.post("/radio-api/login", json={"email": "ola@example.com", "password": "dlugiehaslo1"})
     assert client.get("/radio-api/me").json()["plus"] is True
     return client

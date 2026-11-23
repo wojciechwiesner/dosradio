@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import asdict
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse
@@ -21,6 +21,7 @@ from .personal_news import PersonalNews, PreferenceError, validate_preferences
 from .pill_service import PillService
 from .podcast_list import list_user_podcasts
 from .podcast import PodcastService
+from .podcast_quota import PodcastQuota
 from .youtube_pill import PillError, extract_video_id
 
 # Pills run one at a time and the service remembers 50 jobs / keeps 30 pills on disk:
@@ -60,7 +61,8 @@ class PreferencesBody(BaseModel):
 
 def build_plus_router(access: AccessService, db: Database, news: NewsService,
                       podcasts: PodcastService, personal: PersonalNews,
-                      pills: PillService | None = None) -> APIRouter:
+                      pills: PillService | None = None, quota: PodcastQuota | None = None) -> APIRouter:
+    quota = quota or PodcastQuota(db)
     if pills is None:  # shares the podcast client, archive and (late-bound) process runner
         pills = PillService(podcasts.client, podcasts.dir.parent / "pills", podcasts.archives,
                             podcasts.station_id, run=lambda args, timeout: podcasts.run(args, timeout))
@@ -80,7 +82,7 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
 
     # --- podcasts ---------------------------------------------------------------
     @router.post("/podcast")
-    async def create_podcast(body: PodcastRequest, request: Request) -> dict:
+    async def create_podcast(body: PodcastRequest, request: Request) -> Any:
         user_id = require_plus(request)
         topic = (body.topic or "").strip() or None
         headlines = [story.title for story in news.cache["ai"].stories[:1]]
@@ -102,9 +104,15 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
                 raise HTTPException(502, "Nie udało się pobrać treści podanej strony internetowej.") from err
         if body.comment and body.comment.strip():
             topic = f"{topic or 'Audycja specjalna'}\nKomentarz/dedykacja do wplecenia na antenie: {body.comment.strip()}"
+        reservation = 0  # replaying an existing episode is free
+        if not quota.is_replay(podcasts, topic):
+            reservation = quota.reserve(f"u:{user_id}")
+            if reservation is None:
+                return quota.limit_response()
         try:
             manifest = await podcasts.episode(topic, headlines=headlines)
         except Exception as error:
+            quota.release(reservation)  # a failed run does not use up the day
             log.warning("podcast generation failed: %s: %s", type(error).__name__, error)
             raise HTTPException(502, "Nie udało się wygenerować podcastu. Spróbuj ponownie za chwilę.") from error
         db.save_user_podcast(user_id, manifest["id"])  # also when served from cache

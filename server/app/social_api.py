@@ -16,6 +16,7 @@ from .db import Database
 from .dedications import DedicationStore, build_dedication_script
 from .hosts import host_for
 from .podcast import PodcastService
+from .podcast_quota import PodcastQuota
 from .social import SocialService, build_share_links
 from .spots import SpotService
 from .url_extractor import extract_webpage_content
@@ -71,7 +72,9 @@ def build_social_router(
     access: AccessService,
     podcasts: PodcastService,
     station_lookup: Callable[[str], dict[str, Any] | None],
+    quota: PodcastQuota | None = None,
 ) -> APIRouter:
+    quota = quota or PodcastQuota(db)
     router = APIRouter(prefix="/radio-api/social", tags=["social"])
     social = SocialService(db)
     ded_store = DedicationStore(db.path)
@@ -171,11 +174,12 @@ def build_social_router(
         }
         return out
 
-    async def _generate_drop_podcast_bg(token: str, topic_prompt: str) -> None:
+    async def _generate_drop_podcast_bg(token: str, topic_prompt: str, reservation: int | None = 0) -> None:
         try:
             manifest = await podcasts.episode(topic_prompt, headlines=[])
             social.update_drop_podcast(token, podcast_id=manifest["id"], status="ready")
         except Exception as exc:
+            quota.release(reservation)  # a failed run does not use up the day
             log.warning("Background drop podcast %s failed: %s", token, exc)
             social.update_drop_podcast(token, status="failed", error=str(exc))
 
@@ -283,7 +287,7 @@ def build_social_router(
         return {"token": drop["token"], "drop": _enrich_drop(drop), **links}
 
     @router.post("/url-podcast-link")
-    async def create_url_podcast_link(body: UrlPodcastLinkBody, request: Request, background_tasks: BackgroundTasks) -> dict[str, Any]:
+    async def create_url_podcast_link(body: UrlPodcastLinkBody, request: Request, background_tasks: BackgroundTasks) -> Any:
         actor = resolve_actor_key(request, access, db)
         sender = _caller_name(request, body.from_name)
         try:
@@ -298,6 +302,11 @@ def build_social_router(
         if body.comment.strip():
             intro_note += f"Komentarz od {sender} do przytoczenia na wejściu: {body.comment.strip()}."
         topic_prompt = build_url_podcast_prompt(site, intro_note)
+        reservation = 0  # replaying an existing episode is free
+        if not quota.is_replay(podcasts, topic_prompt):
+            reservation = quota.reserve(actor)
+            if reservation is None:
+                return quota.limit_response()
         site_about = (site["description"] or site["text"][:220]).strip()[:260]
         drop = social.create_drop(
             prefix="p", from_key=actor, from_name=sender,
@@ -306,7 +315,7 @@ def build_social_router(
             source_url=site["url"], site_title=site["title"], comment=body.comment.strip(),
             podcast_status="generating",
         )
-        background_tasks.add_task(_generate_drop_podcast_bg, drop["token"], topic_prompt)
+        background_tasks.add_task(_generate_drop_podcast_bg, drop["token"], topic_prompt, reservation)
         st_meta = station_lookup(body.station_id) or {"name": body.station_id}
         st_label = str(st_meta.get("name") or body.station_id)
         inv = (

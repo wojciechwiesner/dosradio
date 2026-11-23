@@ -293,8 +293,12 @@ export function wireClassicSocialStudio(
       form.onsubmit = async (ev) => {
         ev.preventDefault();
         const fd = Object.fromEntries(new FormData(form).entries());
-        const res = await sapi('/social/url-podcast-link', { method: 'POST', body: JSON.stringify(fd) });
-        renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Posłuchaj audycji o stronie ${String(res.site_title || '')}:`);
+        try {
+          const res = await sapi('/social/url-podcast-link', { method: 'POST', body: JSON.stringify(fd) });
+          renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Posłuchaj audycji o stronie ${String(res.site_title || '')}:`);
+        } catch (error) {
+          shareBox.textContent = (error as Error).message; // e.g. the daily podcast limit (HTTP 429)
+        }
       };
       body.appendChild(form);
     }

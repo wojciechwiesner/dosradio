@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Daily podcast limit for free Plus** (`server/app/podcast_quota.py`): the free 30-day welcome Plus (and
+  anonymous website-link visitors) may start ONE new podcast per calendar day in `Europe/Warsaw`, counted per
+  account across both `POST /radio-api/plus/podcast` and `POST /radio-api/social/url-podcast-link`. Paid Plus
+  (new nullable `users.plus_paid_until`, set only by the Stripe webhook) is unlimited. Replaying an existing
+  episode and failed generations do not use up the day. Over the limit: HTTP 429
+  `{"detail": "Darmowy Plus: 1 podcast dziennie. Kolejny jutro albo wykup Plus.", "reset_at": <next Warsaw midnight>}`,
+  checked before any LLM/TTS call. The Plus panel status area, Orbita and the classic link studio show the message.
 - **"Moje podcasty" list in the Plus panel** (`GET /radio-api/plus/podcasts`, `server/app/podcast_list.py`,
   `src/ui/podcastList.ts`): podcasts a Plus listener generated (now recorded in the new `user_podcasts`
   table) merged with podcasts made from website links (Orbita drops), newest first, with title, Polish
@@ -40,6 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it no longer depends on which test module set `DOSRADIO_SECRET` first.
 
 ### Changed
+- **Factual website podcasts** (`server/app/url_podcast_prompt.py`): the prompt for podcasts made from a business
+  page now tells the hosts to present the services and client benefits using only facts from the page, with no
+  medical comparisons, health promises, or claims about availability, prices or results the page does not state;
+  reviews only as quoted on the page. Page excerpt raised from 2000 to 6000 characters.
 - `GeminiClient` moved from `server/app/news.py` to `server/app/gemini_client.py` (news.py 427 -> 354 lines).
 - **Safer deploy** (`deploy.sh`): refuses to ship uncommitted deploy inputs (`ALLOW_DIRTY=1` overrides), builds
   with `npm run build` (Orbita bundle, type check, Vite) and checks `orbita.html` and `admin.html` in `dist/`,
