@@ -19,6 +19,7 @@ from .podcast import PodcastService
 from .social import SocialService, build_share_links
 from .spots import SpotService
 from .url_extractor import extract_webpage_content
+from .url_podcast_prompt import build_url_podcast_prompt
 
 log = logging.getLogger("dosradio.social")
 
@@ -296,10 +297,7 @@ def build_social_router(
         intro_note = f"Odbiorca audycji: {recip}. " if recip else ""
         if body.comment.strip():
             intro_note += f"Komentarz od {sender} do przytoczenia na wejściu: {body.comment.strip()}."
-        topic_prompt = (
-            f"Omówcie ciekawie i konkretnie stronę internetową '{site['title']}' ({site['domain']}). "
-            f"Opis: {site['description']}. Treść ze strony: {site['text'][:2000]}\n{intro_note}"
-        )
+        topic_prompt = build_url_podcast_prompt(site, intro_note)
         site_about = (site["description"] or site["text"][:220]).strip()[:260]
         drop = social.create_drop(
             prefix="p", from_key=actor, from_name=sender,
