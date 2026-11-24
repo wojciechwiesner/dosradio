@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`
+  (key >= 32 chars) grants a device such as the LUNA salon reception kiosk permanent access, sent as the
+  `x-dosradio-device` header or `?device=` query (for `<audio>`). Keyed GETs also get `Access-Control-Allow-Origin: *`
+  so a `file://` kiosk can read news JSON. Tests: `server/tests/test_device_keys.py`.
+
 ### Fixed
 - **DJ transitions drifted off the beat** (`server/app/beat_grid.py`, `server/app/mixer.py`): the tempo lock
   took its stretch ratio from ONE detected kick pair and paired kicks by their order, so one missed or

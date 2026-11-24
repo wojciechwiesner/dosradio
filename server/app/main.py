@@ -58,7 +58,7 @@ catalog = CatalogService(db, archives)
 custom_radios = CustomRadioService(db, catalog)
 telemetry = TelemetryService(db)
 ramowka_service = RamowkaService(db, catalog, data_dir=settings.data_dir)
-access = AccessService(db, settings.secret, settings.trial_seconds)
+access = AccessService(db, settings.secret, settings.trial_seconds, settings.device_keys)
 gemini = build_gemini_client(
     settings.gemini_api_key,
     settings.news_model,
@@ -135,6 +135,21 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url=None)
+
+
+@app.middleware("http")
+async def device_cors(request: Request, call_next):
+    """Let a keyed shared device (kiosk page opened from file://) read JSON responses.
+
+    Only simple GETs carrying a valid ?device= key get the header, so browsers and
+    other origins keep the default same-origin behaviour.
+    """
+    response = await call_next(request)
+    if request.method == "GET" and access.device_for_key(request.query_params.get(DEVICE_KEY_QUERY)):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+
+
 app.include_router(build_router(access))
 app.include_router(build_plus_router(access, db, news, podcasts, personal, quota=podcast_quota))
 app.include_router(build_host_clips_router(gemini.speak, static_audio_dir))
@@ -202,7 +217,16 @@ except ImportError:
     pass
 
 
+DEVICE_KEY_HEADER = "x-dosradio-device"
+DEVICE_KEY_QUERY = "device"
+
+
 def require_access(request: Request) -> None:
+    # Shared devices (salon kiosk) send their key as a header, or as ?device= for
+    # <audio> elements that cannot set headers.
+    device_key = request.headers.get(DEVICE_KEY_HEADER) or request.query_params.get(DEVICE_KEY_QUERY)
+    if access.device_for_key(device_key):
+        return
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
     if not access.resolve(request.cookies, ip).allowed:
         raise HTTPException(402, "Darmowa godzina minęła. Załóż konto i odbierz 30 dni Plus za darmo.")

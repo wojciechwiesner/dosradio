@@ -9,7 +9,7 @@ import itertools
 import logging
 import os
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 log = logging.getLogger("dosradio.config")
@@ -49,6 +49,7 @@ class Settings:
     tts_model: str
     news_refresh_seconds: int
     prewarm: bool
+    device_keys: dict[str, str] = field(default_factory=dict)
 
     @property
     def gemini_api_key(self) -> str:
@@ -81,4 +82,18 @@ def load_settings() -> Settings:
         tts_model=os.environ.get("DOSRADIO_TTS_MODEL", "gemini-3.8-flash-tts"),
         news_refresh_seconds=int(os.environ.get("DOSRADIO_NEWS_REFRESH", "3600")),
         prewarm=os.environ.get("DOSRADIO_PREWARM", "1") == "1",
+        device_keys=parse_device_keys(os.environ.get("DOSRADIO_DEVICE_KEYS", "")),
     )
+
+
+def parse_device_keys(raw: str) -> dict[str, str]:
+    """`name:key,name2:key2` -> {key: name}. Keys shorter than 32 chars are rejected."""
+    devices: dict[str, str] = {}
+    for item in raw.split(","):
+        name, _, key = item.strip().partition(":")
+        if not name or not key:
+            continue
+        if len(key) < 32:
+            raise RuntimeError(f"DOSRADIO_DEVICE_KEYS: key for '{name}' must be at least 32 characters")
+        devices[key] = name
+    return devices

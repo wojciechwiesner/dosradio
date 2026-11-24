@@ -77,11 +77,24 @@ class Access:
 
 
 class AccessService:
-    def __init__(self, db: Database, secret: str, trial_seconds: int) -> None:
+    def __init__(
+        self, db: Database, secret: str, trial_seconds: int, device_keys: dict[str, str] | None = None
+    ) -> None:
         self.db = db
         self.secret = secret
         self.trial_seconds = trial_seconds
         self.on_register: Any = None
+        # Shared devices (e.g. a salon reception PC) with permanent access: key -> device name.
+        self.device_keys = device_keys or {}
+
+    def device_for_key(self, key: str | None) -> str | None:
+        """Name of the device owning `key`, compared in constant time; None when unknown."""
+        if not key:
+            return None
+        for known_key, device in self.device_keys.items():
+            if hmac.compare_digest(known_key.encode(), key.encode()):
+                return device
+        return None
 
     def _trial_keys(self, ip: str, anon_id: str | None) -> list[str]:
         ip_key = "ip:" + hmac.new(self.secret.encode(), ip.encode(), hashlib.sha256).hexdigest()[:32]
