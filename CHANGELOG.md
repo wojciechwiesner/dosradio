@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **DJ transitions drifted off the beat** (`server/app/beat_grid.py`, `server/app/mixer.py`): the tempo lock
+  took its stretch ratio from ONE detected kick pair and paired kicks by their order, so one missed or
+  mistimed kick (common on rumble techno) skewed half the blend by tens of ms, sometimes half a beat. Each
+  deck's tempo and beat phase are now measured on the overlap audio itself (low-band onset envelope folded
+  over the beat, +-1.5 % tempo search), with a robust least-squares kick-grid fit as fallback; the head is
+  trimmed so its beats land on the tail's beats. Tempo changes up to 2 % use turntable-style varispeed
+  instead of WSOLA. Measured on production archive recordings (median kick offset during the blend):
+  berlin-bcco-techno 56 -> 7 ms, deep-tech 14 -> 2 ms, hypnotic-techno 48.5 -> 5.5 ms.
+
 ### Added
 - **Daily podcast limit for free Plus** (`server/app/podcast_quota.py`): the free 30-day welcome Plus (and
   anonymous website-link visitors) may start ONE new podcast per calendar day in `Europe/Warsaw`, counted per

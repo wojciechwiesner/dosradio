@@ -16,6 +16,7 @@ import threading
 
 import numpy as np
 
+from .beat_grid import MIN_FIT_KICKS, BeatGrid, fit_beat_grid, refine_grid_from_audio
 from .dj_dsp import tempogram_beat_grid, wsola_stretch, wsola_tempo_glide
 from .dj_genres import (
     TECHNIQUES,
@@ -391,6 +392,72 @@ def _split_bands(audio: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return low, audio - low
 
 
+VARISPEED_MAX_DEVIATION = 0.02    # <= 2 % tempo change: resample like a turntable (exact timing, intact kicks)
+MAX_GRID_RESIDUAL_MS = 30.0       # a grid fitting the kicks worse than this is not trusted for tempo lock
+
+
+def _fit_length(audio: np.ndarray, target_frames: int) -> np.ndarray:
+    """Time-scale `audio` to exactly `target_frames`: varispeed for small changes, WSOLA above 2 %."""
+    if len(audio) == 0 or target_frames <= 0:
+        return audio[:0]
+    if abs(target_frames / len(audio) - 1.0) <= VARISPEED_MAX_DEVIATION:
+        return _resample_stereo(audio, target_frames)
+    return wsola_stretch(audio, target_frames)
+
+
+def _deck_grid(audio: np.ndarray, rel_kicks: np.ndarray) -> BeatGrid | None:
+    """Beat grid of one deck: measured from its audio; a robust fit of its kicks if the audio has no pulse."""
+    if len(rel_kicks) < 3:
+        return None
+    approx = float(np.median(np.diff(rel_kicks)))
+    grid = refine_grid_from_audio(audio, approx)
+    if grid is not None:
+        return grid
+    fitted = fit_beat_grid(rel_kicks, approx) if len(rel_kicks) >= MIN_FIT_KICKS else None
+    if fitted is None or fitted.residual_ms > MAX_GRID_RESIDUAL_MS:
+        return None
+    return fitted
+
+
+def _grid_swap_anchors(
+    tail_slice: np.ndarray,
+    head_slice: np.ndarray,
+    tail_rel_kicks: np.ndarray,
+    head_rel_kicks: np.ndarray,
+    cfg: MixerConfig,
+) -> tuple[int, int, float, int, int] | None:
+    """Swap anchors taken from beat grids measured on the overlap audio itself, not from single kicks.
+
+    Returns (t_swap, h_swap, period_ratio, beats, head_shift): the caller drops the first `head_shift`
+    head frames so that, after a linear time-scale by `period_ratio`, every head beat lands on a tail beat.
+    """
+    tail_frames, head_frames = len(tail_slice), len(head_slice)
+    tail_grid = _deck_grid(tail_slice, tail_rel_kicks)
+    head_grid = _deck_grid(head_slice, head_rel_kicks)
+    if tail_grid is None or head_grid is None:
+        return None
+    ratio = tail_grid.period_s / head_grid.period_s
+    if not (1.0 - MAX_BPM_DIFF_RATIO <= ratio <= 1.0 + MAX_BPM_DIFF_RATIO):
+        return None
+
+    # First grid beat inside each slice; the head is trimmed so its beat sits at tail_first / ratio
+    tail_first = tail_grid.origin_s % tail_grid.period_s
+    head_first = head_grid.origin_s % head_grid.period_s
+    head_beat0 = tail_first / ratio
+    shift_s = (head_first - head_beat0) % head_grid.period_s
+    head_shift = int(round(shift_s * RATE))
+
+    beats_in_tail = int((tail_frames / RATE - tail_first) / tail_grid.period_s)
+    if beats_in_tail < 4:
+        return None
+    swap_index = max(1, int(round(cfg.bass_swap_position * beats_in_tail)))
+    t_swap = int(round((tail_first + swap_index * tail_grid.period_s) * RATE))
+    h_swap = int(round((head_beat0 + swap_index * head_grid.period_s) * RATE))
+    if not (0 < t_swap < tail_frames and 0 < h_swap < head_frames - head_shift):
+        return None
+    return t_swap, h_swap, ratio, beats_in_tail, head_shift
+
+
 def _bass_swap_phrase(
     tail_slice: np.ndarray,
     head_slice: np.ndarray,
@@ -403,25 +470,39 @@ def _bass_swap_phrase(
     Returns (mixed_audio, consumed_head_frames, swap_frame_in_mixed).
     """
     fade_target = len(tail_slice)
+    head_shift = 0
     ceiling = max(float(np.max(np.abs(tail_slice))), float(np.max(np.abs(head_slice))), 1e-6)
 
     # Choose swap beat index near cfg.bass_swap_position where both tracks have corresponding kicks
     pair_count = min(len(tail_rel_kicks), len(head_rel_kicks))
     swap_beat = int(round(cfg.bass_swap_position * max(0, pair_count - 1))) if pair_count >= 3 else 0
 
-    if cfg.tempo_lock and swap_beat > 0 and pair_count >= swap_beat + 1:
+    grid_anchors = _grid_swap_anchors(tail_slice, head_slice, tail_rel_kicks, head_rel_kicks, cfg)
+    t_swap = h_swap = 0
+    period_ratio = 1.0
+    if cfg.tempo_lock and grid_anchors is not None:
+        t_swap, h_swap, period_ratio, pair_count, head_shift = grid_anchors
+        head_slice = head_slice[head_shift:]
+        anchors_ok = True
+    elif cfg.tempo_lock and swap_beat > 0 and pair_count >= swap_beat + 1:
         t_swap = int(round(tail_rel_kicks[swap_beat] * RATE))
         h_swap = int(round(head_rel_kicks[swap_beat] * RATE))
-        ratio = (t_swap / max(1, h_swap)) if h_swap > 0 else 1.0
+        period_ratio = (t_swap / max(1, h_swap)) if h_swap > 0 else 1.0
+        anchors_ok = True
+    else:
+        anchors_ok = False
+
+    if anchors_ok:
+        ratio = period_ratio
         if 0.875 <= ratio <= 1.143 and 0 < t_swap < fade_target and 0 < h_swap < len(head_slice):
             rem_tail = fade_target - t_swap
             rem_head = min(len(head_slice) - h_swap, int(round(rem_tail / ratio)))
             if rem_tail > RATE // 4 and rem_head > RATE // 4:
-                # Pitch-preserving Master Tempo WSOLA: before swap head locks to tail; after swap tail locks to head
+                # Before the swap the head locks to the tail tempo; after it the tail locks to the head tempo
                 tail_pre = tail_slice[:t_swap]
-                head_pre_warped = wsola_stretch(head_slice[:h_swap], t_swap)
+                head_pre_warped = _fit_length(head_slice[:h_swap], t_swap)
                 head_post = head_slice[h_swap : h_swap + rem_head]
-                tail_post_warped = wsola_stretch(tail_slice[t_swap : t_swap + rem_tail], rem_head)
+                tail_post_warped = _fit_length(tail_slice[t_swap : t_swap + rem_tail], rem_head)
 
                 t_aligned = np.concatenate([tail_pre, tail_post_warped], axis=0)
                 h_aligned = np.concatenate([head_pre_warped, head_post], axis=0)
@@ -454,7 +535,7 @@ def _bass_swap_phrase(
                     raw_mix = lows + highs
 
                 mixed = _apply_ceiling(raw_mix, ceiling)
-                return mixed, h_swap + rem_head, t_swap
+                return mixed, head_shift + h_swap + rem_head, t_swap
 
     # Fallback frame-0 aligned bass-swap (used when swap_position == 0 or kicks are sparse)
     n = min(len(tail_slice), len(head_slice))
