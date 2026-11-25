@@ -1,5 +1,6 @@
 """Mix engine: join two recordings so the kick keeps its beat across phrase-long DJ transitions."""
 import numpy as np
+import pytest
 
 from app.mixer import (
     CROSSFADE_BEATS,
@@ -168,3 +169,33 @@ def test_custom_mixer_config_changes_overlap_duration():
 def test_pcm_round_trip_is_lossless_for_16_bit_audio():
     raw = (np.arange(-1000, 1000, dtype=np.int16)).tobytes() * 2
     assert float_to_pcm(pcm_to_float(raw)) == raw
+
+
+def test_bass_swap_snaps_to_measured_kick_paired_by_grid_ordinal():
+    """Regression (c531082): the swap must land on the REAL kick at the target grid ordinal on each deck,
+    not on the idealised fitted-grid time, and the head must be matched in the untrimmed frame."""
+    from app.beat_grid import BeatGrid
+    from app.mixer import _ordinal_swap_times
+
+    period = 60.0 / 126
+    tail_grid = BeatGrid(origin_s=0.10, period_s=period, residual_ms=10.0, kicks_used=12)
+    head_grid = BeatGrid(origin_s=0.30, period_s=period, residual_ms=10.0, kicks_used=12)
+    shift_s = 0.20  # head trimmed by 200 ms: untrimmed = trimmed + shift_s
+    tail_first, head_beat0, swap_index = 0.10, 0.10, 6
+    # Kicks jitter +-25 ms around their grid lines, in opposite directions on the two decks
+    tail_kicks = tail_grid.origin_s + np.arange(12) * period + np.where(np.arange(12) == 6, 0.025, -0.004)
+    head_kicks = head_grid.origin_s + np.arange(12) * period + np.where(np.arange(12) == 6, -0.025, 0.004)
+
+    t_time, h_time = _ordinal_swap_times(
+        tail_kicks, head_kicks, tail_grid, head_grid, tail_first, head_beat0, shift_s, swap_index
+    )
+    assert t_time == pytest.approx(tail_kicks[6])
+    assert h_time == pytest.approx(head_kicks[6] - shift_s)  # matched untrimmed, reported trimmed
+
+    # No detected kick at the target ordinal -> fall back to the grid time, never borrow a neighbour
+    t_time, h_time = _ordinal_swap_times(
+        np.delete(tail_kicks, 6), np.delete(head_kicks, 6), tail_grid, head_grid,
+        tail_first, head_beat0, shift_s, swap_index,
+    )
+    assert t_time == pytest.approx(tail_first + swap_index * period)
+    assert h_time == pytest.approx(head_beat0 + swap_index * period)
