@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Wave 1 integration** (`ow/ambi-integrate-w1`): rebrand + USD pricing, Classic redesign and entry split / start
+  wizard / 6 h trial merged into one branch. The redesign owns layout and styles, the rebrand owns brand strings
+  (ambiradio.com canonical/OG) and USD prices, the wizard owns the entry split, wizard and trial. Wizard and trial
+  styles now use the Classic tokens (square edges, one lime accent instead of the old orange), the trial pill reads
+  "Pełny dostęp 5 h 42 min" so the header stays on one row at 1440 px, the Plus modal sits above the mobile bottom
+  nav, and the leftover "darmowa godzina" texts in Orbita (PL/EN/RU) and the 5-minute nudge now say "pełny dostęp".
+  Screenshots: `docs/ambiradio/shots/integ-w1/`.
 - **Rebrand to AmbiRadio — "AmbiRadio — Ambitnie dla Ciebie"**: every user-facing "DOS Radio" string is now
   "AmbiRadio" across `index.html` (title, description, canonical, OG/Twitter tags pointing at https://ambiradio.com),
   `public/manifest.webmanifest`, `public/admin.html`, `src/**`, Orbita (`orbita/src/*`, PL/EN/RU i18n, rebuilt

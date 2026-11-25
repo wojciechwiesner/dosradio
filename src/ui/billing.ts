@@ -49,7 +49,7 @@ const STYLE = `
 .drplus-badge:hover{background:var(--accent);color:var(--on-accent)}
 .drplus-badge.active{background:var(--accent);color:var(--on-accent)}
 .drplus-badge svg{width:16px;height:16px}
-.drplus-overlay{position:fixed;inset:0;z-index:70;display:grid;place-items:center;padding:16px;background:rgba(5,5,6,0.82)}
+.drplus-overlay{position:fixed;inset:0;z-index:960;display:grid;place-items:center;padding:16px;background:rgba(5,5,6,0.82)}
 .drplus-dialog{width:min(600px,100%);max-height:calc(100vh - 32px);overflow-y:auto;background:var(--bg-2);
   border:1px solid var(--line-strong);border-top:4px solid var(--accent);padding:32px;animation:drplus-in 0.16s ease-out}
 @keyframes drplus-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
