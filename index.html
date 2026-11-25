@@ -139,6 +139,10 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
               Dedykuj stację
             </button>
+            <button class="btn" id="commentBtn" type="button" title="Napisz do prowadzącego. Najciekawsze komentarze idą na antenę AmbiRadio">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg>
+              Komentarz na antenę
+            </button>
             <label class="volume" title="Głośność">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 5 6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/></svg>
               <input type="range" id="volume" min="0" max="1" step="0.01" value="0.9" />
@@ -146,6 +150,7 @@
           </div>
           <div class="status" id="status">Kliknij Graj. Pierwsza godzina za darmo, bez konta.</div>
           <div class="upcoming" id="upcoming" aria-live="off"></div>
+          <div class="comment-feed" id="commentFeed" aria-live="polite"></div>
           <div class="in-programme" id="inProgramme" aria-live="polite" hidden></div>
         </div>
       </div>

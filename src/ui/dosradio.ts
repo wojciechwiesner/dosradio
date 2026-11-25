@@ -35,6 +35,7 @@ import { openOnboarding } from './onboarding';
 import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from './plus';
 import { initProgrammeLine } from './pill';
 import { wireClassicDedications } from './dedicationModal';
+import { wireClassicComments } from './commentBox';
 import { wireClassicSocialStudio } from './socialCreatorStudio';
 
 const $ = <T extends HTMLElement>(id: string): T => {
@@ -943,6 +944,7 @@ wireClassicDedications(
   },
   setStatus,
 );
+wireClassicComments(engine, setStatus);
 wireClassicSocialStudio(
   engine,
   (sid) => {

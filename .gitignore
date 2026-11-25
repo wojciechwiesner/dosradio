@@ -9,3 +9,4 @@ data-local/
 __pycache__/
 .DS_Store
 .planning/orchestration/waves/
+.venv-t/

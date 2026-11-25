@@ -8,6 +8,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Hosts with a soul + listener comments on air (AmbiRadio)** (`server/app/host_personas.py`, `hosts.py`,
+  `comments.py`, `moderation.py`, `og_preview.py`, `main.py`, `src/ui/commentBox.ts`, `src/radio/hostClipPlayer.ts`,
+  `orbita/src/comments.js`, `orbita/src/engine.js`, `index.html`): every host has a Polish persona (backstory,
+  worldview, humour, catchphrases, pet topics, musical loves/hates, how they address listeners, a day thread) and a
+  server-side day memory (last 10 notable things said/heard). Live links between songs are written by the LLM from
+  persona + memory + time of day + the news topic in the programme, once per station per 20 min slot; static chatter
+  is the offline fallback. `POST /radio-api/comments` (max 280 chars, nick optional, per-actor and per-IP rate limit)
+  moderates and scores comments (heuristic + optional cached LLM score); the best fresh comment is read in the next
+  break with the nick ("Ania z Krakowa pisze: ...") and answered in the host's voice. Cost guard: max
+  `AMBI_COMMENTS_PER_HOUR` (4) readouts per station per hour, `AMBI_HOST_LLM_PER_HOUR` (120) LLM calls, one voiced
+  file per break shared by every listener. The sender sees "Twój komentarz poszedł na antenę" with the clip and a
+  share link (`?k=`, OpenGraph card). Classic: "Komentarz na antenę" button + live feed with "na antenie" badge;
+  Orbita: comment icon in the station card + feed. Docs: `docs/ambiradio/hosts-and-comments.md`.
+  Tests: `server/tests/test_comments.py`, `server/tests/test_moderation.py`, `tests/hostBreak.test.ts`.
+- **Shared moderation** (`server/app/moderation.py`): Polish + English abuse list (catches `k u r w a`, `ku.rwa`,
+  leetspeak, repeated letters), link/e-mail/phone/handle stripping, length cap, optional cached LLM second opinion.
+  Used by comments, dedications and custom radio names; rejections return a friendly Polish message.
+
+### Changed
+- Host jingles, dedication greetings and borrowed-host greetings say "AmbiRadio" instead of "DOS Radio". Host clip,
+  greeting and jingle cache files now carry a hash of the line, so edited lines are voiced again.
 - **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`
   (key >= 32 chars) grants a device such as the LUNA salon reception kiosk permanent access, sent as the
   `x-dosradio-device` header or `?device=` query (for `<audio>`). Keyed GETs also get `Access-Control-Allow-Origin: *`

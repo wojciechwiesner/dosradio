@@ -14,6 +14,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from PIL import Image, ImageDraw, ImageFont
 
+from .comments import CommentService
 from .custom_radios import CustomRadioService
 from .db import Database
 from .dedications import DedicationStore
@@ -136,6 +137,7 @@ def build_og_router(
     router = APIRouter(tags=["og"])
     social = SocialService(db)
     ded_store = DedicationStore(db.path)
+    comments = CommentService(db)
 
     def _brand() -> str:
         return os.getenv("RADIO_BRAND_DOMAIN", "heloradio.com").strip() or "heloradio.com"
@@ -170,6 +172,14 @@ def build_og_router(
                 from_name = str(rad.get("creator_name") or "")
                 title = str(rad.get("name") or title)
                 about = str(rad.get("description") or "Autorska stacja radiowa na żywo i pigułki wiedzy.")
+        elif params.get("k"):
+            cmt = comments.get(params["k"]) if params["k"].isalnum() else None
+            if cmt:
+                st_id = str(cmt.get("station_id") or st_id)
+                from_name = str(cmt.get("nick") or "")
+                host_name = str(cmt.get("host_name") or "prowadzący")
+                title = f"Komentarz na antenie AmbiRadio: odpowiada {host_name}" if cmt.get("on_air") else "Komentarz dla prowadzącego AmbiRadio"
+                about = str(cmt.get("text") or about)
         elif params.get("d"):
             ded = ded_store.get(params["d"])
             if ded:
@@ -200,7 +210,7 @@ def build_og_router(
 
     @router.get("/radio-api/og/card.png")
     async def og_card_image(request: Request) -> Response:
-        q = {k: v for k, v in request.query_params.items() if k in ("p", "w", "r", "d", "station")}
+        q = {k: v for k, v in request.query_params.items() if k in ("p", "w", "r", "d", "k", "station")}
         meta = _resolve_meta(q)
         png = render_og_card_png(
             title=meta["title"],
@@ -213,12 +223,12 @@ def build_og_router(
 
     @router.get("/radio-api/og/share-html", response_class=HTMLResponse)
     async def og_share_html(request: Request) -> HTMLResponse:
-        q = {k: v for k, v in request.query_params.items() if k in ("p", "w", "r", "d", "station", "view")}
+        q = {k: v for k, v in request.query_params.items() if k in ("p", "w", "r", "d", "k", "station", "view")}
         meta = _resolve_meta(q)
         proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
         host = request.headers.get("host") or request.url.netloc or "dosradio.theones.io"
         origin = f"{proto}://{host}"
-        qs = urlencode({k: v for k, v in q.items() if k in ("p", "w", "r", "d", "station")})
+        qs = urlencode({k: v for k, v in q.items() if k in ("p", "w", "r", "d", "k", "station")})
         img_url = f"{origin}/radio-api/og/card.png" + (f"?{qs}" if qs else "")
         page_url = f"{origin}/" + (f"?{urlencode(q)}" if q else "")
 

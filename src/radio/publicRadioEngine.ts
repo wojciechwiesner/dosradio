@@ -837,6 +837,11 @@ export class PublicRadioEngine {
     this.lastBreakEndedAt = null;
   }
 
+  /** A listener comment was just sent: let the host check for it at the next quiet moment. */
+  requestHostBreakSoon(delayMs = 40_000): void {
+    if (this.playing && this.hostMode === 'with-host') this.clipPlayer.soon(delayMs);
+  }
+
   /** Random jingle/chatter between songs: ducks the music like a news break. */
   private async airHostClip(url: string): Promise<void> {
     const buffer = await this.decode(url);
@@ -877,8 +882,9 @@ export class PublicRadioEngine {
   /** Nothing new to report today: say so briefly and let the host chat instead of repeating a story. */
   private async airFiller(): Promise<void> {
     this.events.onStatus('To już wszystkie nowe wiadomości na dziś. Zaraz coś od prowadzącego.');
-    const clips = await radioApi.hostClips(hostStationId(this.station));
-    const url = clips?.chatter[Math.floor(Math.random() * (clips?.chatter.length ?? 0))];
+    const live = await this.clipPlayer.freshLiveUrl(hostStationId(this.station));
+    const clips = live ? null : await radioApi.hostClips(hostStationId(this.station));
+    const url = live ?? clips?.chatter[Math.floor(Math.random() * (clips?.chatter.length ?? 0))];
     if (url) await this.airHostClip(url).catch(() => {});
   }
 

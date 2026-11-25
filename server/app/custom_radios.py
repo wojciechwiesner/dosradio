@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from .auth import AccessService, client_ip
 from .db import Database
+from .moderation import moderate_many
 from .hosts import BORROWED_HOSTS
 
 SCHEMA = """
@@ -204,6 +205,16 @@ def build_custom_radios_router(service: CustomRadioService, access: AccessServic
     @router.post("")
     async def create_radio(body: CreateCustomRadioBody, request: Request) -> dict[str, Any]:
         owner = resolve_actor_key(request, access, service.db)
+        cleaned, rejected = moderate_many(
+            {"name": body.name, "creator_name": body.creator_name, "description": body.description}, max_len=600,
+        )
+        if rejected is not None:
+            raise HTTPException(400, rejected.message)
+        cleaned["name"] = cleaned["name"][:80]
+        cleaned["creator_name"] = cleaned["creator_name"][:60]
+        if len(cleaned["name"]) < 2:
+            raise HTTPException(400, "Nazwa stacji musi mieć co najmniej 2 znaki, bez linków i numerów telefonu.")
+        body = body.model_copy(update=cleaned)
         radio = service.create(owner, body)
         share_url = f"{public_base}/orbita.html?r={radio['slug']}"
         classic_url = f"{public_base}/?r={radio['slug']}"

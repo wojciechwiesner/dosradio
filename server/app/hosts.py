@@ -5,7 +5,9 @@ and the same file is replayed for every listener, whatever station they are on.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
+
+from .host_personas import EMPTY_PERSONA, PERSONAS, Persona
 
 
 @dataclass(frozen=True)
@@ -16,8 +18,9 @@ class Host:
     station_label: str  # how the host says the station name
     greeting: str       # spoken on Play, ~10-15 s
     jingle: str         # short ident played when the stream recovers
-    jingles: tuple[str, ...]  # short station idents, each one names DOS Radio
-    chatter: tuple[str, ...]  # evergreen 1-2 sentence remarks played between songs
+    jingles: tuple[str, ...]  # short station idents, each one names AmbiRadio
+    chatter: tuple[str, ...]  # evergreen 1-2 sentence remarks, offline fallback for live links
+    persona: Persona = field(default=EMPTY_PERSONA, compare=False)  # the host's soul, fed to LLM prompts
 
 
 HOSTS: dict[str, Host] = {
@@ -27,10 +30,10 @@ HOSTS: dict[str, Host] = {
         "Cześć, tu Kuba. Ty robisz swoje, ja pilnuję rytmu. Spokojny groove, zero pośpiechu. Zaczynamy.",
         "DOS Groove. Kuba jest z tobą.",
         jingles=(
-            "Tu DOS Radio, DOS Groove. Kuba przy konsolecie.",
-            "DOS Groove w DOS Radio. Rytm pod kontrolą.",
-            "Słuchasz DOS Radio. Spokojnie, groove trwa.",
-            "DOS Radio, DOS Groove. Kuba jest z tobą.",
+            "Tu AmbiRadio, DOS Groove. Kuba przy konsolecie.",
+            "DOS Groove w AmbiRadio. Rytm pod kontrolą.",
+            "Słuchasz AmbiRadio. Spokojnie, groove trwa.",
+            "AmbiRadio, DOS Groove. Kuba jest z tobą.",
         ),
         chatter=(
             "Skupienie to supermoc. Nie musisz go szukać, wystarczy zostać w rytmie.",
@@ -49,10 +52,10 @@ HOSTS: dict[str, Host] = {
         "Hej, tu Ola. Zrób sobie herbatę, usiądź wygodnie. Będzie cicho, ciepło i bez rozpraszania.",
         "Lo-fi Nauka. Ola, jestem obok.",
         jingles=(
-            "Tu DOS Radio, Lo-fi Nauka. Ola jest obok.",
-            "Lo-fi Nauka w DOS Radio. Cicho, ciepło, po swojemu.",
-            "Słuchasz DOS Radio. Zostajemy w skupieniu.",
-            "DOS Radio, Lo-fi Nauka. Ola czuwa nad ciszą.",
+            "Tu AmbiRadio, Lo-fi Nauka. Ola jest obok.",
+            "Lo-fi Nauka w AmbiRadio. Cicho, ciepło, po swojemu.",
+            "Słuchasz AmbiRadio. Zostajemy w skupieniu.",
+            "AmbiRadio, Lo-fi Nauka. Ola czuwa nad ciszą.",
         ),
         chatter=(
             "Mała przerwa też jest częścią nauki. Napij się wody i wróć, kiedy będziesz gotowy.",
@@ -71,10 +74,10 @@ HOSTS: dict[str, Host] = {
         "Dobry wieczór i dzień dobry, tu Rafał. Słuchaj detali, małych kliknięć i ciepłego basu. To się dzieje powoli.",
         "Microhouse. Rafał, gramy dalej.",
         jingles=(
-            "Tu DOS Radio, Microhouse. Rafał, detale są najważniejsze.",
-            "Microhouse w DOS Radio. Słuchaj małych kliknięć.",
-            "Słuchasz DOS Radio. Gramy powoli i dokładnie.",
-            "DOS Radio, Microhouse. Rafał, gramy dalej.",
+            "Tu AmbiRadio, Microhouse. Rafał, detale są najważniejsze.",
+            "Microhouse w AmbiRadio. Słuchaj małych kliknięć.",
+            "Słuchasz AmbiRadio. Gramy powoli i dokładnie.",
+            "AmbiRadio, Microhouse. Rafał, gramy dalej.",
         ),
         chatter=(
             "Najciekawsze rzeczy są zwykle ciche. Trzeba tylko nadstawić ucho.",
@@ -93,10 +96,10 @@ HOSTS: dict[str, Host] = {
         "Tu Ida. Weź głęboki oddech. Nic nie musisz. Pozwól, żeby dźwięk rozlał się wokół ciebie.",
         "Głęboki Ambient. Oddychaj spokojnie.",
         jingles=(
-            "Tu DOS Radio. Głęboki Ambient. Oddychaj spokojnie.",
-            "Głęboki Ambient w DOS Radio. Ida, powoli.",
-            "Słuchasz DOS Radio. Nic nie musisz.",
-            "DOS Radio, Głęboki Ambient. Ida jest blisko.",
+            "Tu AmbiRadio. Głęboki Ambient. Oddychaj spokojnie.",
+            "Głęboki Ambient w AmbiRadio. Ida, powoli.",
+            "Słuchasz AmbiRadio. Nic nie musisz.",
+            "AmbiRadio, Głęboki Ambient. Ida jest blisko.",
         ),
         chatter=(
             "Weź powolny oddech. Wydech niech będzie jeszcze dłuższy.",
@@ -115,10 +118,10 @@ HOSTS: dict[str, Host] = {
         "Dzień dobry, tu Zosia! Kawa w dłoń, okno szeroko. Gramy jasno i z energią na dobry start.",
         "Poranna Kawa. Zosia mówi: dasz radę.",
         jingles=(
-            "Tu DOS Radio, Poranna Kawa! Zosia mówi: dasz radę.",
-            "Poranna Kawa w DOS Radio. Uśmiech na start!",
-            "Słuchasz DOS Radio. Jasno, lekko i z energią.",
-            "DOS Radio, Poranna Kawa. Zosia gra z uśmiechem.",
+            "Tu AmbiRadio, Poranna Kawa! Zosia mówi: dasz radę.",
+            "Poranna Kawa w AmbiRadio. Uśmiech na start!",
+            "Słuchasz AmbiRadio. Jasno, lekko i z energią.",
+            "AmbiRadio, Poranna Kawa. Zosia gra z uśmiechem.",
         ),
         chatter=(
             "Mały uśmiech to dobry początek czegokolwiek. Spróbuj!",
@@ -137,10 +140,10 @@ HOSTS: dict[str, Host] = {
         "Cześć, tu Lena. Płyniemy razem: połamane bity, ciepły bas i dużo przestrzeni. Zapnij pasy, jedziemy.",
         "Liquid DnB. Lena, płyniemy dalej.",
         jingles=(
-            "Tu DOS Radio, Liquid DnB. Lena, płyniemy dalej.",
-            "Liquid DnB w DOS Radio. Zapnij pasy, jedziemy.",
-            "Słuchasz DOS Radio. Bity płyną, a ty z nimi.",
-            "DOS Radio, Liquid DnB. Lena prowadzi.",
+            "Tu AmbiRadio, Liquid DnB. Lena, płyniemy dalej.",
+            "Liquid DnB w AmbiRadio. Zapnij pasy, jedziemy.",
+            "Słuchasz AmbiRadio. Bity płyną, a ty z nimi.",
+            "AmbiRadio, Liquid DnB. Lena prowadzi.",
         ),
         chatter=(
             "Połamane bity lubią przestrzeń. Pozwól im płynąć.",
@@ -159,10 +162,10 @@ HOSTS: dict[str, Host] = {
         "Siema, tu Tadek! Bas buja, gitara skacze, a ty nie musisz siedzieć prosto. Kręcimy groove.",
         "Neo Funk. Tadek, bujamy się dalej.",
         jingles=(
-            "Tu DOS Radio, Neo Funk. Tadek, bujamy się dalej!",
-            "Neo Funk w DOS Radio. Bas buja, gitara skacze.",
-            "Słuchasz DOS Radio. Kręcimy groove, siema!",
-            "DOS Radio, Neo Funk. Tadek się uśmiecha.",
+            "Tu AmbiRadio, Neo Funk. Tadek, bujamy się dalej!",
+            "Neo Funk w AmbiRadio. Bas buja, gitara skacze.",
+            "Słuchasz AmbiRadio. Kręcimy groove, siema!",
+            "AmbiRadio, Neo Funk. Tadek się uśmiecha.",
         ),
         chatter=(
             "Nie musisz siedzieć prosto. Groove lubi luz.",
@@ -181,10 +184,10 @@ HOSTS: dict[str, Host] = {
         "Hej, tu Max! Głośniej, wyżej, lżej. Parkiet jest tam, gdzie ty. Jedziemy z energią.",
         "Klubowy Dance. Max, nie zwalniamy.",
         jingles=(
-            "Tu DOS Radio, Klubowy Dance. Max, nie zwalniamy!",
-            "Klubowy Dance w DOS Radio. Parkiet jest tam, gdzie ty.",
-            "Słuchasz DOS Radio. Energia w górę!",
-            "DOS Radio, Klubowy Dance. Max przy mikrofonie.",
+            "Tu AmbiRadio, Klubowy Dance. Max, nie zwalniamy!",
+            "Klubowy Dance w AmbiRadio. Parkiet jest tam, gdzie ty.",
+            "Słuchasz AmbiRadio. Energia w górę!",
+            "AmbiRadio, Klubowy Dance. Max przy mikrofonie.",
         ),
         chatter=(
             "Energia nie krzyczy, ona się udziela. Czujesz?",
@@ -203,10 +206,10 @@ HOSTS: dict[str, Host] = {
         "Tu Igor. Mniej słów, więcej pulsu. Zostań w rytmie.",
         "Minimal Techno. Igor. Rytm trwa.",
         jingles=(
-            "Tu DOS Radio. Minimal Techno. Igor.",
-            "Minimal Techno w DOS Radio. Rytm trwa.",
-            "Słuchasz DOS Radio. Mniej słów, więcej pulsu.",
-            "DOS Radio, Minimal Techno. Igor przy pulsie.",
+            "Tu AmbiRadio. Minimal Techno. Igor.",
+            "Minimal Techno w AmbiRadio. Rytm trwa.",
+            "Słuchasz AmbiRadio. Mniej słów, więcej pulsu.",
+            "AmbiRadio, Minimal Techno. Igor przy pulsie.",
         ),
         chatter=(
             "Puls wystarczy. Reszta to szum.",
@@ -225,10 +228,10 @@ HOSTS: dict[str, Host] = {
         "Tu Wiktor. Światła gasną, stopa rośnie. Ciężko, prosto, do przodu.",
         "Mocne Techno. Wiktor. Nie zatrzymujemy się.",
         jingles=(
-            "Tu DOS Radio, Mocne Techno. Wiktor. Nie zatrzymujemy się.",
-            "Mocne Techno w DOS Radio. Stopa rośnie.",
-            "Słuchasz DOS Radio. Ciężko, prosto, do przodu.",
-            "DOS Radio, Mocne Techno. Wiktor gra dalej.",
+            "Tu AmbiRadio, Mocne Techno. Wiktor. Nie zatrzymujemy się.",
+            "Mocne Techno w AmbiRadio. Stopa rośnie.",
+            "Słuchasz AmbiRadio. Ciężko, prosto, do przodu.",
+            "AmbiRadio, Mocne Techno. Wiktor gra dalej.",
         ),
         chatter=(
             "Hala huczy, a ty trzymasz rytm. Tak to się robi.",
@@ -247,10 +250,10 @@ HOSTS: dict[str, Host] = {
         "Dobry wieczór, tu Helena. Przyciemnij światło, nalej sobie coś dobrego. Mamy całą noc.",
         "Nocny Jazz. Helena, zostańmy chwilę dłużej.",
         jingles=(
-            "Tu DOS Radio, Nocny Jazz. Helena, zostańmy chwilę.",
-            "Nocny Jazz w DOS Radio. Przyciemnij światło.",
-            "Słuchasz DOS Radio. Mamy czas dla siebie.",
-            "DOS Radio, Nocny Jazz. Helena przy mikrofonie.",
+            "Tu AmbiRadio, Nocny Jazz. Helena, zostańmy chwilę.",
+            "Nocny Jazz w AmbiRadio. Przyciemnij światło.",
+            "Słuchasz AmbiRadio. Mamy czas dla siebie.",
+            "AmbiRadio, Nocny Jazz. Helena przy mikrofonie.",
         ),
         chatter=(
             "Dobra muzyka nie potrzebuje pośpiechu. Usiądź wygodnie.",
@@ -269,10 +272,10 @@ HOSTS: dict[str, Host] = {
         "Cześć, tu Marta. Zwolnij. Gęsty bas, winyl i deszcz za oknem. Nigdzie się nie spieszymy.",
         "Trip-hop Wieczór. Marta, powoli.",
         jingles=(
-            "Tu DOS Radio, Trip-hop Wieczór. Marta, powoli.",
-            "Trip-hop Wieczór w DOS Radio. Gęsty bas, leniwy rytm.",
-            "Słuchasz DOS Radio. Nigdzie się nie spieszymy.",
-            "DOS Radio, Trip-hop Wieczór. Marta mówi: zwolnij.",
+            "Tu AmbiRadio, Trip-hop Wieczór. Marta, powoli.",
+            "Trip-hop Wieczór w AmbiRadio. Gęsty bas, leniwy rytm.",
+            "Słuchasz AmbiRadio. Nigdzie się nie spieszymy.",
+            "AmbiRadio, Trip-hop Wieczór. Marta mówi: zwolnij.",
         ),
         chatter=(
             "Zwolnij. Gęsty bas sam wie, dokąd prowadzi.",
@@ -291,10 +294,10 @@ HOSTS: dict[str, Host] = {
         "Tu Szymon. Miasto śpi, a my jedziemy przez noc. Echo, przestrzeń i spokój.",
         "Nocny Dub. Szymon, jedziemy dalej.",
         jingles=(
-            "Tu DOS Radio, Nocny Dub. Szymon, jedziemy dalej.",
-            "Nocny Dub w DOS Radio. Echo i przestrzeń.",
-            "Słuchasz DOS Radio. Spokojna trasa, dobry dźwięk.",
-            "DOS Radio, Nocny Dub. Szymon prowadzi.",
+            "Tu AmbiRadio, Nocny Dub. Szymon, jedziemy dalej.",
+            "Nocny Dub w AmbiRadio. Echo i przestrzeń.",
+            "Słuchasz AmbiRadio. Spokojna trasa, dobry dźwięk.",
+            "AmbiRadio, Nocny Dub. Szymon prowadzi.",
         ),
         chatter=(
             "Echo niesie dźwięk daleko, ale spokój zostaje blisko.",
@@ -313,10 +316,10 @@ HOSTS: dict[str, Host] = {
         "Witaj, tu Marek. Nie wszystko zależy od ciebie, ale twoja uwaga tak. Usiądź spokojnie. Zacznijmy.",
         "Stoa. Marek. Wróć do tego, co zależy od ciebie.",
         jingles=(
-            "Tu DOS Radio, Stoa. Marek. Wróć do tego, co zależy od ciebie.",
-            "Stoa w DOS Radio. Spokój to wybór.",
-            "Słuchasz DOS Radio. Uwaga to twoje.",
-            "DOS Radio, Stoa. Marek. Zacznijmy od oddechu.",
+            "Tu AmbiRadio, Stoa. Marek. Wróć do tego, co zależy od ciebie.",
+            "Stoa w AmbiRadio. Spokój to wybór.",
+            "Słuchasz AmbiRadio. Uwaga to twoje.",
+            "AmbiRadio, Stoa. Marek. Zacznijmy od oddechu.",
         ),
         chatter=(
             "Nie kontrolujesz zdarzeń. Kontrolujesz swoją reakcję.",
@@ -330,6 +333,8 @@ HOSTS: dict[str, Host] = {
         ),
     ),
 }
+
+HOSTS = {sid: replace(host, persona=PERSONAS.get(sid, EMPTY_PERSONA)) for sid, host in HOSTS.items()}
 
 NEWSROOM_VOICES: dict[str, tuple[str, str]] = {
     "ai": ("Kore", "a calm, confident, friendly Polish radio news reader"),
@@ -369,10 +374,9 @@ def host_for(station_id: str | None) -> Host:
     borrowed = BORROWED_HOSTS.get(station_id or "")
     if borrowed:
         source, label = borrowed
-        from dataclasses import replace
         base = HOSTS[source]
         custom_jingle = base.jingle.replace(base.station_label, label)
-        custom_greeting = f"Cześć, tu {base.name}. Wkraczamy w {label}, DOS Radio. Zaczynamy."
+        custom_greeting = f"Cześć, tu {base.name}. Wkraczamy w {label}, AmbiRadio. Zaczynamy."
         custom_jingles = tuple(j.replace(base.station_label, label) for j in base.jingles)
         return replace(
             base,
@@ -391,4 +395,4 @@ BORROWED_HOSTS.update(EXTRA_BORROWED_HOSTS)
 
 def intro_line(station_id: str) -> str:
     host = host_for(station_id)
-    return f"Z tej strony {host.name}, {host.station_label}, DOS Radio."
+    return f"Z tej strony {host.name}, {host.station_label}, AmbiRadio."

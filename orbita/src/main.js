@@ -7,6 +7,7 @@ import { createScene, STEP } from './scene.js';
 import { Sales } from './sales.js';
 import { radioPane, minePane, podsPane } from './panes.js';
 import { openDedicationModal, loadIncomingDedication } from './dedication.js';
+import { initOrbitaComments } from './comments.js';
 import { initOrbitaSocial } from './social.js';
 import { stoicThoughts, stoicPill, stoicPillTitle, toParts, gmailSample } from './content.js';
 
@@ -897,6 +898,10 @@ function frame(now) {
   $('#dedicateBtn')?.addEventListener('click', () => {
     if (app.openQuickShareStation) app.openQuickShareStation();
     else openDedicationModal(app, prefs.station);
+  });
+  initOrbitaComments(app, {
+    stationId: () => (byId[prefs.station] || STATIONS[0]).id,
+    hostName: () => (byId[prefs.station] || STATIONS[0]).host,
   });
   const dedLbl = document.getElementById('dedicateTxt');
   if (dedLbl) dedLbl.textContent = 'Udostępnij';
