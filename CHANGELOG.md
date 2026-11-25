@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a `file://` kiosk can read news JSON. Tests: `server/tests/test_device_keys.py`.
 
 ### Fixed
+- **Dropped/doubled kick at AmbiRadio DJ joins** (`server/app/mixer.py`): the grid-locked bass swap fired at
+  each deck's idealised fitted-grid time, up to ~30 ms off the real kick in opposite directions, so the
+  anti-flam ramp smeared both kicks and the join read as a 2-beat gap (0.968 s at 126 bpm). Kicks are now
+  paired by grid ordinal on each deck and the swap lands on the measured kick at that ordinal (head matched
+  in the untrimmed frame). 5-segment chain: kick interval max 0.968 -> 0.505 s, stddev 35.8 -> 12.1 ms.
+  Restores `tests/test_stream_chain.py`; regression test in `tests/test_mixer.py`.
 - **DJ transitions drifted off the beat** (`server/app/beat_grid.py`, `server/app/mixer.py`): the tempo lock
   took its stretch ratio from ONE detected kick pair and paired kicks by their order, so one missed or
   mistimed kick (common on rumble techno) skewed half the blend by tens of ms, sometimes half a beat. Each
