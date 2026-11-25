@@ -78,7 +78,7 @@ function openClassicDedicationModal(currentStationId: string): void {
     'width:100%;max-width:480px;background:#12151e;color:#f3f4f6;border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:22px;box-shadow:0 24px 64px rgba(0,0,0,.55)',
   );
 
-  const eyebrow = mk('div', 'font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#9ca3af;margin-bottom:4px', 'DOS RADIO · DEDYKACJA');
+  const eyebrow = mk('div', 'font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#9ca3af;margin-bottom:4px', 'AMBIRADIO · DEDYKACJA');
   const h2 = mk('h2', 'margin:0 0 6px;font-size:20px', 'Udostępnij stację z dedykacją');
   const sub = mk(
     'p',

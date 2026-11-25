@@ -1,4 +1,4 @@
-"""Duet podcast generator (DOS Radio Plus): NotebookLM-style two-host Polish conversation.
+"""Duet podcast generator (AmbiRadio Plus): NotebookLM-style two-host Polish conversation.
 
 Gemini (gemini-3.8-flash) writes the dialogue, the existing TTS pipeline voices each
 turn with two distinct voices, and music breaks are copied out of the station archive
@@ -37,7 +37,7 @@ DEFAULT_TOPIC = "najciekawsze wydarzenia dnia ze świata technologii i sztucznej
 BUMPER_TEXTS = {
     "break-out": "Gramy dalej. Przerwa muzyczna, lecimy.",
     "break-in": "Wracamy do rozmowy.",
-    "outro": "To był podcast DOS Radio. Gramy dalej!",
+    "outro": "To był podcast AmbiRadio. Gramy dalej!",
 }
 _PART_NAME_RE = re.compile(r"^[vmbc]\d{2,4}\.(wav|opus)$")
 _EPISODE_ID_RE = re.compile(r"^[a-z0-9-]+$")
@@ -52,12 +52,12 @@ def slugify(text: str) -> str:
 
 
 def intro_bumper_text(title: str) -> str:
-    return f"Rozmowy DOS Radio. {title}."
+    return f"Rozmowy AmbiRadio. {title}."
 
 
 def build_podcast_prompt(topic: str, today: date) -> str:
     return "\n".join([
-        f"Dzisiaj jest {today.isoformat()}. Przygotuj scenariusz żywej audycji radiowej w duecie po polsku dla DOS Radio.",
+        f"Dzisiaj jest {today.isoformat()}. Przygotuj scenariusz żywej audycji radiowej w duecie po polsku dla AmbiRadio.",
         f"Temat audycji: {topic}.",
         "Prowadzący: Ania (ciekawska, ciepła, zadaje celne pytania) i Michał (konkretny, błyskotliwy, z lekkim humorem).",
         "Audycja MUSI mieć wyraźną budowę radiową podzieloną na części (między częściami radio puści muzykę):",
@@ -90,7 +90,7 @@ def parse_script(reply_text: str) -> tuple[str, list[dict]]:
     if start < 0 or end <= start:
         raise ValueError("podcast reply has no JSON object")
     parsed = json.loads(reply_text[start:end + 1])
-    title = str(parsed.get("title") or "").strip()[:120] or "Rozmowy DOS Radio"
+    title = str(parsed.get("title") or "").strip()[:120] or "Rozmowy AmbiRadio"
     turns: list[dict] = []
     speakers: set[int] = set()
     for item in parsed.get("turns", []):

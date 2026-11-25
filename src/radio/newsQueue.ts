@@ -1,5 +1,5 @@
 /**
- * Pure news helpers for the public DOS Radio client. Fetching, validation and TTS happen on the server.
+ * Pure news helpers for the public AmbiRadio client. Fetching, validation and TTS happen on the server.
  */
 
 export type NewsCategory = 'ai' | 'beauty' | 'sport' | 'funny' | 'stoic' | 'mine';

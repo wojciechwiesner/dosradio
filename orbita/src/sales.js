@@ -4,6 +4,22 @@ import { storage } from './data.js';
 import { defaultPodcast, defaultPodcastTitle, stoicPill, stoicPillTitle, toParts } from './content.js';
 
 const KEY = 'dosradio.orbita.freehour.v1';
+
+/* AmbiRadio prices in USD (cents). Server billing status wins when it reports USD; yearly is display-only. */
+const DEFAULT_PLANS = [
+  { id: 'plus', name: 'AmbiRadio Plus', currency: 'usd', amount_cents: 299, yearly_cents: 2990 },
+  { id: 'plus_ai', name: 'AmbiRadio Plus AI', currency: 'usd', amount_cents: 699, yearly_cents: 6990 },
+];
+const usd = cents => `$${(Math.round(cents) / 100).toFixed(2)}`;
+function planPrice(plans, id) {
+  const fallback = DEFAULT_PLANS.find(p => p.id === id) || DEFAULT_PLANS[0];
+  const live = (plans || []).find(p => p.id === id && p.currency === 'usd' && p.amount_cents);
+  return {
+    monthly: live?.amount_cents || fallback.amount_cents,
+    yearly: live?.yearly_cents || fallback.yearly_cents,
+    short: id === 'plus_ai' ? 'Plus AI' : 'Plus',
+  };
+}
 export const STEPS = ['news', 'orbit', 'stoic', 'podcast', 'source'];
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -100,7 +116,7 @@ export class Sales {
 
   /* ---------------- plus pane ---------------- */
   paneHtml() {
-    const me = this.app.me || {}, plan = this.app.billing?.plans || [{ id: 'plus', amount_pln: 39 }, { id: 'plus_ai', amount_pln: 59 }];
+    const me = this.app.me || {}, plan = this.app.billing?.plans || DEFAULT_PLANS;
     let h = '';
     if (me.plus) h += `<section class="group"><h2>${t('plansTitle')}</h2><p class="lead"><span class="tag hot">${t('plusActive')}</span></p></section>`;
     else {
@@ -116,9 +132,11 @@ export class Sales {
     return h;
   }
   plansHtml(plans) {
-    const get = id => plans.find(p => p.id === id)?.amount_pln ?? (id === 'plus' ? 39 : 59);
-    const card = (id, name, feats, cta, featured) => `<div class="plan${featured ? ' featured' : ''}"><b>${name}</b><div class="price">${get(id)} <small>${t('currency')} ${t('perMonth')}</small></div><ul>${feats.map(f => `<li>${esc(f)}</li>`).join('')}</ul><button class="btn ${featured ? 'primary' : ''} small" type="button" data-plan="${id}">${cta}</button></div>`;
-    return `<div class="plans">${card('plus', 'Plus', t('planPlus'), t('choosePlus'), true)}${card('plus_ai', 'Plus+AI', t('planAi'), t('chooseAi'), false)}</div>`;
+    const card = (id, feats, cta, featured) => {
+      const { monthly, yearly, short } = planPrice(plans, id);
+      return `<div class="plan${featured ? ' featured' : ''}"><b>${short}</b><div class="price">${usd(monthly)} <small>${t('perMonth')}</small></div><div class="hint">${t('orYear', { p: `${usd(yearly)} ${t('perYear')}` })}</div><ul>${feats.map(f => `<li>${esc(f)}</li>`).join('')}</ul><button class="btn ${featured ? 'primary' : ''} small" type="button" data-plan="${id}">${cta}</button></div>`;
+    };
+    return `<div class="plans">${card('plus', t('planPlus'), t('choosePlus'), true)}${card('plus_ai', t('planAi'), t('chooseAi'), false)}</div>`;
   }
   bindPane(root) {
     root.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => this.goStep(b.dataset.step)));
@@ -141,7 +159,7 @@ export class Sales {
   open(kind, authMode) {
     const box = document.getElementById('pwBox'), me = this.app.me || {};
     if (authMode) this.authMode = authMode;
-    const plans = this.app.billing?.plans || [{ id: 'plus', amount_pln: 39 }, { id: 'plus_ai', amount_pln: 59 }];
+    const plans = this.app.billing?.plans || DEFAULT_PLANS;
     let h = '';
     if (kind === 'ended') {
       const st = this.stats;
@@ -151,7 +169,7 @@ export class Sales {
     else h += `<h2 id="pwTitle">${t('plansTitle')}</h2>${kind === 'podcastUsed' ? `<p class="lead">${t('podUsed')}</p>` : kind === 'locked' ? `<p class="lead">${t('plusOnly')}</p>` : ''}`;
     if (kind !== 'auth' && me.registered) h += this.plansHtml(plans);
     if (!me.registered) h += this.authHtml(kind === 'auth' ? this.authMode : 'register');
-    if (kind !== 'auth' && !me.registered) h += `<details><summary class="hint" style="cursor:pointer">${t('plansTitle')}: 39 / 59 ${t('currency')} ${t('perMonth')}</summary><div style="margin-top:10px">${this.plansHtml(plans)}</div></details>`;
+    if (kind !== 'auth' && !me.registered) h += `<details><summary class="hint" style="cursor:pointer">${t('plansTitle')}: ${usd(planPrice(plans, 'plus').monthly)} / ${usd(planPrice(plans, 'plus_ai').monthly)} ${t('perMonth')}</summary><div style="margin-top:10px">${this.plansHtml(plans)}</div></details>`;
     h += `<p class="hint">${t('stripeNote')}</p><div class="row"><button class="btn small" type="button" data-close>${t('later')}</button></div>`;
     box.innerHTML = h;
     const pw = document.getElementById('paywall'); pw.hidden = false;

@@ -1,5 +1,5 @@
-// DOS Radio PWA Service Worker — installable shell & network-first HTML
-const CACHE_NAME = 'dosradio-shell-v4';
+// AmbiRadio PWA Service Worker — installable shell & network-first HTML
+const CACHE_NAME = 'dosradio-shell-v5'; // v5: AmbiRadio rebrand
 const ASSETS = [
   '/',
   '/index.html',

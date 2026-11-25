@@ -14,6 +14,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, Response
 from PIL import Image, ImageDraw, ImageFont
 
+from .config import BRAND_TAGLINE, public_base_url, public_domain
 from .custom_radios import CustomRadioService
 from .db import Database
 from .dedications import DedicationStore
@@ -53,7 +54,7 @@ def render_og_card_png(
     about: str,
     station_name: str,
     from_name: str = "",
-    brand_domain: str = "heloradio.com",
+    brand_domain: str = "ambiradio.com",
 ) -> bytes:
     """Render a crisp 1200x630 Dark Obsidian + 3-Orbit Vinyl social share card PNG."""
     w, h = 1200, 630
@@ -86,7 +87,7 @@ def render_og_card_png(
     f_body = _load_font(FONT_CANDIDATES_REG, 26)
     f_meta = _load_font(FONT_CANDIDATES_BOLD, 24)
 
-    # Top pill badge: AUDYCJA W RADIU HELORADIO.COM
+    # Top pill badge: AUDYCJA W RADIU AMBIRADIO.COM
     badge_txt = f"AUDYCJA W RADIU {brand_domain.upper()}" + (f"  ·  OD: {from_name.upper()}" if from_name else "")
     draw.rounded_rectangle((74, 72, min(w - 80, 120 + len(badge_txt) * 14), 120), radius=24, fill=(38, 20, 18), outline=(255, 107, 61), width=2)
     draw.ellipse((94, 89, 108, 103), fill=(255, 107, 61))
@@ -138,7 +139,7 @@ def build_og_router(
     ded_store = DedicationStore(db.path)
 
     def _brand() -> str:
-        return os.getenv("RADIO_BRAND_DOMAIN", "heloradio.com").strip() or "heloradio.com"
+        return os.getenv("RADIO_BRAND_DOMAIN", "").strip() or public_domain()
 
     def _resolve_meta(params: dict[str, str]) -> dict[str, str]:
         brand = _brand()
@@ -216,8 +217,9 @@ def build_og_router(
         q = {k: v for k, v in request.query_params.items() if k in ("p", "w", "r", "d", "station", "view")}
         meta = _resolve_meta(q)
         proto = request.headers.get("x-forwarded-proto") or request.url.scheme or "https"
-        host = request.headers.get("host") or request.url.netloc or "dosradio.theones.io"
-        origin = f"{proto}://{host}"
+        host = request.headers.get("host") or request.url.netloc
+        # Serve both ambiradio.com and the legacy dosradio.theones.io from their own host.
+        origin = f"{proto}://{host}" if host else public_base_url()
         qs = urlencode({k: v for k, v in q.items() if k in ("p", "w", "r", "d", "station")})
         img_url = f"{origin}/radio-api/og/card.png" + (f"?{qs}" if qs else "")
         page_url = f"{origin}/" + (f"?{urlencode(q)}" if q else "")
@@ -244,7 +246,7 @@ def build_og_router(
             f"<title>{e_title}</title>\n"
             f'  <meta name="description" content="{e_desc}" />\n'
             f'  <meta property="og:type" content="website" />\n'
-            f'  <meta property="og:site_name" content="audycja w radiu {html.escape(meta["brand"], quote=True)}" />\n'
+            f'  <meta property="og:site_name" content="{html.escape(BRAND_TAGLINE, quote=True)}" />\n'
             f'  <meta property="og:url" content="{e_url}" />\n'
             f'  <meta property="og:title" content="{e_title}" />\n'
             f'  <meta property="og:description" content="{e_desc}" />\n'

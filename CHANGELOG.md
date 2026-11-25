@@ -1,11 +1,36 @@
 # Changelog
 
-All notable changes to DOS Radio are documented in this file.
+All notable changes to AmbiRadio (formerly DOS Radio) are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+### Changed
+- **Rebrand to AmbiRadio — "AmbiRadio — Ambitnie dla Ciebie"**: every user-facing "DOS Radio" string is now
+  "AmbiRadio" across `index.html` (title, description, canonical, OG/Twitter tags pointing at https://ambiradio.com),
+  `public/manifest.webmanifest`, `public/admin.html`, `src/**`, Orbita (`orbita/src/*`, PL/EN/RU i18n, rebuilt
+  `public/orbita.html`), and the backend (host jingles and TTS lines, podcasts, spots, Auto-Ramówka, dedications,
+  e-mail, Telegram, share texts, OG share cards). The tagline shows in the header, footer, page title, OG site name,
+  Orbita enter screen and the verification e-mail. Service worker cache bumped to `dosradio-shell-v5`.
+  Kept on purpose for backwards compatibility: localStorage keys (`dosradio.*`), API paths, `x-dosradio-*` headers,
+  postMessage types, env var names, logger names, file and DB names.
+- **Public base URL is configurable** (`server/app/config.py`): `DOSRADIO_PUBLIC_BASE_URL` (default
+  `https://ambiradio.com`; the older `DOSRADIO_PUBLIC_URL` still works) feeds share links, custom-radio links, the
+  verification e-mail, Telegram alerts and bot user agents. OG share pages keep using the request's own host, so
+  ambiradio.com and dosradio.theones.io both work. The OG brand domain defaults to ambiradio.com (was heloradio.com).
+- **Pricing in USD** (`server/app/billing.py`): AmbiRadio Plus $2.99/month and AmbiRadio Plus AI $6.99/month
+  (`currency: "usd"`, amounts in cents). Stripe price ids come from `DOSRADIO_PLUS_PRICE_USD` and
+  `DOSRADIO_PLUS_AI_PRICE_USD`; `DOSRADIO_PLUS_PRICE_PLN` is no longer read, so a PLN price can't be charged while
+  the UI shows dollars. `/radio-api/billing/status` now returns `currency`, `amount_cents` and `yearly_cents`
+  instead of `amount_pln`. The billing modal (`src/ui/billing.ts`, new `src/ui/pricing.ts`) and the Orbita Plus pane
+  show "$2.99 / mies." and "$6.99 / mies." plus "$29.90 / rok" and "$69.90 / rok" (yearly is display-only; there is
+  no yearly checkout yet).
+
+### Fixed
+- Mobile header (`src/ui/dosradio.css`): the top action buttons wrap instead of pushing the page 140 px wider
+  than a 390 px screen; the tagline now shows on mobile too. The Orbita plan card keeps "/ mies." on one line.
 
 ### Added
 - **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`

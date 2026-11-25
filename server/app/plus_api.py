@@ -1,4 +1,4 @@
-"""DOS Radio Plus endpoints: duet podcasts, YouTube pills and personalized news sources.
+"""AmbiRadio Plus endpoints: duet podcasts, YouTube pills and personalized news sources.
 
 Every route requires a registered listener with an active Plus subscription
 (HTTP 402 otherwise). Mounted by app.main through build_plus_router.
@@ -37,7 +37,7 @@ def split_links(text: str) -> list[str]:
     return [match.rstrip(".)]>\"'") for match in LINK_RE.findall(text)]
 
 log = logging.getLogger("dosradio.plus")
-PLUS_MESSAGE = "Ta funkcja jest częścią DOS Radio Plus."
+PLUS_MESSAGE = "Ta funkcja jest częścią AmbiRadio Plus."
 
 
 class PodcastRequest(BaseModel):

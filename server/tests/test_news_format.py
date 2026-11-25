@@ -75,7 +75,7 @@ def test_teaser_is_deterministic_and_rotates_phrasings():
 def test_intro_scripts_for_each_kind():
     assert intro_script("flash", "czternasta dwadzieścia", "Host.") == "Czternasta dwadzieścia. Krótko, co słychać."
     assert intro_script("main", "czternasta", "Host.") == "Czternasta. Temat na teraz."
-    assert intro_script("hourly", "czternasta", "Host.") == "Jest czternasta. Pełne wiadomości DOS Radio."
+    assert intro_script("hourly", "czternasta", "Host.") == "Jest czternasta. Pełne wiadomości AmbiRadio."
     assert intro_script(None, "czternasta", "Host.") == "Czternasta. Host."
 
 

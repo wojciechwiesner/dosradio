@@ -124,7 +124,7 @@ export function wireClassicSocialStudio(
       if (ch?.outcome === 'accepted') window.__pwaPrompt = null;
       return;
     }
-    window.alert('Aby zainstalować DOS Radio na ekranie głównym: otwórz menu przeglądarki lub przycisk Udostępnij i wybierz „Dodaj do ekranu początkowego / Zainstaluj aplikację”.');
+    window.alert('Aby zainstalować AmbiRadio na ekranie głównym: otwórz menu przeglądarki lub przycisk Udostępnij i wybierz „Dodaj do ekranu początkowego / Zainstaluj aplikację”.');
   };
   topActions?.prepend(pwaBtn);
 
@@ -157,7 +157,7 @@ export function wireClassicSocialStudio(
   overlay.id = 'dos-soc-overlay';
   document.body.appendChild(overlay);
 
-  const renderAppBadgeGrid = (target: HTMLElement, url: string, text: string, title = 'DOS Radio') => {
+  const renderAppBadgeGrid = (target: HTMLElement, url: string, text: string, title = 'AmbiRadio') => {
     target.replaceChildren();
     const hdr = el('div', '', 'Udostępnij przez...');
     hdr.style.cssText = 'font-weight:700;font-size:13px;margin-top:12px';
@@ -200,7 +200,7 @@ export function wireClassicSocialStudio(
     const cl = el('button', 'dos-soc-chip', 'Zamknij'); cl.type = 'button'; cl.onclick = () => overlay.classList.remove('open');
     top.appendChild(cl); modal.appendChild(top);
     const badgeMount = el('div');
-    renderAppBadgeGrid(badgeMount, `${location.origin}/?station=${encodeURIComponent(engine.currentStation.id)}`, `Posłuchaj stacji ${engine.currentStation.name} w DOS Radio:`);
+    renderAppBadgeGrid(badgeMount, `${location.origin}/?station=${encodeURIComponent(engine.currentStation.id)}`, `Posłuchaj stacji ${engine.currentStation.name} w AmbiRadio:`);
     modal.appendChild(badgeMount);
     overlay.appendChild(modal);
   };
@@ -246,7 +246,7 @@ export function wireClassicSocialStudio(
           const msg = window.prompt(`Pozdrowienie / pigułka dla ${f.name}:`, 'Dobrego odsłuchu!') || '';
           if (!msg) return;
           const res = await sapi('/social/drops', { method: 'POST', body: JSON.stringify({ to_friend_id: f.id, to_name: f.name, kind: 'greeting', station_id: engine.currentStation.id, message: msg }) });
-          renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Wrzutka na antenę DOS Radio dla ${f.name}:`);
+          renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Wrzutka na antenę AmbiRadio dla ${f.name}:`);
         };
         row.appendChild(dropBtn); body.appendChild(row);
       }
@@ -263,7 +263,7 @@ export function wireClassicSocialStudio(
         const fd = Object.fromEntries(new FormData(form).entries());
         if (fd.from_name) localStorage.setItem(NAME_KEY, String(fd.from_name));
         const res = await sapi('/social/friends', { method: 'POST', body: JSON.stringify({ ...fd, with_greeting: true }) });
-        renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Cześć ${String(fd.name)}! Pozdrowienie na antenie DOS Radio:`);
+        renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Cześć ${String(fd.name)}! Pozdrowienie na antenie AmbiRadio:`);
       };
       body.appendChild(form);
     } else if (tab === 'creator') {
@@ -279,7 +279,7 @@ export function wireClassicSocialStudio(
         const fd = Object.fromEntries(new FormData(form).entries());
         const pills = String(fd.pills_raw || '').split('\n').map((l) => l.trim()).filter(Boolean).map((u) => ({ url: u, title: u, note: '' }));
         const res = await sapi('/custom-radios', { method: 'POST', body: JSON.stringify({ ...fd, base_station_id: fd.station_id, pills }) });
-        renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Posłuchaj mojej stacji ${String(fd.name)} w DOS Radio:`);
+        renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Posłuchaj mojej stacji ${String(fd.name)} w AmbiRadio:`);
       };
       body.appendChild(form);
     } else {

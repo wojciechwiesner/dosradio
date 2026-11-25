@@ -3,18 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>DOS Radio · prywatna stacja ze sztuczną inteligencją</title>
-  <meta name="description" content="Radio, w którym muzykę w czasie rzeczywistym generuje sztuczna inteligencja, a prowadzący podaje godzinę i krótkie wiadomości." />
+  <title>AmbiRadio — Ambitnie dla Ciebie</title>
+  <meta name="description" content="AmbiRadio — Ambitnie dla Ciebie. Osobiste radio AI na żywo: muzyka generowana w czasie rzeczywistym, prowadzący, krótkie wiadomości i podcasty na Twoje tematy." />
+  <link rel="canonical" href="https://ambiradio.com/" />
   <meta name="theme-color" content="#0b0c10" />
-  <meta property="og:title" content="Żywe radio AI i własne audycje — audycja w radiu heloradio.com" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="AmbiRadio — Ambitnie dla Ciebie" />
+  <meta property="og:url" content="https://ambiradio.com/" />
+  <meta property="og:title" content="AmbiRadio — Ambitnie dla Ciebie" />
   <meta property="og:description" content="Trzy orbity muzyki pod kciukiem, prowadzący na żywo i audycje ze stron WWW." />
-  <meta property="og:image" content="/radio-api/og/card.png" />
+  <meta property="og:image" content="https://ambiradio.com/radio-api/og/card.png" />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="AmbiRadio — Ambitnie dla Ciebie" />
+  <meta name="twitter:description" content="Trzy orbity muzyki pod kciukiem, prowadzący na żywo i audycje ze stron WWW." />
+  <meta name="twitter:image" content="https://ambiradio.com/radio-api/og/card.png" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23ff6b4a'/%3E%3Ccircle cx='16' cy='16' r='5' fill='%231a0d08'/%3E%3C/svg%3E" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="DOS Radio" />
+  <meta name="apple-mobile-web-app-title" content="AmbiRadio" />
   <link rel="apple-touch-icon" href="/icon-192.png" />
   <script>
     window.__pwaPrompt = null;
@@ -30,7 +37,7 @@
   </script>
   <link rel="stylesheet" href="/src/ui/dosradio.css" />
   <style>
-    /* DOS Radio Plus panel ("Twoje źródła" + duet podcast) — scoped styles for the Plus section. */
+    /* AmbiRadio Plus panel ("Twoje źródła" + duet podcast) — scoped styles for the Plus section. */
     .plus-box { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; background: var(--panel);
       border: 1px solid var(--line); border-radius: var(--radius); padding: 18px 20px; }
     .plus-form { display: grid; gap: 12px; align-content: start; }
@@ -71,7 +78,7 @@
     <header class="topbar">
       <div class="brand">
         <span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="2.5"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg></span>
-        DOS Radio <small>inteligentna stacja na żywo</small>
+        AmbiRadio <small>Ambitnie dla Ciebie</small>
       </div>
       <div class="top-actions">
         <div class="view-switcher" id="viewSwitcher" role="group" aria-label="Widok interfejsu">
@@ -99,7 +106,7 @@
       </div>
       <div class="ramowka-bar-side">
         <span id="ramowkaSpotText" class="ramowka-spot-text">zrobi.my — Automatyzacja AI dla firm</span>
-        <a id="ramowkaCtaLink" class="ramowka-cta" href="https://zrobi.my?utm_source=dosradio&utm_medium=ramowka" target="_blank" rel="noopener">
+        <a id="ramowkaCtaLink" class="ramowka-cta" href="https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka" target="_blank" rel="noopener">
           <span>Zamów wdrożenie AI · zrobi.my</span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 17 17 7M9 7h8v8"/></svg>
         </a>
@@ -216,9 +223,9 @@
       <div class="chips" id="categories"></div>
     </section>
 
-    <!-- DOS Radio Plus: własne źródła wiadomości i podcasty w duecie -->
+    <!-- AmbiRadio Plus: własne źródła wiadomości i podcasty w duecie -->
     <section class="section" id="plusPanel" hidden>
-      <div class="section-head"><h2>Twoje źródła</h2><span>DOS Radio Plus · własne wiadomości i podcasty w duecie</span></div>
+      <div class="section-head"><h2>Twoje źródła</h2><span>AmbiRadio Plus · własne wiadomości i podcasty w duecie</span></div>
       <div class="plus-box">
         <form id="plusPrefsForm" class="plus-form" novalidate>
           <label class="plus-field" for="plusKeywords">Słowa kluczowe (maks. 20, oddzielone przecinkiem)
@@ -268,8 +275,8 @@
     </section>
 
     <footer>
-      <span>DOS Radio · theones.io</span>
-      <span>Prywatna stacja ze sztuczną inteligencją</span>
+      <span>AmbiRadio · ambiradio.com</span>
+      <span>AmbiRadio — Ambitnie dla Ciebie</span>
     </footer>
   </div>
 
@@ -281,7 +288,7 @@
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>30 dni Plus za darmo po potwierdzeniu e-maila</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Komponowanie muzyki z własnego opisu nastroju</li>
         <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>Wiadomości z wybranych tematów</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>W Plus: podcasty w duecie i własne źródła wiadomości</li>
+        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>W Plus (od $2.99 / mies.): podcasty w duecie i własne źródła wiadomości</li>
       </ul>
       <form id="authForm" novalidate>
         <input type="email" id="authEmail" placeholder="E-mail" autocomplete="email" required />
@@ -297,7 +304,7 @@
   <div class="modal" id="onboardModal" role="dialog" aria-modal="true" aria-label="Co chcesz usłyszeć"></div>
 
   <div id="orbitaShell" class="orbita-shell" hidden>
-    <iframe id="orbitaFrame" class="orbita-frame" title="DOS Radio Orbita 2.5D" allow="autoplay; web-share; clipboard-write"></iframe>
+    <iframe id="orbitaFrame" class="orbita-frame" title="AmbiRadio Orbita 2.5D" allow="autoplay; web-share; clipboard-write"></iframe>
   </div>
 
   <script type="module" src="/src/ui/dosradio.ts"></script>

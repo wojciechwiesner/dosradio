@@ -1,4 +1,4 @@
-/* Backend access. LiveApi talks to dosradio.theones.io (same origin). DemoApi mirrors the shapes with local content. */
+/* Backend access. LiveApi talks to the AmbiRadio backend (same origin). DemoApi mirrors the shapes with local content. */
 import { getLang } from './i18n.js';
 import { demoNews, gmailSample, demoPodcast, toParts } from './content.js';
 import { byId } from './data.js';
@@ -92,7 +92,7 @@ export class DemoApi {
   async pillsBatch() { const e = new Error('demo'); e.demo = true; throw e; }
   async pillStatus() { return { status: 'error' }; }
   async hostClips() { return null; }
-  async billing() { return { registered: false, plus: false, checkout_available: false, plans: [{ id: 'plus', amount_pln: 39 }, { id: 'plus_ai', amount_pln: 59 }], demo: true }; }
+  async billing() { return { registered: false, plus: false, checkout_available: false, plans: [{ id: 'plus', currency: 'usd', amount_cents: 299, yearly_cents: 2990 }, { id: 'plus_ai', currency: 'usd', amount_cents: 699, yearly_cents: 6990 }], demo: true }; }
   async checkout() { const e = new Error('demo'); e.demo = true; throw e; }
   async showcase() { return null; }
   orbitaIntroUrl() { return null; }

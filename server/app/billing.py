@@ -1,6 +1,9 @@
-"""Stripe Checkout billing for DOS Radio Plus (test mode).
+"""Stripe Checkout billing for AmbiRadio Plus (test mode).
 
-Plans: Plus 39 PLN/month, Plus+AI 59 PLN/month. The webhook grants `plus`
+Plans (USD): AmbiRadio Plus $2.99/month, AmbiRadio Plus AI $6.99/month. Stripe price
+ids come from env (`DOSRADIO_PLUS_PRICE_USD`, `DOSRADIO_PLUS_AI_PRICE_USD`); without them
+Checkout uses an inline USD price. The old `DOSRADIO_PLUS_PRICE_PLN` is deliberately not
+read any more: a PLN price id would charge PLN while the UI shows dollars. The webhook grants `plus`
 (plan='plus', plus_until=now+30d) on `checkout.session.completed`. Mount is
 handled by app.main via a guarded import; shared Database/AccessService are
 resolved lazily to avoid a circular import.
@@ -25,9 +28,24 @@ PLUS_DAYS = 30
 SEEN_EVENT_LIMIT = 2048  # in-memory idempotency guard; survives duplicate deliveries
 _seen_events: set[str] = set()
 
+CURRENCY = "usd"
+
+# amount_cents is the monthly price; yearly_cents is shown in the UI only (no yearly checkout yet).
 PLANS: dict[str, dict[str, Any]] = {
-    "plus": {"id": "plus", "name": "DOS Radio Plus", "amount_pln": 39, "price_env": "DOSRADIO_PLUS_PRICE_PLN"},
-    "plus_ai": {"id": "plus_ai", "name": "DOS Radio Plus+AI", "amount_pln": 59, "price_env": ""},
+    "plus": {
+        "id": "plus",
+        "name": "AmbiRadio Plus",
+        "amount_cents": 299,
+        "yearly_cents": 2990,
+        "price_envs": ("DOSRADIO_PLUS_PRICE_USD",),
+    },
+    "plus_ai": {
+        "id": "plus_ai",
+        "name": "AmbiRadio Plus AI",
+        "amount_cents": 699,
+        "yearly_cents": 6990,
+        "price_envs": ("DOSRADIO_PLUS_AI_PRICE_USD",),
+    },
 }
 
 router = APIRouter(prefix="/radio-api/billing")
@@ -59,14 +77,15 @@ class CheckoutRequest(BaseModel):
 def _line_item(plan_id: str) -> dict[str, Any]:
     """Price ID from env when configured, otherwise an inline recurring price."""
     spec = PLANS[plan_id]
-    price_id = os.environ.get(spec["price_env"], "").strip() if spec["price_env"] else ""
-    if price_id:
-        return {"price": price_id, "quantity": 1}
+    for env_name in spec["price_envs"]:
+        price_id = os.environ.get(env_name, "").strip()
+        if price_id:
+            return {"price": price_id, "quantity": 1}
     return {
         "quantity": 1,
         "price_data": {
-            "currency": "pln",
-            "unit_amount": spec["amount_pln"] * 100,
+            "currency": CURRENCY,
+            "unit_amount": spec["amount_cents"],
             "recurring": {"interval": "month"},
             "product_data": {"name": spec["name"]},
         },
@@ -87,11 +106,11 @@ def _site_url(request: Request) -> str:
 def checkout(body: CheckoutRequest, request: Request) -> dict:
     """Open a Stripe Checkout session for any registered (non-Plus-required) listener."""
     if body.plan not in PLANS:
-        raise HTTPException(400, "Nieznany plan. Wybierz Plus albo Plus+AI.")
+        raise HTTPException(400, "Nieznany plan. Wybierz AmbiRadio Plus albo AmbiRadio Plus AI.")
     db, access = _core()
     current = access.resolve(request.cookies, _ip(request))
     if not current.registered or not current.email:
-        raise HTTPException(401, "Załóż konto i zaloguj się, żeby wykupić DOS Radio Plus.")
+        raise HTTPException(401, "Załóż konto i zaloguj się, żeby wykupić AmbiRadio Plus.")
     user = db.find_user_by_email(current.email)
     if user is None:
         raise HTTPException(401, "Nie znaleziono konta.")
@@ -184,7 +203,14 @@ def billing_status(request: Request) -> dict:
         "email": current.email,
         "checkout_available": bool(os.environ.get("STRIPE_SECRET_KEY", "").strip()),
         "plans": [
-            {"id": spec["id"], "name": spec["name"], "amount_pln": spec["amount_pln"], "interval": "month"}
+            {
+                "id": spec["id"],
+                "name": spec["name"],
+                "currency": CURRENCY,
+                "amount_cents": spec["amount_cents"],
+                "yearly_cents": spec["yearly_cents"],
+                "interval": "month",
+            }
             for spec in PLANS.values()
         ],
     }

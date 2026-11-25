@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 
 INTRO_PHRASES = {"flash": "Krótko, co słychać.", "main": "Temat na teraz."}
-HOURLY_INTRO = "Jest {time}. Pełne wiadomości DOS Radio."
+HOURLY_INTRO = "Jest {time}. Pełne wiadomości AmbiRadio."
 TEASER_PHRASES = (
     "Za chwilę: {headline}. Zostań z nami.",
     "Zaraz usłyszysz: {headline}. Nie przełączaj.",

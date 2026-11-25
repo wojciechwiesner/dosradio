@@ -1,5 +1,5 @@
 /**
- * Thin client for the DOS Radio API (same origin). The Gemini key lives only on the server.
+ * Thin client for the AmbiRadio API (same origin). The Gemini key lives only on the server.
  */
 import type { CategoryNews, NewsCategory } from './newsQueue';
 import type { AiredRemote } from './airedStore';
@@ -169,7 +169,7 @@ export const radioApi = {
     request<{ categories: CategoryNews[] }>(`/radio-api/news?cats=${categories.join(',')}`),
   mood: (description: string) =>
     postJson<{ id: string; name: string; tagline: string; prompt: string; bpm: number; density: number; brightness: number }>('/radio-api/mood', { mood: description }),
-  // --- DOS Radio Plus ---
+  // --- AmbiRadio Plus ---
   newsPreferences: () => request<NewsPreferences>('/radio-api/plus/news-preferences'),
   saveNewsPreferences: (keywords: string[], rssFeeds: string[]) =>
     putJson<NewsPreferences>('/radio-api/plus/news-preferences', { keywords, rss_feeds: rssFeeds }),

@@ -1,10 +1,13 @@
 /**
- * DOS Radio Plus billing UI: floating "Plus" badge opens a minimal plan modal,
+ * AmbiRadio Plus billing UI: floating "Plus" badge opens a minimal plan modal,
  * plan choice goes through POST /radio-api/billing/checkout and redirects to Stripe.
  * Self-contained by design (own styles, own fetches) — owned by the billing worker.
+ * Prices are USD; yearly prices are display-only.
  */
 
-interface PlanInfo { id: string; name: string; amount_pln: number; interval: string }
+import { PLAN_PRICES, formatUsd, yearlyLabel, type PlanPrice } from './pricing';
+
+interface PlanInfo { id: string; name: string; amount_cents?: number; yearly_cents?: number; currency?: string; interval: string }
 interface BillingStatus {
   registered: boolean;
   plus: boolean;
@@ -28,7 +31,7 @@ const PLAN_FEATURES: Record<string, string[]> = {
     'Wsparcie rozwoju stacji',
   ],
   plus_ai: [
-    'Wszystko, co w planie Plus',
+    'Wszystko, co w AmbiRadio Plus',
     'Wyższe limity generowania AI',
     'Priorytetowa kolejka podcastów',
     'Najnowsze funkcje jako pierwsza wersja',
@@ -64,6 +67,7 @@ const STYLE = `
 .drplus-card b{font-size:15px}
 .drplus-price{font-size:24px;letter-spacing:-0.5px}
 .drplus-price small{font-size:13px;color:var(--dim);font-weight:400}
+.drplus-year{margin-top:-6px;font-size:12.5px;color:var(--dim)}
 .drplus-card ul{margin:0;padding:0;list-style:none;display:grid;gap:7px;flex:1}
 .drplus-card li{display:flex;gap:8px;align-items:flex-start;color:var(--dim);font-size:13px}
 .drplus-card li svg{width:13px;height:13px;color:var(--ok);margin-top:3px}
@@ -125,7 +129,7 @@ async function choosePlan(planId: string, button: HTMLButtonElement, errorLine: 
     ? (body as { detail: string }).detail : null;
   errorLine.textContent = checkoutError(status, detail);
   button.disabled = false;
-  button.textContent = planId === 'plus_ai' ? 'Wybieram Plus+AI' : 'Wybieram Plus';
+  button.textContent = buyLabel(planId);
 }
 
 function statusLine(status: BillingStatus | null): string {
@@ -141,17 +145,31 @@ function statusLine(status: BillingStatus | null): string {
   return 'Załóż konto, żeby wykupić Plus — zajmie chwilę.';
 }
 
+const fallbackPrice = (id: string): PlanPrice => PLAN_PRICES[id === 'plus_ai' ? 'plus_ai' : 'plus'];
+
+function buyLabel(planId: string): string {
+  return `Wybieram ${fallbackPrice(planId).shortName}`;
+}
+
 function planCard(plan: PlanInfo): HTMLElement {
+  const fallback = fallbackPrice(plan.id);
+  // Older servers sent amount_pln; only trust explicit USD cents.
+  const usd = plan.currency === 'usd';
+  const monthly = usd && plan.amount_cents ? plan.amount_cents : fallback.monthlyCents;
+  const yearly = usd && plan.yearly_cents ? plan.yearly_cents : fallback.yearlyCents;
   const card = document.createElement('div');
   card.className = 'drplus-card';
   const name = document.createElement('b');
-  name.textContent = plan.id === 'plus_ai' ? 'Plus+AI' : 'Plus';
+  name.textContent = fallback.name;
   const price = document.createElement('div');
   price.className = 'drplus-price';
-  price.append(document.createTextNode(`${plan.amount_pln} zł `));
+  price.append(document.createTextNode(`${formatUsd(monthly)} `));
   const per = document.createElement('small');
   per.textContent = '/ mies.';
   price.append(per);
+  const year = document.createElement('div');
+  year.className = 'drplus-year';
+  year.textContent = `lub ${yearlyLabel(yearly)}`;
   const list = document.createElement('ul');
   for (const feature of PLAN_FEATURES[plan.id] ?? []) {
     const item = document.createElement('li');
@@ -162,8 +180,8 @@ function planCard(plan: PlanInfo): HTMLElement {
   const buy = document.createElement('button');
   buy.className = 'drplus-buy';
   buy.type = 'button';
-  buy.textContent = plan.id === 'plus_ai' ? 'Wybieram Plus+AI' : 'Wybieram Plus';
-  card.append(name, price, list, buy);
+  buy.textContent = buyLabel(plan.id);
+  card.append(name, price, year, list, buy);
   card.dataset.plan = plan.id;
   return card;
 }
@@ -212,11 +230,11 @@ function openModal(): void {
   dialog.className = 'drplus-dialog';
   dialog.setAttribute('role', 'dialog');
   dialog.setAttribute('aria-modal', 'true');
-  dialog.setAttribute('aria-label', 'DOS Radio Plus');
+  dialog.setAttribute('aria-label', 'AmbiRadio Plus');
   const head = document.createElement('div');
   head.className = 'drplus-head';
   const title = document.createElement('h2');
-  title.textContent = 'DOS Radio Plus';
+  title.textContent = 'AmbiRadio Plus';
   const close = document.createElement('button');
   close.className = 'drplus-close';
   close.type = 'button';

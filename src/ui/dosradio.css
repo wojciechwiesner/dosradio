@@ -175,8 +175,8 @@ footer { margin-top: 18px; color: var(--faint); font-size: 12.5px; display: flex
 @media (max-width: 560px) {
   .shell { padding: 16px 14px 36px; }
   .topbar { flex-wrap: wrap; row-gap: 10px; }
-  .brand small { display: none; }
-  .top-actions { gap: 8px; }
+  .brand small { font-size: 12px; }
+  .top-actions { gap: 8px; flex-wrap: wrap; width: 100%; }
   .top-actions .btn { padding: 7px 11px; font-size: 13px; white-space: nowrap; }
   #onAir { display: none; }
   .hero { margin-top: 18px; }
