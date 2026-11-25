@@ -12,6 +12,12 @@ import { stoicThoughts, stoicPill, stoicPillTitle, toParts, gmailSample } from '
 
 const $ = s => document.querySelector(s);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+/* Calm view: a still scene (fixed camera, no streaks, no pulses) for reduced-motion users or anyone who asks for it.
+   The system preference always wins; the toggle is remembered under its own dosradio.* key. */
+const CALM_KEY = 'dosradio.orbita.calm.v1';
+let calmPref = false;
+try { calmPref = localStorage.getItem(CALM_KEY) === '1'; } catch { /* storage blocked */ }
+const isCalm = () => reduceMotion || calmPref;
 const vibrate = ms => { try { navigator.vibrate?.(ms); } catch { /* unsupported */ } };
 setLang(detectLang());
 
@@ -154,7 +160,7 @@ const endPress = e => {
 };
 stage.addEventListener('pointerup', endPress); stage.addEventListener('pointercancel', endPress);
 stage.addEventListener('wheel', e => { e.preventDefault(); app.ensureEntered(); wheelAcc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY; if (Math.abs(wheelAcc) > 40) { dial.nudge(wheelAcc > 0 ? 1 : -1); wheelAcc = 0; } }, { passive: false });
-function startSeek() { dial.seeking = true; dial.userMoved = true; timeScaleTarget = reduceMotion ? 1.5 : 3.6; }
+function startSeek() { dial.seeking = true; dial.userMoved = true; timeScaleTarget = isCalm() ? 1.5 : 3.6; }
 function stopSeek() { if (!dial.seeking) return; dial.seeking = false; timeScaleTarget = 1; dial.target = dial.snapPhi(dial.phi + dial.vel * 0.22); }
 function handleClick(e) {
   const lab = press.target?.closest?.('[data-station],[data-topic]');
@@ -180,6 +186,10 @@ addEventListener('keydown', e => {
   else if (e.key.toLowerCase() === 'h') app.setHostMode(prefs.hostMode === 'with-host' ? 'music-only' : 'with-host');
   else if (e.key.toLowerCase() === 'p') app.togglePlay();
   else if (e.key.toLowerCase() === 'n') app.engine.newsNow();
+  else if (e.key.toLowerCase() === 'm') app.toggleCalm();
+  else if (e.key.toLowerCase() === 's') { app.ensureEntered(); app.share(); }
+  else if (e.key.toLowerCase() === 'c') { app.ensureEntered(); app.comment(); }
+  else if (e.key === '+' || e.key === '=') app.openTab('plus');
   else if (/^[1-6]$/.test(e.key)) app.toggleTopic(TOPIC_IDS[+e.key - 1]);
 });
 addEventListener('keyup', e => { if (e.code === 'Space') stopSeek(); });
@@ -294,6 +304,8 @@ function renderCard() {
   $('#cardHostName').textContent = prefs.hostMode === 'with-host' ? base.host : t('musicOnlyLower');
   app.syncFavBtn?.();
   $('#freqTop').textContent = `${base.freq} MHz`;
+  $('#npName').textContent = app.moodStation ? s.name : stationName(s);
+  $('#npHost').textContent = prefs.hostMode === 'with-host' ? `${t('hostedBy')} ${base.host}` : t('musicOnlyLower');
   $('#blendInfo').hidden = !prefs.blend; if (prefs.blend && byId[prefs.blend]) $('#blendName').textContent = stationName(byId[prefs.blend]);
   $('#newsNowBtn').hidden = prefs.hostMode === 'music-only';
   const on = app.engine?.playing;
@@ -327,8 +339,9 @@ function renderSchedule() {
 const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function renderCaption() {
   const h = hostState, el = $('#captions');
+  document.body.classList.toggle('has-captions', !!(h && h.caption));
   if (!h || !h.caption) { el.hidden = true; return; }
-  el.hidden = false; $('#capWho').textContent = h.speaking ? (h.who === 'clip' ? (h.title || 'DOS Radio') : h.name || 'DOS Radio') : t('music');
+  el.hidden = false; $('#capWho').textContent = h.speaking ? (h.who === 'clip' ? (h.title || 'AmbiRadio') : h.name || 'AmbiRadio') : t('music');
   $('#capText').textContent = h.caption.length > 260 ? h.caption.slice(0, 257) + '…' : h.caption;
 }
 
@@ -645,6 +658,7 @@ function commands() {
   c.push({ label: t('stoicListen') + ': ' + t('stoicTitle'), hint: t('stoicTitle'), run: app.playStoic, keys: 'stoic' }, { label: t('cmdRandom'), hint: 'R', run: () => app.goToStation((Math.random() * STATIONS.length) | 0), keys: 'random' });
   c.push({ label: app.engine?.playing ? t('pause') : t('play'), hint: 'P', run: () => app.togglePlay(), keys: 'play pause' }, { label: t('cmdUndo'), hint: 'Ctrl+Z', run: undo, keys: 'undo' });
   LANGS.forEach(l => c.push({ label: t('cmdLang', { l: LANG_NAMES[l] }), hint: l.toUpperCase(), run: () => switchLang(l), keys: `${l} language` }));
+  c.push({ label: t('calm'), hint: 'M', run: () => app.toggleCalm(), keys: 'calm spokojny reduced motion' }, { label: t('shareHint'), hint: 'S', run: () => app.share(), keys: 'share dedykacja udostepnij' }, { label: t('comment'), hint: 'C', run: () => app.comment(), keys: 'comment komentarz' });
   c.push({ label: t('plansTitle'), hint: t('tabPlus'), run: () => app.sales.open('plans'), keys: 'plus plan' }, { label: t('cmdOpen'), hint: 'VIEW', run: () => switchToClassicView(), keys: 'classic' });
   return c;
 }
@@ -671,6 +685,8 @@ function applyI18n() {
   document.querySelectorAll('[data-lang]').forEach(b => b.setAttribute('aria-pressed', b.dataset.lang === getLang()));
   $('#modeBadge').textContent = app.api?.live ? t('live') : t('demo'); $('#modeBadge').classList.toggle('live', !!app.api?.live);
   $('#enterMode').textContent = app.api?.live ? t('enterLive') : t('enterDemo');
+  syncCalm();
+  $('#dedicateBtn').title = t('shareHint'); $('#commentBtn').title = t('commentHint');
   $('#infoList').innerHTML = t('info').map(([a, b]) => `<dt>${escapeHtml(a)}</dt><dd>${escapeHtml(b)}</dd>`).join('');
   syncLabels(); renderCard(); renderOnAir(); renderSchedule(); renderStoic(); renderPanes(); app.sales?.renderTrial(); app.sales?.renderPip();
 }
@@ -781,6 +797,27 @@ $('#prevBtn').addEventListener('click', () => { app.ensureEntered(); dial.nudge(
 $('#nextBtn').addEventListener('click', () => { app.ensureEntered(); dial.nudge(1); });
 $('#newsNowBtn').addEventListener('click', () => { app.ensureEntered(); app.engine.newsNow(); });
 $('#paletteBtn').addEventListener('click', openPalette);
+app.share = () => { if (app.openQuickShareStation) app.openQuickShareStation(); else openDedicationModal(app, prefs.station); };
+/* No listener-comment endpoint exists yet: a comment travels as the voice greeting of a shared link,
+   which the host reads on air when the recipient opens it. */
+app.comment = () => {
+  app.share();
+  setTimeout(() => { const m = document.querySelector('#qsGreetForm input[name="msg"]'); if (m) { m.placeholder = t('commentHint'); m.focus(); } }, 80);
+};
+$('#commentBtn').addEventListener('click', () => { app.ensureEntered(); app.comment(); });
+$('#plusBtn').addEventListener('click', () => { app.ensureEntered(); app.openTab('plus'); });
+function syncCalm() {
+  const on = isCalm();
+  document.body.classList.toggle('calm', on);
+  const b = $('#calmBtn'); b.setAttribute('aria-pressed', on); b.title = t('calm') + (reduceMotion ? ' (prefers-reduced-motion)' : ' (M)');
+}
+app.toggleCalm = () => {
+  if (reduceMotion) { app.toast(t('calmOn')); return; }
+  calmPref = !calmPref; try { localStorage.setItem(CALM_KEY, calmPref ? '1' : '0'); } catch { /* storage blocked */ }
+  syncCalm(); app.announce(t(calmPref ? 'calmOn' : 'calmOff')); app.toast(t(calmPref ? 'calmOn' : 'calmOff'));
+};
+$('#calmBtn').addEventListener('click', app.toggleCalm);
+syncCalm();
 $('#blendClear').addEventListener('click', () => app.commit(p => { p.blend = null; }, t('mixOff'), { toast: true }));
 $('#stoicListen').addEventListener('click', app.playStoic);
 $('#stoicAdd').addEventListener('click', () => { if (!prefs.categories.includes('stoic')) app.toggleTopic('stoic'); else app.toast(t('stoicAdded')); });
@@ -820,12 +857,25 @@ function engineEvents() {
 
 /* =========================================================  frame loop  */
 const clockEl = $('#clock'), speedEl = $('#speedVal');
-let last = performance.now(), sessionMs = 0, beat = 0, kickEnv = 0, secAcc = 0, onAirAcc = 0;
+let last = performance.now(), sessionMs = 0, beat = 0, kickEnv = 0, secAcc = 0, onAirAcc = 0, loopOn = false;
+const CALM_FRAME_MS = 1000 / 30;
+/* The loop stops while the tab is hidden (no GPU work, no battery drain) and restarts on return. */
+function startLoop() {
+  if (loopOn || document.hidden) return;
+  loopOn = true; app.scene?.resetTiming?.();
+  requestAnimationFrame(t0 => { last = t0; frame(t0); });
+}
 function frame(now) {
-  const dt = Math.min((now - last) / 1000, 1 / 20); last = now; sessionMs += dt * 1000;
+  if (document.hidden) { loopOn = false; return; }
+  const calm = isCalm(), still = calm && !dial.dragging && !dial.seeking && Math.abs(dial.target - dial.phi) < 1e-4;
+  /* calm and nothing moving: 30 fps is plenty for a still scene */
+  if (still && now - last < CALM_FRAME_MS - 1) { requestAnimationFrame(frame); return; }
+  const frameDt = Math.min((now - last) / 1000, 1); // real frame time, for the quality governor
+  const dt = Math.min(frameDt, 1 / 20); last = now; sessionMs += dt * 1000;
   const e = app.engine;
   /* dial physics */
   if (dial.seeking) { dial.vel += (-(timeScale - 1) * 1.15 - dial.vel) * Math.min(1, dt * 3); dial.phi += dial.vel * dt; }
+  else if (!dial.dragging && calm) { dial.phi = dial.target; dial.vel = 0; } // calm: the dial jumps, no swing
   else if (!dial.dragging) { const k = 95, damp = 2 * Math.sqrt(k) * 0.8; dial.vel += ((dial.target - dial.phi) * k - dial.vel * damp) * dt; dial.phi += dial.vel * dt; }
   const idx = dial.idxAt(dial.phi);
   if (idx !== dial.lastIdx) { if (dial.lastIdx !== -1) { app.core.tick(); vibrate(5); } dial.lastIdx = idx; }
@@ -855,12 +905,12 @@ function frame(now) {
   const curBase = byId[prefs.station] || STATIONS[0];
   if (e?.playing) { if (f.kick) kickEnv = Math.max(kickEnv, f.kick); }
   else { beat += dt * curBase.bpm / 60; if (beat >= 1) { beat -= 1; if (curBase.bpm >= 80) kickEnv = Math.max(kickEnv, 0.55); } }
-  kickEnv *= Math.exp(-dt * (reduceMotion ? 14 : 8));
-  const kick = reduceMotion ? kickEnv * 0.3 : kickEnv;
+  kickEnv *= Math.exp(-dt * 8);
+  const kick = calm ? 0 : kickEnv;
   pointer.dx = pointer.x - pointer.px; pointer.dy = pointer.y - pointer.py; pointer.px = pointer.x; pointer.py = pointer.y;
 
   app.scene.render({
-    f, kick, timeScale, pointer, phi: dial.phi, playing: !!e?.playing, station: curBase,
+    f, kick, calm, frameDt, timeScale, pointer, phi: dial.phi, playing: !!e?.playing, station: curBase,
     tunedIdx: curBase.idx, needleIdx: idx, blendIdx: prefs.blend && byId[prefs.blend] ? byId[prefs.blend].idx : -1,
     activeGroup: app.highlightedGroup || (prefs.playGroup ? prefs.activeGroup : null),
     ringFilter: app.ringFilter, favorites: app.favorites, friendStations: app.friendStations, leftHand: app.leftHand, hide3dRings: !!app.hide3dRings,
@@ -887,19 +937,14 @@ function frame(now) {
   if (!byId[prefs.station]) prefs.station = STATIONS[0].id;
   app.engine = new RadioEngine({ core: app.core, api: app.api, prefs: { ...prefs, stationObj: byId[prefs.station] || STATIONS[0] }, events: engineEvents() });
   app.sales = new Sales(app);
-  app.scene = createScene($('#gl'), {});
+  app.scene = createScene($('#gl'), { onQuality: q => { document.body.dataset.quality = q; } });
   rebuildSatLabels();
   dial.goTo((byId[prefs.station] || STATIONS[0]).idx, true);
   try { app.connectors = await app.api.connectors(); } catch { app.connectors = null; }
   applyI18n();
   await loadIncomingDedication(app, prefs, dial);
   initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuildSatLabels });
-  $('#dedicateBtn')?.addEventListener('click', () => {
-    if (app.openQuickShareStation) app.openQuickShareStation();
-    else openDedicationModal(app, prefs.station);
-  });
-  const dedLbl = document.getElementById('dedicateTxt');
-  if (dedLbl) dedLbl.textContent = 'Udostępnij';
+  $('#dedicateBtn')?.addEventListener('click', () => { app.ensureEntered(); app.share(); });
   renderCard();
   app.syncFavBtn?.();
   if (new URLSearchParams(location.search).get('embed') === '1') {
@@ -912,7 +957,7 @@ function frame(now) {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
   }
-  document.addEventListener('visibilitychange', () => { if (document.hidden) stopSeek(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopSeek(); else startLoop(); });
   window.__orbita = { app, dial };
-  requestAnimationFrame(t0 => { last = t0; frame(t0); });
+  startLoop();
 })();

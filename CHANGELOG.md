@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Orbita SOTA upgrade** (`orbita/src/scene.js`, `reactive.js`, `main.js`, `index.frag.html`): the scene reacts to
+  the real Web Audio analyser through a bass/mid/high band follower (auto-gain, attack/release, slew cap so nothing
+  flashes); adaptive quality tiers with device pixel ratio capped at 2 and a frame-time governor (drops bloom, streaks,
+  fluid rate and backdrop blur on slow GPUs); the render loop stops while the tab is hidden; per-category colour grade
+  in the final pass; slower, speed-capped camera and much lighter chromatic aberration. Calm view (`prefers-reduced-motion`
+  or key M, stored in `dosradio.orbita.calm.v1`): still camera, no streaks, pulses or fluid, 30 fps. Readable captions
+  (proportional face, solid backdrop, max 3 lines), a now-playing line, and the Classic core actions in the card:
+  play, station, share with dedication (S), comment (C), Plus (+). Orbita user-facing texts now say AmbiRadio, with the
+  tagline "Ambitnie dla Ciebie" (PL/EN/RU). Perf script `scripts/orbita-perf.mjs`; numbers in
+  `docs/ambiradio/orbita-upgrade.md`. Tests: `tests/orbitaReactive.test.ts`, `tests/orbitaCalmScene.test.ts`.
 - **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`
   (key >= 32 chars) grants a device such as the LUNA salon reception kiosk permanent access, sent as the
   `x-dosradio-device` header or `?device=` query (for `<audio>`). Keyed GETs also get `Access-Control-Allow-Origin: *`

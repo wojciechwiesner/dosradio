@@ -1,4 +1,4 @@
-# DOS Radio Orbita v2: wdrożenie i kontrakt z backendem
+# AmbiRadio Orbita v2: wdrożenie i kontrakt z backendem
 
 ## Wdrożenie
 
@@ -11,9 +11,20 @@
    Orbita wykrywa to i chowa oba przyciski.
 4. Język: `#pl`, `#en` lub `#ru` w adresie, przełącznik PL/EN/RU albo język przeglądarki.
 
-Orbita dzieli z klasycznym DOS Radio te klucze `localStorage`: `dosradio.prefs.v1`, `dosradio.pillQueue.v1`
-i `dosradio.aired.v1`. Obie wersje mogą więc działać równolegle. Pigułki „showcase” czytane głosem przeglądarki
+Orbita dzieli z klasycznym AmbiRadio te klucze `localStorage`: `dosradio.prefs.v1`, `dosradio.pillQueue.v1`
+i `dosradio.aired.v1` (nazwy kluczy zostają `dosradio.*` dla zgodności wstecz). Własny klucz Orbity:
+`dosradio.orbita.calm.v1` (spokojny widok). Obie wersje mogą więc działać równolegle. Pigułki „showcase” czytane głosem przeglądarki
 nie trafiają do wspólnej kolejki, bo klasyczna wersja nie umie ich odtworzyć.
+
+## Scena: jakość, dźwięk, dostępność
+
+Szczegóły i pomiary: `docs/ambiradio/orbita-upgrade.md`. W skrócie:
+
+- `src/reactive.js` — czyste funkcje: śledzenie pasm bas/środek/góra (auto-gain, attack/release, limit tempa zmian,
+  żeby nic nie błyskało), poziomy jakości (dpr maks. 2) z regulatorem czasu klatki, korekcja barwna per kategoria.
+- Pętla klatek staje, gdy karta jest ukryta. Spokojny widok (`prefers-reduced-motion` albo klawisz M): kamera stoi,
+  bez smug, płynu i pulsów, 30 kl./s.
+- Pomiar: `node scripts/orbita-perf.mjs` (Playwright, opis w nagłówku skryptu).
 
 ## Endpointy już używane (bez zmian)
 

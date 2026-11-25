@@ -221,7 +221,7 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
     const baseUrl = `${location.origin}/?station=${encodeURIComponent(st.id)}`;
     const baseInv = stationMetaInvite(st.id, `Antena na żywo · ${st.name}`, `wspólny odsłuch na żywo z prowadzącym ${st.host} i wyselekcjonowanymi pigułkami wiedzy`);
     openQuickShareSheet({
-      title: `DOS Radio · ${st.name}`,
+      title: `AmbiRadio · ${st.name}`,
       subtitle: `${st.freq} MHz · ${st.bpm} BPM · Prowadzi ${st.host}`,
       url: baseUrl,
       text: formatInviteShareText(baseInv),

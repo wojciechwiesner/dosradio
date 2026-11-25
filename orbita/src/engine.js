@@ -454,7 +454,7 @@ export class RadioEngine {
       if (myEpoch !== this.voiceEpoch || !this.podcastActive || !this.playing) return;
       const sp = data.spot;
       this.events.onPodcastHud?.({
-        phase: sp.kind === 'ciekawostka' ? 'CIEKAWOSTKA DOS RADIO' : 'SPOT DOS RADIO',
+        phase: sp.kind === 'ciekawostka' ? 'CIEKAWOSTKA AMBIRADIO' : 'SPOT AMBIRADIO',
         title: sp.title,
         subtitle: sp.text,
         ctaLabel: sp.cta_label || 'Sprawdź Plus',

@@ -47,7 +47,7 @@ export function buildInvitePreviewHtml(inv) {
   if (!inv) return '';
   ensureInviteStyles();
   const title = inv.title || 'Audycja specjalna';
-  const about = inv.about || 'wyjątkowy temat przygotowany przez prowadzących DOS Radio';
+  const about = inv.about || 'wyjątkowy temat przygotowany przez prowadzących AmbiRadio';
   const stName = inv.station_name || inv.stationName || 'DOS Groove';
   const stGenre = inv.station_genre || inv.stationGenre || 'elektronika i klubowy groove';
   return `
@@ -90,7 +90,7 @@ export function openAuditionInvite({ invite, ready = true, statusText = '', ctaL
       <div class="ai-card" role="dialog" aria-modal="true" aria-label="Zaproszenie do odsłuchu audycji">
         <div class="ai-badge"><span class="ai-dot"></span><span>${esc(fromBadge)}</span></div>
         <p class="ai-lead">${inv.to_name ? `Cześć ${esc(inv.to_name)}! ` : ''}Zapraszamy do wysłuchania audycji w radiu:</p>
-        <h2 class="ai-title">„${esc(inv.title || 'Audycja specjalna DOS Radio')}”</h2>
+        <h2 class="ai-title">„${esc(inv.title || 'Audycja specjalna AmbiRadio')}”</h2>
         <div class="ai-story">
           <span class="ai-story-lbl">Audycja opowiada o:</span>
           <span class="ai-story-body">${esc(inv.about || 'wybranym temacie przygotowanym przez prowadzących na żywo')}</span>

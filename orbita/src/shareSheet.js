@@ -59,7 +59,7 @@ function getOverlay() {
   return ov;
 }
 
-export function buildAppBadgesHtml({ url, text, title = 'DOS Radio' }) {
+export function buildAppBadgesHtml({ url, text, title = 'AmbiRadio' }) {
   const full = `${text ? text.trim() + ' ' : ''}${url}`.trim();
   const wa = `https://wa.me/?text=${encodeURIComponent(full)}`;
   const tg = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text || title)}`;
@@ -92,7 +92,7 @@ export function bindAppBadges(container, onToast) {
   container.querySelectorAll('[data-qs-native]').forEach(btn => {
     btn.addEventListener('click', async () => {
       const nav = (window.top && window.top.location?.origin === location.origin ? window.top.navigator : null) || navigator;
-      const shareData = { title: btn.dataset.title || 'DOS Radio', text: btn.dataset.text || '', url: btn.dataset.url || location.href };
+      const shareData = { title: btn.dataset.title || 'AmbiRadio', text: btn.dataset.text || '', url: btn.dataset.url || location.href };
       if (nav.share) {
         try { await nav.share(shareData); return; } catch {}
       }
@@ -182,7 +182,7 @@ export async function triggerPwaInstall(onToast) {
     if (choice?.outcome === 'accepted') {
       hostWin.__pwaPrompt = null;
       window.__pwaPrompt = null;
-      onToast?.('Instalowanie aplikacji DOS Radio...');
+      onToast?.('Instalowanie aplikacji AmbiRadio...');
     }
     return;
   }
@@ -190,9 +190,9 @@ export async function triggerPwaInstall(onToast) {
   const ua = navigator.userAgent || '';
   const isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   ov.innerHTML = `
-    <div class="qs-sheet" role="dialog" aria-modal="true" aria-label="Zainstaluj aplikację DOS Radio">
+    <div class="qs-sheet" role="dialog" aria-modal="true" aria-label="Zainstaluj aplikację AmbiRadio">
       <div class="qs-head">
-        <span class="qs-title">Zainstaluj DOS Radio</span>
+        <span class="qs-title">Zainstaluj AmbiRadio</span>
         <button type="button" class="qs-close" data-qs-close>Zamknij</button>
       </div>
       <div class="qs-preview">
@@ -204,7 +204,7 @@ export async function triggerPwaInstall(onToast) {
           <div class="qs-step"><span class="qs-num">1</span><span>Stuknij ikonę <strong>Udostępnij</strong> na dolnym lub górnym pasku przeglądarki Safari.</span></div>
           <div class="qs-step"><span class="qs-num">2</span><span>Wybierz z listy <strong>Dodaj do ekranu początkowego</strong> i potwierdź przyciskiem <strong>Dodaj</strong>.</span></div>
         ` : `
-          <div class="qs-step"><span class="qs-num">1</span><span>Kliknij ikonę <strong>Zainstaluj DOS Radio</strong> w pasku adresu (lub otwórz menu przeglądarki).</span></div>
+          <div class="qs-step"><span class="qs-num">1</span><span>Kliknij ikonę <strong>Zainstaluj AmbiRadio</strong> w pasku adresu (lub otwórz menu przeglądarki).</span></div>
           <div class="qs-step"><span class="qs-num">2</span><span>Wybierz <strong>Zainstaluj aplikację</strong> / <strong>Dodaj do ekranu głównego</strong>.</span></div>
         `}
       </div>

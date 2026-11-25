@@ -193,7 +193,7 @@ export function computeAutoRamowkaSlot(now = new Date()) {
   } catch { /* fallback */ }
   const spots = [
     { id: 'zrobimy-ai', title: 'zrobi.my — Automatyzacja AI i agenci głosowi dla firm' },
-    { id: 'dosradio-ramowka', title: 'DOS Radio — Auto-Ramówka 24/7 i własne pasma muzyczne' },
+    { id: 'dosradio-ramowka', title: 'AmbiRadio — Auto-Ramówka 24/7 i własne pasma muzyczne' },
     { id: 'zrobimy-wdrozenia', title: 'zrobi.my — Dedykowane wdrożenia AI w 14 dni' },
   ];
   const spot = spots[Math.floor((h * 60 + now.getMinutes()) / 20) % spots.length];
