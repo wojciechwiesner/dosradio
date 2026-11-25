@@ -7,6 +7,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`
+  (key >= 32 chars) grants a device such as the LUNA salon reception kiosk permanent access, sent as the
+  `x-dosradio-device` header or `?device=` query (for `<audio>`). Keyed GETs also get `Access-Control-Allow-Origin: *`
+  so a `file://` kiosk can read news JSON. Tests: `server/tests/test_device_keys.py`.
+
+### Fixed
+- **DJ transitions drifted off the beat** (`server/app/beat_grid.py`, `server/app/mixer.py`): the tempo lock
+  took its stretch ratio from ONE detected kick pair and paired kicks by their order, so one missed or
+  mistimed kick (common on rumble techno) skewed half the blend by tens of ms, sometimes half a beat. Each
+  deck's tempo and beat phase are now measured on the overlap audio itself (low-band onset envelope folded
+  over the beat, +-1.5 % tempo search), with a robust least-squares kick-grid fit as fallback; the head is
+  trimmed so its beats land on the tail's beats. Tempo changes up to 2 % use turntable-style varispeed
+  instead of WSOLA. Measured on production archive recordings (median kick offset during the blend):
+  berlin-bcco-techno 56 -> 7 ms, deep-tech 14 -> 2 ms, hypnotic-techno 48.5 -> 5.5 ms.
+
+### Added
+- **Daily podcast limit for free Plus** (`server/app/podcast_quota.py`): the free 30-day welcome Plus (and
+  anonymous website-link visitors) may start ONE new podcast per calendar day in `Europe/Warsaw`, counted per
+  account across both `POST /radio-api/plus/podcast` and `POST /radio-api/social/url-podcast-link`. Paid Plus
+  (new nullable `users.plus_paid_until`, set only by the Stripe webhook) is unlimited. Replaying an existing
+  episode and failed generations do not use up the day. Over the limit: HTTP 429
+  `{"detail": "Darmowy Plus: 1 podcast dziennie. Kolejny jutro albo wykup Plus.", "reset_at": <next Warsaw midnight>}`,
+  checked before any LLM/TTS call. The Plus panel status area, Orbita and the classic link studio show the message.
+- **"Moje podcasty" list in the Plus panel** (`GET /radio-api/plus/podcasts`, `server/app/podcast_list.py`,
+  `src/ui/podcastList.ts`): podcasts a Plus listener generated (now recorded in the new `user_podcasts`
+  table) merged with podcasts made from website links (Orbita drops), newest first, with title, Polish
+  date, summary, a play button sharing `playManifest` with the generator, and the share link for link
+  podcasts. Link podcasts still generating or failed show their status instead of a play button.
+- **LLM and TTS fallback when Gemini fails** (`server/app/gemini_client.py`, `llm_fallback.py`, `llm_breaker.py`):
+  text goes Gemini direct -> `DOSRADIO_LLM_FALLBACK_MODELS` on an OpenAI-compatible endpoint
+  (`DOSRADIO_LLM_FALLBACK_URL`, default `https://llm.borg.tools/v1`, token `DOSRADIO_LLM_FALLBACK_TOKEN`).
+  Podcasts, YouTube pills, spots, voice greetings, ramówka spots, Orbita voice and the mood station
+  (no longer calling `gemini._call` directly) all use the chain. Every served call logs provider and model;
+  `on_usage` telemetry records the real fallback model.
+- **Circuit breaker**: after a 429 the Gemini model is skipped for `retryDelay`/`Retry-After` (else 10 min,
+  doubling on consecutive quota failures, max 1 h); after a 401 or invalid key the whole Gemini key is skipped
+  for 30 min. Stops the ~180 failing calls per hour seen in production.
+- **Sourced news fallback** (`server/app/news_fallback.py`): when grounded Gemini search fails, each category is
+  rebuilt from fresh real RSS items (The Verge, TechCrunch, Antyweb, Elle.pl, Vogue, Polsat Sport,
+  SportoweFakty, BBC Sport, Daily Stoic, Oddity Central, Sky News Strange) rewritten by the fallback LLM.
+  Every story keeps the link of the item it cites; a category without a fresh described item fails loudly.
+- **Grok TTS fallback** (`server/app/tts_fallback.py`): Gemini TTS -> `grok-tts`, one table mapping every
+  Gemini voice to a same-gender Grok voice (gender measured by pitch), MP3 decoded to 24 kHz mono WAV before
+  `normalize_loudness`. Gemini `style` is never sent or read aloud.
+
+### Security
+- Require a verified email for admin password login and issue only the session cookie, not the shared admin token.
+- **Admin token no longer exposes secret material** (`server/app/admin_api.py`): without a dedicated
+  `DOSRADIO_ADMIN_TOKEN`, the token returned by `POST /radio-api/admin/login` was the first 32 characters of
+  `DOSRADIO_SECRET`. The fallback is now an HMAC-SHA256 derivation of the app secret, so the session-signing
+  secret never leaves the server; a dedicated `DOSRADIO_ADMIN_TOKEN` still wins when set. Covered by
+  `server/tests/test_admin_token.py`. `server/tests/test_main_integration.py` now pins its own admin token, so
+  it no longer depends on which test module set `DOSRADIO_SECRET` first.
+
+### Changed
+- **Factual website podcasts** (`server/app/url_podcast_prompt.py`): the prompt for podcasts made from a business
+  page now tells the hosts to present the services and client benefits using only facts from the page, with no
+  medical comparisons, health promises, or claims about availability, prices or results the page does not state;
+  reviews only as quoted on the page. Page excerpt raised from 2000 to 6000 characters.
+- `GeminiClient` moved from `server/app/news.py` to `server/app/gemini_client.py` (news.py 427 -> 354 lines).
+- **Safer deploy** (`deploy.sh`): refuses to ship uncommitted deploy inputs (`ALLOW_DIRTY=1` overrides), builds
+  with `npm run build` (Orbita bundle, type check, Vite) and checks `orbita.html` and `admin.html` in `dist/`,
+  keeps `feeds/` and `share-*` in the web root during `--delete`, no longer uploads `.venv312` or
+  `.pytest_cache`, backs up `.env`, the SQLite database (online backup API) and the nginx vhost before
+  uploading, and fails when the health check does not answer within 30 s.
+
+### Added
+- **Dynamic OpenGraph Social Miniatures (`1200x630` PNG) & SSR Meta Tags for Shared Links** (`server/app/og_preview.py`, `server/app/main.py`, `server/requirements.txt`, `index.html`, `orbita/src/inviteScreen.js`): added dynamic `1200x630` Pillow PNG miniature renderer (`/radio-api/og/card.png`) and SSR OpenGraph/Twitter HTML injector (`/radio-api/og/share-html` + Nginx root query-param rewrite) so shared links (`?p=`, `?w=`, `?r=`, `?d=`, `?station=`) display a custom broadcast thumbnail card and `<meta property="og:title">` containing the exact audition title + `audycja w radiu heloradio.com`, story summary, and station music.
+- **Clean Vinyl Scrub Detent, Global `isPodcastPlaying` Exclusivity Lock, 5-Act Segmented Podcast Show, Guest/Free DOS Radio Spots & Dedicated-Link Invitation Screen** (`orbita/src/audio.js`, `orbita/src/engine.js`, `orbita/src/inviteScreen.js`, `orbita/src/social.js`, `orbita/src/shareSheet.js`, `orbita/src/main.js`, `src/radio/publicRadioEngine.ts`, `src/ui/dosradio.ts`, `src/ui/plus.ts`, `server/app/spots.py`, `server/app/podcast.py`, `server/app/social_api.py`, `server/tests/test_social_custom_urlpodcast.py`): eliminated harsh `2600 Hz` square-wave dial ticks and white-noise static hiss in favor of a subtle `<=145 Hz` lowpass vinyl micro-detent (`140 ms` rate-limited); added `isPodcastPlaying()` + `voiceEpoch` mutual exclusion across Orbita and Classic so host intros, news breaks, jingles, and friend drops never overlap an active podcast; structured generated and played podcasts into distinct chapters (`Wejście -> Część 1 -> Przerwa muzyczna -> Ciekawostka/Spot DOS Radio -> Część 2 -> Przerwa muzyczna -> Finał i Wyjście`) with live HUD controls; added 8 voiced DOS Radio ciekawostki & promotional spots (`/radio-api/social/spot`, played automatically for unregistered guests and non-Plus accounts, skipped for Plus); and added an editorial full-screen Invitation Card + sender preview (`Zapraszamy do wysłuchania audycji w radiu pt. „...” która opowiada o ... przy muzyce ...`) on dedicated links (`?p=`, `?w=`, `?r=`).
+- **Mobile Bottom Navigation (`Antena / Radio / Moje / Podcast / Znajomi`), True 1/4-Circle 2.5D 3-Orbit Thumb-Turntable, App-Badge Share Sheet & Full PWA Installability** (`orbita/src/thumbDial.js`, `orbita/src/shareSheet.js`, `orbita/src/social.js`, `orbita/src/index.frag.html`, `src/ui/socialCreatorStudio.ts`, `index.html`, `public/manifest.webmanifest`, `public/sw.js`): added native-style 5-tab mobile bottom navigation bar with safe-area support, dedicated 1/4-circle (`95°`) 3-orbit 2.5D corner thumb-turntable (`I · Chill`, `II · Groove`, `III · Rave` with tactile scrub ticks, auto-tune needle, clamped AABB non-clipping station pills, and `Prawy / Lewy kciuk` + desktop `1/4 2.5D` toggle), simplified `"Udostępnij przez..."` sheet with 6 branded SVG app badges (`Więcej apek` Web Share, `WhatsApp`, `Telegram`, `SMS`, `E-mail`, `Kopiuj link`) + optional inline voice greeting, and compliant PWA installability (`purpose: any` + `maskable` icons, `beforeinstallprompt` capture across top/iframe windows, `Zainstaluj` button + iOS/Android install guide, and `application/manifest+json` Nginx MIME).
+- **3-Ring 2.5D Hybrid Astrolabe + Mobile Corner Thumb-Turntable + Social Airwave Graph, Creator Radios & Website-to-Podcast Outreach** (`orbita/src/data.js`, `orbita/src/scene.js`, `orbita/src/main.js`, `orbita/src/social.js`, `src/ui/socialCreatorStudio.ts`, `src/ui/dosradio.ts`, `server/app/url_extractor.py`, `server/app/custom_radios.py`, `server/app/social.py`, `server/app/social_api.py`, `server/app/plus_api.py`, `server/tests/test_social_custom_urlpodcast.py`): partitioned all 43+ stations across 3 concentric 2.5D energy rings (`<106 BPM` Chill/Fokus, `106–129 BPM` Groove/House/Synth, `>=130 BPM` Techno/Trance/Rave) with golden-ratio phase offsets, strict AABB screen-space label anti-collision, Favorites star & ring filter bar (`Wszystkie / Ulubione / I / II / III`), and ergonomic Mobile Corner Thumb-Turntable (`Prawy / Lewy kciuk`); added Friends & Invite-with-Greeting (`WhatsApp`, `Telegram`, `E-mail`, `SMS`, self-pairing `?w=` links, live station presence halos, and Live Airwave Hijack drops for greetings/pills/podcasts), Custom Creator & YouTuber Live Radios (`?r=slug` with curated YouTube/web pills), and SSRF-guarded Website-to-Podcast personalized outreach links (`?p=token` with optional intro comment).
+- **Club DJ Mixer Engine (`±12%` Master-Tempo WSOLA, Spectral-Flux Tempogram & Genre Techniques) + Inline Prompt Editor in `Muzyka` Tab** (`server/app/dj_dsp.py`, `server/app/dj_genres.py`, `server/app/mixer.py`, `server/app/stream.py`, `server/app/admin_api.py`, `public/admin.html`, `server/scripts/dj_mix_tool.py`, `server/tests/test_dj_mixer.py`): upgraded radio transitions from short linear-resampling fades to stereo phase-locked WSOLA time-stretching within `±12%` BPM (`0.0` semitone shift), multi-band spectral-flux autocorrelation beat tracking (`tempogram_beat_grid`) for rolling-sub rumble techno (`berlin-bcco-techno`, `detroit-techno`, `goa-trance`), 32–48 beat (`15–23s`) real DJ phrase lengths (`MIX_RESERVE_SECONDS = 26.0`), and 4 genre-routed DJ techniques (`eq_blend` 3-band Linkwitz-Riley isolator + downbeat bass swap, `filter_sweep` dual Chamberlin SVF LPF/HPF sweep, `echo_out` 3/4 tempo-synced dub delay + drop on 1 for hip-hop/dub/`>12%` BPM jumps, and `velvet_fade` 12–16s 3-band S-curve for ambient/jazz/B2B); exposed inline Lyria prompt + BPM/density/brightness editing directly inside the `Muzyka (Kawałki i Prompty)` tab of `/admin.html`.
+- **Voice-Only Podcasts & Pills Over Live Radio Music Bed (`MANIFEST_VERSION = 3`)** (`server/app/podcast.py`, `server/app/pill_service.py`, `orbita/src/engine.js`, `src/ui/plus.ts`, `src/ui/dosradio.ts`, `src/radio/publicRadioEngine.ts`): eliminated double-music layering where podcasts and YouTube pills baked `dos-groove` music into bumpers (`b*.opus`) and 2–3 min archive segments (`m*.opus`) on top of the active radio stream; episodes now emit 100% pure spoken segments while the listener's chosen live radio station plays continuously underneath as the single ducked background music bed (`DUCK_LEVEL = 0.24`, voice gain `0.42`).
+- **Inline Lyria Prompt Editor in Admin (`/admin.html`), Universal MP3/Ogg DJ Stream & Ducking Fix** (`public/admin.html`, `server/app/stream.py`, `orbita/src/audio.js`, `orbita/src/engine.js`, `src/radio/publicRadioEngine.ts`, `src/radio/chunkStreamer.ts`): every station row in `/admin.html` (`Rodzaje Muzyki`) now exposes an inline Lyria prompt `<textarea>` with instant search and 1-click `Zapisz prompt` (`PATCH /radio-api/admin/catalog/stations/{id}`) feeding `StationRecorder` live; added `/radio-api/station/{id}/stream.mp3` and `/radio-api/group/{id}/stream.mp3` (`libmp3lame 160k`) auto-selected on Safari/WebKit/iOS so `mixer.py` 16-beat DJ crossfades are no longer bypassed by `stream.ogg` fallback; fixed `ChunkStreamer` intra-session continuity (`live_prob=0` after initial segment + 2.4s inter-session crossfade); fixed voice/music ducking (`musicBus = 1.0`, `DUCK_LEVEL = 0.24`, `VOICE_BASE_GAIN = 0.42`, 320 ms pre-duck, 1.8 s restore).
+- **8 Techno & Rave Genres + 3 B2B Venue Sets (42 Stations Total)** (`server/app/catalog_extra.py`, `server/app/catalog.py`, `server/app/hosts.py`, `server/app/recorder.py`, `src/radio/extraStations.ts`, `src/radio/stations.ts`, `orbita/src/data.js`, `orbita/src/i18n.js`): added group `techno-rave` (`berlin-bcco-techno`, `raw-techno`, `hypnotic-techno`, `etno-techno`, `tribal-techno`, `goa-trance`, `hard-dance`, `tekk`) and group `przestrzenie-b2b` (`salon-beauty-spa`, `lobby-hotelowe`, `poczekalnia`), plus updated 4th Orbita welcome line highlighting the free first hour and registration.
+- **Share Station with Personal Host Dedication (`?d=<token>`)** (`server/app/dedications.py`, `orbita/src/dedication.js`, `src/ui/dedicationModal.ts`): `POST /radio-api/dedications` creates a shareable link (`Dla [Imię]`, `Od [Imię]`, dedication up to 200 chars) and synthesizes/caches a personalized WAV host greeting (`/radio-api/dedications/{id}/greeting.wav`) played automatically when the recipient opens `/orbita.html?d=...` or `/?d=...`.
+- **Unified Classic <-> Orbita 3D View Switcher & PWA Integration** (`index.html`, `src/ui/dosradio.ts`, `src/ui/prefs.ts`, `orbita/src/main.js`, `public/sw.js`, `public/manifest.webmanifest`): live view switcher (`Widok: Klasyczny | Orbita 3D`) persisting `dosradio.view.v1`, `?view=orbita` / `?view=classic` deep links, PWA app shortcuts for Classic, Orbita 3D and Auto-Ramowka, and Service Worker caching for `/orbita.html` and `/admin.html`.
+- **6 Music Groups, Subgroups, Group Streaming & 7 New Genres** (`server/app/catalog.py`, `server/app/stream.py`, `server/app/hosts.py`, `server/app/recorder.py`, `src/radio/stations.ts`, `orbita/src/data.js`): 32 stations organized into 6 groups (`fokus-puls`, `klub-energia`, `synth-filmowa`, `klasyka-instrumentalna`, `etno-folk`, `chill-noc`), continuous DJ-mixed group stream `/radio-api/group/{group_id}/stream.ogg`, and 7 new genres (`stranger-synth`, `muzyka-filmowa`, `cyber-noir`, `muzyka-klasyczna`, `instrumentalna-akustyczna`, `etno-world`, `slowianski-folk`).
+- **Auto-Ramowka 24/7 Engine & `zrobi.my` B2B Audio Funnel** (`server/app/auto_ramowka.py`, `src/radio/publicRadioEngine.ts`, `orbita/src/main.js`): hourly genre rotation matched to Warsaw time of day, news bulletins every 20 minutes, podcasts, host jingles, TTS-synthesized `zrobi.my` AI audit/implementation spots (`/radio-api/ramowka/spot/{id}.wav`), and CORS-enabled lead receiver `POST /radio-api/leads/zrobimy` coupled with the standalone B2B project `/Users/wojciechwiesner/Projects/active/zrobimy`.
+- **Admin Cockpit (`/admin.html`) & Admin API** (`public/admin.html`, `server/app/admin_api.py`, `server/app/telemetry.py`): recorded `.opus` track browser/player, interactive A/B DJ Mixer Tester with live WAV synthesis and 64-point envelope plot, token/Lyria usage telemetry, registered & online listener presence, dynamic station/group catalog CRUD, 24h Auto-Ramowka editor, and `zrobi.my` SME lead inbox.
+
+### Fixed
+- **Orbita: dedications are read again** (`orbita/src/engine.js`): `playDedicationIntro()` passed an undefined
+  `kind` to `say()`, so opening a dedication link threw `ReferenceError: kind is not defined` and the dedication
+  was never voiced. It now airs with `kind: 'dedication'`. Covered by `tests/orbitaDedicationIntro.test.ts`.
+- **Phrase-Long DJ Mixer & Seamless Intra-Session Continuity** (`server/app/mixer.py`, `server/app/stream.py`): fixed short/audible transitions caused by 4-beat (~1.9s) linear fades, 0.5s fallback cuts on syncopated/ambient tracks, and destructive beat-slicing inside continuous 30s Lyria takes. Consecutive 30s intra-session segments now splice via 15 ms equal-power micro-declick (0 dropped beats); inter-session and group transitions use a 16-beat (4-bar, ~7.6-8.0s) beat-matched crossfade with Linkwitz-Riley 150 Hz midpoint bass-swap and 6.5s equal-power crossfade for beatless/ambient genres.
+- **AP newest news in the `ap` feed** (`scripts/publish_feeds.py`): reads ap_improve `GET /api/radio` first (blockers, overdue and just finished company topics, most urgent IT ticket) and puts those lines before the queue signals. Optional: an older ap_improve without the endpoint still publishes the queue signals.
+
+### Fixed
+- **Orbita: recorded host voices at start & showcase** (`server/app/orbita_voice.py`, `server/app/orbita_scripts.py`, `orbita/src/engine.js`, `orbita/src/api.js`, `orbita/src/sales.js`, `orbita/src/main.js`): after browser `speechSynthesis` was removed from Orbita, `playIntro()` (e.g. Kuba on `dos-groove`), showcase programmes (`defaultPodcast`, `stoicPill`), air fillers and 5-minute nudges emitted `kind: 'tts'` without WAV URLs, showing silent captions only. Added `/radio-api/orbita/intro/{station}/{index}.wav`, `/radio-api/orbita/nudge/5min.wav`, `/radio-api/showcase`, and `/radio-api/showcase/{kind}/{index}.wav` (`pl`/`en`/`ru`) with atomic disk caching (`data/voice/orbita/`), look-ahead warm-up, startup prewarm for Kuba & showcase, and Orbita engine wire-up with caption fallback.
+- **Station stream: a second listener got silence** (`server/app/stream.py`): the shared Ogg/Opus encoder writes its Opus headers
+  only once, when it starts. Anyone who joined a station that already had a listener received audio pages with no header, so
+  the browser's audio element waited forever (a couple of seconds of the welcome intro, then silence). New listeners now get
+  the two header pages replayed and the stream continues on a page boundary. Covered by
+  `server/tests/test_stream_late_join.py`, which fails on the old code and passes now.
+
 ### Changed
 - **Orbita: no synthetic speech, a quieter and more artistic stage** (`orbita/src/`): the browser speech-synthesis fallback is gone;
   a part without a recording is shown as a caption at reading pace while the host form moves with it, and silent captions no

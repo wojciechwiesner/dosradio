@@ -5,10 +5,10 @@ import { interleaveStories, pickNextStory, type QueuedStory } from '../src/radio
 import { nextBreakAt, msUntilNextBreak, spokenTimePl } from '../src/radio/radioClock';
 
 describe('DOS Radio Stations', () => {
-  it('loads 14 stations with unique IDs and hosts', () => {
-    expect(STATIONS.length).toBe(25);
+  it('loads 42 stations with unique IDs and hosts', () => {
+    expect(STATIONS.length).toBe(42);
     const ids = new Set(STATIONS.map((s) => s.id));
-    expect(ids.size).toBe(25);
+    expect(ids.size).toBe(42);
   });
 
   it('resolves preset station correctly', () => {

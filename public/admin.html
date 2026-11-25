@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DOS Radio - Admin Cockpit</title>
+<meta name="robots" content="noindex">
+<style>
+:root{--bg:#090A0F;--card:#11131C;--bd:#1D2030;--tx:#ECEEF4;--mu:#8A90A6;--ac:#FF6B4A;--ok:#35D0B5;--bad:#F0566A;--r:10px}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--tx);font:14px/1.5 Inter,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--ac);text-decoration:none}a:hover{text-decoration:underline}
+.app{display:flex;min-height:100%}
+aside{width:260px;flex:none;background:#0C0E15;border-right:1px solid var(--bd);padding:18px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
+.brand{display:flex;align-items:center;gap:10px;padding:4px 10px 18px;font-weight:600;letter-spacing:.2px}
+.brand svg{color:var(--ac)}
+.nav{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;color:var(--mu);background:none;border:0;font:inherit;text-align:left;cursor:pointer;width:100%}
+.nav:hover{background:#14172200;background:#141722;color:var(--tx)}
+.nav.on{background:#1A1D2B;color:var(--tx);box-shadow:inset 2px 0 0 var(--ac)}
+.nav svg{flex:none}
+.side-foot{margin-top:auto;display:flex;flex-direction:column;gap:6px;padding:10px;font-size:12px;color:var(--mu)}
+main{flex:1;min-width:0;padding:28px 32px 60px;max-width:1400px}
+h1{font-size:20px;margin:0 0 4px;font-weight:600}
+h2{font-size:14px;margin:0 0 12px;font-weight:600}
+.sub{color:var(--mu);margin:0 0 22px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);padding:16px;margin-bottom:16px}
+.grid{display:grid;gap:12px}
+.kpis{grid-template-columns:repeat(auto-fill,minmax(170px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.kpi .v{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums}
+.kpi .l{color:var(--mu);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--bd);vertical-align:middle}
+th{color:var(--mu);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
+tr:last-child td{border-bottom:0}
+.scroll{overflow-x:auto}
+input,select,textarea,button{font:inherit;color:var(--tx)}
+input,select,textarea{background:#0B0D14;border:1px solid var(--bd);border-radius:7px;padding:7px 9px;outline:none;max-width:100%}
+input:focus,select:focus,textarea:focus{border-color:var(--ac)}
+textarea{width:100%;min-height:70px;resize:vertical}
+label{display:flex;flex-direction:column;gap:4px;color:var(--mu);font-size:12px}
+.btn{background:#1A1D2B;border:1px solid var(--bd);border-radius:7px;padding:7px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{border-color:#2B3050}
+.btn.pri{background:var(--ac);border-color:var(--ac);color:#150803;font-weight:600}
+.btn.ok{border-color:var(--ok);color:var(--ok)}
+.btn.bad{color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:wait}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.pill{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;border:1px solid var(--bd);color:var(--mu)}
+.pill.ok{color:var(--ok);border-color:#1F5C51}.pill.off{color:var(--bad);border-color:#5C2430}.pill.ac{color:var(--ac);border-color:#6A3425}
+.muted{color:var(--mu)}
+canvas{width:100%;height:220px;background:#0B0D14;border:1px solid var(--bd);border-radius:8px;display:block}
+.tree .grp{border:1px solid var(--bd);border-radius:8px;margin-bottom:10px}
+.tree .gh{display:flex;gap:10px;align-items:center;padding:10px 12px;background:#0E1018;border-radius:8px 8px 0 0}
+.tree .st{display:flex;gap:10px;align-items:center;padding:8px 12px 8px 28px;border-top:1px solid var(--bd);flex-wrap:wrap}
+.tree .sg{padding:6px 12px 6px 20px;color:var(--mu);font-size:12px;background:#0B0D14;border-top:1px solid var(--bd)}
+.grow{flex:1}
+.toast{position:fixed;right:20px;bottom:20px;background:var(--card);border:1px solid var(--bd);border-left:3px solid var(--ok);padding:10px 14px;border-radius:8px;z-index:200;max-width:360px}
+.toast.err{border-left-color:var(--bad)}
+.modal{position:fixed;inset:0;background:rgba(5,6,9,.82);display:none;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
+.modal.show{display:flex}
+.box{width:380px;max-width:92vw;background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:22px}
+.seg{display:flex;gap:4px;background:#0B0D14;padding:3px;border-radius:8px;margin:12px 0}
+.seg button{flex:1;background:none;border:0;padding:6px;border-radius:6px;color:var(--mu);cursor:pointer}
+.seg button.on{background:#1A1D2B;color:var(--tx)}
+.stack{display:flex;flex-direction:column;gap:10px}
+input[type=range]{padding:0;accent-color:var(--ac)}
+.chk{flex-direction:row;align-items:center;gap:8px;color:var(--tx)}
+@media(max-width:860px){.app{flex-direction:column}aside{width:100%;height:auto;position:static;flex-direction:row;flex-wrap:wrap}.side-foot{display:none}main{padding:18px}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="brand">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19.1 4.9a10 10 0 0 1 0 14.2M4.9 19.1a10 10 0 0 1 0-14.2"/></svg>
+    DOS Radio Admin
+  </div>
+  <div id="nav"></div>
+  <div class="side-foot">
+    <a href="/">Radio Classic</a>
+    <a href="/orbita.html">Orbita</a>
+    <a href="https://zrobi.my" target="_blank" rel="noopener">zrobi.my</a>
+    <button class="btn" id="logout">Wyloguj</button>
+  </div>
+</aside>
+<main id="view"></main>
+</div>
+
+<div class="modal" id="loginModal">
+  <form class="box stack" id="loginForm" autocomplete="on">
+    <div><h1>Logowanie administratora</h1><div class="muted">Sesja wygasła lub brak uprawnień.</div></div>
+    <div class="seg"><button type="button" data-m="pw" class="on">Email i hasło</button><button type="button" data-m="tk">Token admina</button></div>
+    <div id="lpw" class="stack">
+      <label>Email<input type="email" name="email" id="lEmail" autocomplete="username"></label>
+      <label>Hasło<input type="password" name="password" id="lPass" autocomplete="current-password"></label>
+    </div>
+    <div id="ltk" class="stack" style="display:none">
+      <label>Token<input type="password" id="lToken" autocomplete="off"></label>
+    </div>
+    <div id="lErr" style="color:var(--bad);min-height:18px"></div>
+    <button class="btn pri" type="submit" style="justify-content:center">Zaloguj</button>
+  </form>
+</div>
+
+<script>
+(function(){
+'use strict';
+var API='/radio-api';
+var TOKEN_KEY='dosradio.adminToken';
+var $=function(s,r){return (r||document).querySelector(s)};
+var $$=function(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))};
+function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]})}
+function num(v,d){var n=Number(v);return isFinite(n)?n:(d||0)}
+function fmt(n){return num(n).toLocaleString('pl-PL',{maximumFractionDigits:2})}
+function pick(o){for(var i=1;i<arguments.length;i++){var v=o&&o[arguments[i]];if(v!==undefined&&v!==null)return v}return undefined}
+function fdate(s){if(!s)return '-';var d=new Date(s);return isNaN(d)?esc(s):d.toLocaleString('pl-PL')}
+function fdur(s){s=Math.round(num(s));return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
+function fsize(b){b=num(b);return b>1048576?(b/1048576).toFixed(1)+' MB':Math.round(b/1024)+' KB'}
+function toast(msg,err){var t=document.createElement('div');t.className='toast'+(err?' err':'');t.textContent=msg;document.body.appendChild(t);setTimeout(function(){t.remove()},3500)}
+
+var ICON={
+ home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+ disc:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>',
+ sliders:'<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+ tree:'<rect x="3" y="3" width="7" height="5" rx="1"/><rect x="14" y="10" width="7" height="5" rx="1"/><rect x="14" y="17" width="7" height="4" rx="1"/><path d="M6 8v11h8M6 12.5h8"/>',
+ coin:'<ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/>',
+ users:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.4c2 .7 3.5 2.5 3.5 5.6"/>',
+ play:'<path d="M7 4l13 8-13 8z"/>',
+ trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+ save:'<path d="M5 3h12l3 3v15H5z"/><path d="M8 3v6h8V3M8 21v-7h8v7"/>',
+ plus:'<path d="M12 5v14M5 12h14"/>'
+};
+function ic(n,s){return '<svg width="'+(s||16)+'" height="'+(s||16)+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'+ICON[n]+'</svg>'}
+
+/* ---------- API + auth ---------- */
+var pendingRetry=null;
+function authHeaders(h){h=h||{};var t=sessionStorage.getItem(TOKEN_KEY);if(t)h['X-Admin-Token']=t;return h}
+function api(path,opt){
+  opt=opt||{};
+  var h=authHeaders({'Accept':'application/json'});
+  var init={method:opt.method||'GET',headers:h,credentials:'include'};
+  if(opt.body!==undefined){h['Content-Type']='application/json';init.body=JSON.stringify(opt.body)}
+  return fetch(API+path,init).then(function(r){
+    if(r.status===401||r.status===403){
+      return new Promise(function(res,rej){showLogin(function(){api(path,opt).then(res,rej)})});
+    }
+    return r.text().then(function(t){
+      var j=null;try{j=t?JSON.parse(t):null}catch(e){}
+      if(!r.ok){var m=(j&&(j.detail||j.error))||('HTTP '+r.status);throw new Error(typeof m==='string'?m:JSON.stringify(m))}
+      return j||{};
+    });
+  });
+}
+function showLogin(cb){pendingRetry=cb;$('#loginModal').classList.add('show');$('#lErr').textContent=''}
+var lmode='pw';
+$$('#loginForm .seg button').forEach(function(b){b.onclick=function(){
+  lmode=b.dataset.m;$$('#loginForm .seg button').forEach(function(x){x.classList.toggle('on',x===b)});
+  $('#lpw').style.display=lmode==='pw'?'':'none';$('#ltk').style.display=lmode==='tk'?'':'none'}});
+$('#loginForm').onsubmit=function(e){
+  e.preventDefault();
+  var body,tok=null;
+  if(lmode==='tk'){tok=$('#lToken').value.trim();body={token:tok}}
+  else body={email:$('#lEmail').value.trim(),password:$('#lPass').value};
+  fetch(API+'/admin/login',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+  .then(function(r){return r.json().catch(function(){return {}}).then(function(j){return {r:r,j:j}})})
+  .then(function(x){
+    if(!x.r.ok||x.j.ok===false){$('#lErr').textContent=(x.j&&x.j.detail)||'Logowanie nieudane';return}
+    if(tok)sessionStorage.setItem(TOKEN_KEY,tok);else sessionStorage.removeItem(TOKEN_KEY);
+    $('#loginModal').classList.remove('show');$('#lPass').value='';$('#lToken').value='';
+    var cb=pendingRetry;pendingRetry=null;if(cb)cb();
+  }).catch(function(){$('#lErr').textContent='Błąd sieci'});
+};
+$('#logout').onclick=function(){sessionStorage.removeItem(TOKEN_KEY);fetch(API+'/logout',{method:'POST',credentials:'include'}).catch(function(){}).then(function(){showLogin(function(){go(cur)})})};
+
+/* ---------- tabs ---------- */
+var TABS=[
+ {id:'dash',t:'Pulpit i Aktywni',i:'home',f:tDash},
+ {id:'tracks',t:'Muzyka (Kawałki i Prompty)',i:'disc',f:tTracks},
+ {id:'mixer',t:'Tester Miksera DJ',i:'sliders',f:tMixer},
+ {id:'catalog',t:'Rodzaje Muzyki (Grupy i Prompty)',i:'tree',f:tCatalog},
+ {id:'tokens',t:'Zużycie Tokenów',i:'coin',f:tTokens},
+ {id:'people',t:'Użytkownicy, Auto-Ramówka i Leady',i:'users',f:tPeople}
+];
+var cur=(location.hash||'#dash').slice(1);
+if(!TABS.some(function(t){return t.id===cur}))cur='dash';
+$('#nav').innerHTML=TABS.map(function(t){return '<button class="nav" data-t="'+t.id+'">'+ic(t.i,18)+'<span>'+esc(t.t)+'</span></button>'}).join('');
+$$('#nav .nav').forEach(function(b){b.onclick=function(){go(b.dataset.t)}});
+var dashTimer=null;
+function go(id){
+  cur=id;location.hash=id;clearInterval(dashTimer);
+  $$('#nav .nav').forEach(function(b){b.classList.toggle('on',b.dataset.t===id)});
+  var tab=TABS.filter(function(t){return t.id===id})[0];
+  var v=$('#view');v.innerHTML='<h1>'+esc(tab.t)+'</h1><p class="sub muted">Ładowanie...</p>';
+  Promise.resolve().then(function(){return tab.f(v)}).catch(function(e){
+    v.innerHTML='<h1>'+esc(tab.t)+'</h1><div class="card" style="border-color:#5C2430">Błąd: '+esc(e.message)+'</div>';
+  });
+}
+function head(t,s){return '<h1>'+esc(t)+'</h1><p class="sub">'+esc(s||'')+'</p>'}
+function kpi(l,v){return '<div class="card kpi" style="margin:0"><div class="l">'+esc(l)+'</div><div class="v">'+esc(v)+'</div></div>'}
+function busy(btn,p){btn.disabled=true;return p.then(function(r){btn.disabled=false;return r},function(e){btn.disabled=false;toast(e.message,true);throw e})}
+
+/* ---------- 1. dashboard ---------- */
+function tDash(v){
+  function load(){
+    return api('/admin/overview').then(function(o){
+      var u=o.users||{},l=o.listeners||{},a=o.archive||{};
+      var list=l.listeners||[];
+      var by=l.by_view||{};
+      var views=['classic','orbita','ramowka'];
+      var counts={classic:num(pick(by,'classic','Classic')),orbita:num(pick(by,'orbita','Orbita')),ramowka:num(pick(l,'ramowka_listeners')!==undefined?l.ramowka_listeners:pick(by,'ramowka','auto_ramowka'))};
+      function viewOf(x){var s=String(pick(x,'view','mode','kind')||'').toLowerCase();if(s.indexOf('orbit')>=0)return 'Orbita';if(s.indexOf('ram')>=0||s.indexOf('auto')>=0)return 'Auto-Ramówka';return 'Classic'}
+      var rows=list.map(function(x){return '<tr><td>'+esc(pick(x,'email','user','name','id','session')||'anonim')+'</td><td><span class="pill ac">'+viewOf(x)+'</span></td><td>'+esc(pick(x,'station_name','station_id','station')||'-')+'</td><td class="muted">'+fdate(pick(x,'last_seen','last_seen_at','since','started_at'))+'</td></tr>'}).join('')||'<tr><td colspan="4" class="muted">Brak aktywnych słuchaczy</td></tr>';
+      var st=(a.by_station||[]).map(function(s){return '<tr><td>'+esc(pick(s,'station_id','station','name'))+'</td><td>'+fmt(pick(s,'hours','total_hours'))+' h</td><td>'+fmt(pick(s,'segments','total_segments'))+'</td><td>'+fmt(pick(s,'mb','total_mb'))+' MB</td></tr>'}).join('')||'<tr><td colspan="4" class="muted">Brak danych</td></tr>';
+      var t30=o.tokens&&o.tokens.totals_30d;
+      v.innerHTML=head('Pulpit i Aktywni','Statystyki na żywo, odświeżane co 15 s.')+
+      '<div class="card row" style="align-items:center"><span class="muted">Szybkie linki:</span><a class="btn" href="/">Radio Classic</a><a class="btn" href="/orbita.html">Orbita</a><a class="btn" href="https://zrobi.my" target="_blank" rel="noopener">zrobi.my</a></div>'+
+      '<div class="grid kpis" style="margin-bottom:16px">'+
+        kpi('Użytkownicy',fmt(u.total))+kpi('Zweryfikowani',fmt(u.verified))+kpi('Plus',fmt(u.plus))+kpi('Online teraz',fmt(u.online_now))+kpi('Aktywni 24h',fmt(u.active_24h))+kpi('Aktywne triale',fmt(u.active_trials))+
+        kpi('Słuchacze teraz',fmt(l.active_now))+kpi('Słuchacze 24h',fmt(l.active_24h))+kpi('Leady',fmt(o.leads_count))+kpi('Archiwum (h)',fmt(a.total_hours))+kpi('Segmenty',fmt(a.total_segments))+kpi('Archiwum (MB)',fmt(a.total_mb))+
+      '</div>'+
+      '<div class="grid g2"><div class="card"><h2>Aktywni słuchacze</h2><div class="row" style="margin-bottom:10px">'+
+        '<span class="pill">Classic: '+counts.classic+'</span><span class="pill">Orbita: '+counts.orbita+'</span><span class="pill">Auto-Ramówka: '+counts.ramowka+'</span></div>'+
+        '<div class="scroll"><table><tr><th>Słuchacz</th><th>Widok</th><th>Stacja</th><th>Aktywność</th></tr>'+rows+'</table></div></div>'+
+      '<div class="card"><h2>Archiwum wg stacji</h2><p class="muted">Nagrywana teraz: '+esc(a.current_recording_station||'-')+'</p><div class="scroll"><table><tr><th>Stacja</th><th>Godziny</th><th>Segmenty</th><th>Rozmiar</th></tr>'+st+'</table></div></div></div>';
+    });
+  }
+  return load().then(function(){dashTimer=setInterval(function(){if(cur==='dash')load().catch(function(){})},15000)});
+}
+
+/* ---------- 2. tracks ---------- */
+var decks={a:null,b:null};
+var PAGE=80;
+function tTracks(v){
+  var st={station:'',offset:0,showAllPrompts:false};
+  return api('/admin/catalog').then(function(c){return c.stations||[]},function(){return []}).then(function(stations){
+    function findSt(sid){return stations.filter(function(s){return String(s.id)===String(sid)})[0]||null}
+    function promptCardHtml(){
+      var sel=st.station?findSt(st.station):null;
+      if(sel){
+        var pr=pick(sel,'prompt','lyria_prompt')||'';
+        return '<div class="card stack" id="mpCard" style="margin-bottom:14px"><h2>Prompt muzyki: '+esc(sel.name||sel.id)+' <span class="muted">('+esc(sel.id)+')</span></h2>'+
+          '<textarea id="mpTxt" rows="3" placeholder="Prompt Lyria dla tej muzyki..." style="width:100%;font-size:13px">'+esc(pr)+'</textarea>'+
+          '<div class="row"><label>BPM <input id="mpBpm" type="number" min="40" max="220" value="'+esc(sel.bpm||'')+'" style="width:84px"></label>'+
+          '<label>Gęstość (0-1) <input id="mpDen" type="number" step="0.05" min="0" max="1" value="'+esc(sel.density??'')+'" style="width:92px"></label>'+
+          '<label>Jasność (0-1) <input id="mpBri" type="number" step="0.05" min="0" max="1" value="'+esc(sel.brightness??'')+'" style="width:92px"></label>'+
+          '<button class="btn pri" id="mpSave">'+ic('save')+' Zapisz prompt dla '+esc(sel.id)+'</button>'+
+          '<button class="btn" id="mpToggleAll">'+(st.showAllPrompts?'Ukryj listę wszystkich promptów':'Pokaż wszystkie prompty ('+stations.length+')')+'</button></div></div>';
+      }
+      return '<div class="card" style="margin-bottom:14px"><div class="row" style="justify-content:space-between"><div><b>Edycja promptów muzyki (Lyria)</b><div class="muted">Wybierz stację poniżej lub kliknij „Prompt” przy dowolnym nagraniu, aby od razu poprawić prompt generowania muzyki.</div></div>'+
+        '<button class="btn pri" id="mpToggleAll">'+(st.showAllPrompts?'Ukryj wszystkie prompty':'Edytuj prompty wszystkich stacji ('+stations.length+')')+'</button></div>'+
+        (st.showAllPrompts?'<div class="stack" style="margin-top:12px;max-height:420px;overflow:auto">'+stations.map(function(s){
+          var pr=pick(s,'prompt','lyria_prompt')||'';
+          return '<div class="st" data-mpid="'+esc(s.id)+'" style="display:flex;gap:8px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--bd)"><div style="min-width:190px"><b>'+esc(s.name||s.id)+'</b><div class="muted" style="font-size:11px">'+esc(s.id)+' · BPM '+esc(s.bpm||'-')+'</div></div><textarea data-mpt rows="2" style="flex:1;font-size:12px">'+esc(pr)+'</textarea><button class="btn pri" data-mps="'+esc(s.id)+'">'+ic('save')+' Zapisz</button></div>';
+        }).join('')+'</div>':'')+'</div>';
+    }
+    function draw(){
+      var q='?station_id='+encodeURIComponent(st.station)+'&limit='+PAGE+'&offset='+st.offset;
+      return api('/admin/tracks'+q).then(function(d){
+        var tr=d.tracks||[],total=num(d.total,tr.length);
+        var rows=tr.map(function(t,i){
+          var src=t.audio_url||(API+'/admin/tracks/'+encodeURIComponent(t.station_id)+'/'+encodeURIComponent(t.filename)+'/audio');
+          return '<tr data-i="'+i+'"><td><b>'+esc(t.station_id)+'</b></td><td>'+esc(t.filename)+(t.is_session_start?' <span class="pill ac">start sesji</span>':'')+'</td><td class="muted">'+fdate(t.recorded_at)+'</td><td>'+fdur(t.duration_s)+'</td><td>'+fsize(t.size_bytes)+'</td>'+
+          '<td><audio controls preload="none" style="height:32px;width:220px" data-src="'+esc(src)+'"></audio></td>'+
+          '<td><div class="row"><button class="btn" data-a="pr">Prompt</button><button class="btn" data-a="a">Deck A</button><button class="btn" data-a="b">Deck B</button><button class="btn bad" data-a="del">'+ic('trash')+'</button></div></td></tr>'}).join('')||'<tr><td colspan="7" class="muted">Brak nagrań</td></tr>';
+        v.innerHTML=head('Muzyka — Nagrane Kawałki i Prompty Lyria','Odsłuchuj nagrania .opus i na żywo poprawiaj prompt każdej stacji. Deck A: '+(decks.a?decks.a.filename:'-')+' | Deck B: '+(decks.b?decks.b.filename:'-'))+
+        promptCardHtml()+
+        '<div class="card"><div class="row" style="margin-bottom:12px"><label>Stacja<select id="fs"><option value="">Wszystkie ('+stations.length+')</option>'+stations.map(function(s){return '<option value="'+esc(s.id)+'"'+(String(s.id)===st.station?' selected':'')+'>'+esc(s.name||s.id)+'</option>'}).join('')+'</select></label>'+
+        '<span class="muted">'+(total?(st.offset+1)+'-'+Math.min(st.offset+PAGE,total):0)+' z '+total+'</span><button class="btn" id="pv"'+(st.offset<=0?' disabled':'')+'>Poprzednia</button><button class="btn" id="nx"'+(st.offset+PAGE>=total?' disabled':'')+'>Następna</button></div>'+
+        '<div class="scroll"><table><tr><th>Stacja</th><th>Plik</th><th>Nagrano</th><th>Czas</th><th>Rozmiar</th><th>Odtwarzacz</th><th>Akcje</th></tr>'+rows+'</table></div></div>';
+        $$('audio',v).forEach(function(a){a.addEventListener('play',function(){
+          if(!a.src){
+            fetch(a.dataset.src,{headers:authHeaders(),credentials:'include'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.blob()}).then(function(b){a.src=URL.createObjectURL(b);a.play()}).catch(function(e){toast('Audio: '+e.message,true)});
+          }
+        },{once:false})});
+        $('#fs',v).onchange=function(){st.station=this.value;st.offset=0;draw()};
+        $('#pv',v).onclick=function(){st.offset=Math.max(0,st.offset-PAGE);draw()};
+        $('#nx',v).onclick=function(){st.offset+=PAGE;draw()};
+        var tgAll=$('#mpToggleAll',v);if(tgAll)tgAll.onclick=function(){st.showAllPrompts=!st.showAllPrompts;if(st.showAllPrompts)st.station='';draw()};
+        var mpSave=$('#mpSave',v);if(mpSave)mpSave.onclick=function(){
+          var sel=findSt(st.station);if(!sel)return;
+          var body={prompt:($('#mpTxt',v).value||'').trim()};
+          var bv=$('#mpBpm',v).value,dv=$('#mpDen',v).value,brv=$('#mpBri',v).value;
+          if(bv!=='')body.bpm=num(bv);if(dv!=='')body.density=num(dv);if(brv!=='')body.brightness=num(brv);
+          busy(mpSave,api('/admin/catalog/stations/'+encodeURIComponent(sel.id),{method:'PATCH',body:body})).then(function(){
+            Object.assign(sel,body);toast('Zapisano prompt muzyki: '+sel.id);
+          });
+        };
+        $$('button[data-mps]',v).forEach(function(b){b.onclick=function(){
+          var sid=b.dataset.mps,row=b.closest('[data-mpid]'),txt=($('textarea[data-mpt]',row).value||'').trim();
+          var sel=findSt(sid);
+          busy(b,api('/admin/catalog/stations/'+encodeURIComponent(sid),{method:'PATCH',body:{prompt:txt}})).then(function(){
+            if(sel)sel.prompt=txt;toast('Zapisano prompt: '+sid);
+          });
+        }});
+        $$('tr[data-i] button',v).forEach(function(b){b.onclick=function(){
+          var t=tr[num(b.closest('tr').dataset.i)];
+          if(b.dataset.a==='pr'){st.station=t.station_id;st.offset=0;draw();return}
+          if(b.dataset.a==='del'){
+            if(!confirm('Usunąć '+t.filename+'?'))return;
+            busy(b,api('/admin/tracks/'+encodeURIComponent(t.station_id)+'/'+encodeURIComponent(t.filename),{method:'DELETE'})).then(function(){toast('Usunięto');draw()});
+          }else{decks[b.dataset.a]={station_id:t.station_id,filename:t.filename};toast('Deck '+b.dataset.a.toUpperCase()+': '+t.filename);
+            var s=$('.sub',v);if(s)s.textContent='Odsłuchuj nagrania .opus i na żywo poprawiaj prompt każdej stacji. Deck A: '+(decks.a?decks.a.filename:'-')+' | Deck B: '+(decks.b?decks.b.filename:'-')}
+        }});
+      });
+    }
+    return draw();
+  });
+}
+
+/* ---------- 3. mixer ---------- */
+function tMixer(v){
+  return Promise.all([api('/admin/mixer/config').catch(function(){return {}}),api('/admin/catalog').catch(function(){return {}}),api('/admin/tracks?limit=200&offset=0').catch(function(){return {}})]).then(function(r){
+    var cfg=Object.assign({crossfade_beats:16,fallback_fade_seconds:4,bass_swap_position:0.5,equal_power_highs:true,tempo_lock:true,intra_declick_ms:5},r[0]);
+    var tracks=r[2].tracks||[];
+    function opts(deck){var sel=decks[deck];return '<option value="">-- wybierz --</option>'+tracks.map(function(t,i){var k=t.station_id+'|'+t.filename;return '<option value="'+esc(k)+'"'+(sel&&sel.station_id===t.station_id&&sel.filename===t.filename?' selected':'')+'>'+esc(t.station_id+' / '+t.filename)+'</option>'}).join('')}
+    function sl(id,l,min,max,step,val){return '<label>'+l+' <b id="'+id+'v" style="color:var(--tx)">'+val+'</b><input type="range" id="'+id+'" min="'+min+'" max="'+max+'" step="'+step+'" value="'+val+'"></label>'}
+    v.innerHTML=head('Tester Miksera DJ','Wybierz dwa nagrania, ustaw parametry i odsłuchaj przejście.')+
+    '<div class="grid g2"><div class="card stack"><h2>Decki</h2>'+
+      '<label>Deck A<select id="da">'+opts('a')+'</select></label><label>Deck B<select id="db">'+opts('b')+'</select></label>'+
+      '<label>Technika DJ<select id="tc"><option value="auto"'+(cfg.technique==='auto'||!cfg.technique?' selected':'')+'>Auto (wg gatunku i ±12% BPM)</option><option value="eq_blend"'+(cfg.technique==='eq_blend'?' selected':'')+'>3-Band Isolator EQ + Bass Swap (Techno/House)</option><option value="filter_sweep"'+(cfg.technique==='filter_sweep'?' selected':'')+'>Dual DJ Filter Sweep LPF/HPF (Trance/Rave/Grupy)</option><option value="echo_out"'+(cfg.technique==='echo_out'?' selected':'')+'>Dub Echo-Out 3/4 + Drop na 1 (Hip-Hop/Dub/&gt;12% BPM)</option><option value="velvet_fade"'+(cfg.technique==='velvet_fade'?' selected':'')+'>Velvet Fade 3-Band (Ambient/Jazz/B2B)</option></select></label>'+
+      sl('cb','Długość frazy DJ w beatach (32=8 taktów, 64=16 taktów)',8,64,4,num(cfg.crossfade_beats,32))+
+      sl('ff','Velvet fade bez bitu (s)',2,22,0.5,num(cfg.fallback_fade_seconds,12))+
+      sl('bs','Punkt podmiany basu (Bass Swap 0..1)',0,1,0.05,num(cfg.bass_swap_position,0.5))+
+      '<label class="chk"><input type="checkbox" id="eq"'+(cfg.equal_power_highs?' checked':'')+'> equal_power_highs</label>'+
+      '<label class="chk"><input type="checkbox" id="tl"'+(cfg.tempo_lock?' checked':'')+'> Master Tempo WSOLA (±12% BPM match)</label>'+
+      '<div class="row"><button class="btn pri" id="gen">'+ic('play')+' Wygeneruj i odsłuchaj przejście</button><button class="btn ok" id="sv">'+ic('save')+' Zapisz jako domyślne ustawienia miksera</button></div></div>'+
+    '<div class="card stack"><h2>Wynik</h2><audio id="pl" controls style="width:100%"></audio><canvas id="cv" width="800" height="300"></canvas><div id="rep" class="scroll"></div></div></div>';
+    ['cb','ff','bs'].forEach(function(id){var e=$('#'+id,v);e.oninput=function(){$('#'+id+'v',v).textContent=e.value}});
+    function params(){return {technique:$('#tc',v).value||'auto',crossfade_beats:num($('#cb',v).value),fallback_fade_seconds:num($('#ff',v).value),bass_swap_position:num($('#bs',v).value),equal_power_highs:$('#eq',v).checked,tempo_lock:$('#tl',v).checked}}
+    function split(s){var i=s.indexOf('|');return [s.slice(0,i),s.slice(i+1)]}
+    var last=null;
+    $('#sv',v).onclick=function(){var b=this;var p=params();p.intra_declick_ms=num(cfg.intra_declick_ms,15);busy(b,api('/admin/mixer/config',{method:'PUT',body:p})).then(function(){toast('Zapisano ustawienia miksera')})};
+    $('#gen',v).onclick=function(){
+      var b=this,a=$('#da',v).value,c=$('#db',v).value;
+      if(!a||!c){toast('Wybierz Deck A i Deck B',true);return}
+      var A=split(a),B=split(c);decks.a={station_id:A[0],filename:A[1]};decks.b={station_id:B[0],filename:B[1]};
+      var body=Object.assign({station_a:A[0],segment_a:A[1],station_b:B[0],segment_b:B[1],context_seconds:18},params());
+      busy(b,api('/admin/mixer/preview',{method:'POST',body:body})).then(function(d){
+        last=d;var rp=d.report||{};
+        var pl=$('#pl',v);pl.src='data:audio/wav;base64,'+d.audio_wav_base64;pl.play().catch(function(){});
+        var keys=['mode','technique','overlap_seconds','beats_mixed','bass_swap_seconds','tail_bpm','head_bpm','bpm_delta_pct','pitch_locked','peak_dbfs','sub_rms_db','mid_rms_db'];
+        $('#rep',v).innerHTML='<table>'+keys.map(function(k){var x=rp[k];return '<tr><td class="muted">'+k+'</td><td>'+esc(typeof x==='number'?Math.round(x*100)/100:(x==null?'-':x))+'</td></tr>'}).join('')+'<tr><td class="muted">duration_seconds</td><td>'+esc(d.duration_seconds)+'</td></tr></table>';
+        plot($('#cv',v),rp);
+      });
+    };
+    function plot(cv,rp){
+      var W=cv.width=cv.clientWidth*2||1600,H=cv.height=440,g=cv.getContext('2d');
+      g.fillStyle='#0B0D14';g.fillRect(0,0,W,H);
+      var env=(rp.envelope_db||[]).map(function(x){return num(x,-60)});
+      var lo=-60,hi=Math.max(0,Math.max.apply(null,env.concat([0])));
+      g.strokeStyle='#1D2030';g.lineWidth=1;g.fillStyle='#8A90A6';g.font='20px sans-serif';
+      for(var d=lo;d<=hi;d+=12){var y=H-24-(d-lo)/(hi-lo)*(H-40);g.beginPath();g.moveTo(40,y);g.lineTo(W,y);g.stroke();g.fillText(d+' dB',4,y-3)}
+      if(!env.length){g.fillText('Brak danych envelope_db',60,H/2);return}
+      function X(i){return 50+i/(Math.max(1,env.length-1))*(W-70)}
+      function Y(val){return H-24-(Math.max(lo,Math.min(hi,val))-lo)/(hi-lo)*(H-40)}
+      g.beginPath();env.forEach(function(e,i){i?g.lineTo(X(i),Y(e)):g.moveTo(X(i),Y(e))});
+      g.strokeStyle='#35D0B5';g.lineWidth=3;g.stroke();
+      g.lineTo(X(env.length-1),H-24);g.lineTo(X(0),H-24);g.closePath();g.fillStyle='rgba(53,208,181,.12)';g.fill();
+      var dur=num(last&&last.duration_seconds),sw=num(rp.bass_swap_seconds,-1);
+      if(sw>=0&&dur>0){var bx=50+Math.min(1,sw/dur)*(W-70);
+        g.setLineDash([10,8]);g.strokeStyle='#FF6B4A';g.lineWidth=3;g.beginPath();g.moveTo(bx,10);g.lineTo(bx,H-24);g.stroke();g.setLineDash([]);
+        g.fillStyle='#FF6B4A';g.fillText('bass swap '+sw.toFixed(2)+'s',Math.min(bx+8,W-220),28)}
+    }
+  });
+}
+
+/* ---------- 4. catalog ---------- */
+function tCatalog(v){
+  function on(s){var x=pick(s,'on_air','enabled','active','is_active');return x===undefined?true:!!x}
+  function load(){
+    return api('/admin/catalog').then(function(c){
+      var groups=c.groups||[],stations=c.stations||[];
+      var top=groups.filter(function(g){return !pick(g,'parent_id','parent')});
+      var html=top.map(function(g){
+        var subs=groups.filter(function(x){return String(pick(x,'parent_id','parent'))===String(g.id)});
+        var own=stations.filter(function(s){return String(pick(s,'group_id','group'))===String(g.id)});
+        function stRow(s){var pr=pick(s,'prompt','lyria_prompt')||'';return '<div class="st" data-sid="'+esc(s.id)+'" data-search="'+esc((s.name+' '+s.id+' '+pr).toLowerCase())+'" style="flex-wrap:wrap;align-items:center"><b>'+esc(s.name||s.id)+'</b> <span class="muted">'+esc(s.id)+'</span><span class="pill">BPM '+esc(pick(s,'bpm')||'-')+'</span><span class="pill">gęstość '+esc(pick(s,'density')||'-')+'</span><span class="pill">jasność '+esc(pick(s,'brightness')||'-')+'</span><span class="muted">'+esc(pick(s,'host','host_name')||'')+'</span><span class="grow"></span><span class="pill '+(on(s)?'ok':'off')+'">'+(on(s)?'Na antenie':'Zdjęta')+'</span><button class="btn" data-a="tg">'+(on(s)?'Zdejmij':'Wystaw na antenę')+'</button><button class="btn" data-a="es">Edytuj</button><button class="btn bad" data-a="ds">'+ic('trash')+'</button><div style="flex:1 1 100%;display:flex;gap:8px;margin-top:6px;align-items:flex-start"><textarea data-p rows="2" placeholder="Prompt Lyria dla tej stacji..." style="flex:1;min-height:46px;font-size:12px">'+esc(pr)+'</textarea><button class="btn pri" type="button" data-a="sp" style="white-space:nowrap">'+ic('save')+' Zapisz prompt</button></div></div>'}
+        var inner=own.map(stRow).join('');
+        subs.forEach(function(sg){inner+='<div class="sg" data-gid="'+esc(sg.id)+'">Podgrupa: <b>'+esc(sg.name||sg.id)+'</b> <button class="btn" data-a="eg" style="padding:2px 8px">Edytuj</button></div>'+stations.filter(function(s){return String(pick(s,'group_id','group'))===String(sg.id)}).map(stRow).join('')});
+        return '<div class="grp" data-gid="'+esc(g.id)+'"><div class="gh"><b>'+esc(g.name||g.id)+'</b><span class="muted">'+esc(g.id)+'</span><span class="grow"></span><button class="btn" data-a="eg">Edytuj grupę</button></div>'+(inner||'<div class="st muted">Brak stacji</div>')+'</div>';
+      }).join('')||'<p class="muted">Brak grup</p>';
+      var gopts=groups.map(function(g){return '<option value="'+esc(g.id)+'">'+esc((pick(g,'parent_id','parent')?'  - ':'')+(g.name||g.id))+'</option>'}).join('');
+      v.innerHTML=head('Rodzaje Muzyki (Grupy, Stacje i Prompty Lyria)','Edytuj prompt Lyria bezpośrednio przy każdej stacji lub zarządzaj całym drzewem katalogu.')+
+      '<div class="grid g2"><div class="card tree"><div class="row" style="justify-content:space-between;margin-bottom:10px"><h2 style="margin:0">Drzewo i Prompty Stacji</h2><input id="catSearch" placeholder="Szukaj stacji lub frazy w prompcie..." style="max-width:280px"></div>'+html+'</div><div>'+
+      '<form class="card stack" id="gf"><h2 id="gt">Dodaj grupę / podgrupę</h2><input type="hidden" name="id"><label>Nazwa<input name="name" required></label><label>Grupa nadrzędna (puste = główna)<select name="parent_id"><option value="">-</option>'+gopts+'</select></label><div class="row"><button class="btn pri" type="submit">'+ic('save')+' Zapisz grupę</button><button class="btn" type="reset">Wyczyść</button></div></form>'+
+      '<form class="card stack" id="sf"><h2 id="st">Dodaj stację</h2><input type="hidden" name="eid"><label>ID stacji (slug)<input name="id" required></label><label>Nazwa<input name="name" required></label><label>Grupa<select name="group_id">'+gopts+'</select></label>'+
+      '<label>Prompt Lyria<textarea name="prompt"></textarea></label><div class="row"><label>BPM<input name="bpm" type="number" min="40" max="220" style="width:90px"></label><label>Gęstość (0-1)<input name="density" type="number" step="0.05" min="0" max="1" style="width:100px"></label><label>Jasność (0-1)<input name="brightness" type="number" step="0.05" min="0" max="1" style="width:100px"></label></div>'+
+      '<label>Prowadzący (host)<input name="host"></label><label class="chk"><input type="checkbox" name="on_air" checked> Na antenie</label><div class="row"><button class="btn pri" type="submit">'+ic('save')+' Zapisz stację</button><button class="btn" type="reset">Wyczyść</button></div></form></div></div>';
+      var gf=$('#gf',v),sf=$('#sf',v);
+      function setf(f,o){Object.keys(o).forEach(function(k){var e=f.elements[k];if(!e)return;if(e.type==='checkbox')e.checked=!!o[k];else e.value=o[k]==null?'':o[k]})}
+      gf.onreset=function(){setf(gf,{id:''});$('#gt',v).textContent='Dodaj grupę / podgrupę'};
+      sf.onreset=function(){setf(sf,{eid:''});sf.elements.id.readOnly=false;$('#st',v).textContent='Dodaj stację'};
+      gf.onsubmit=function(e){e.preventDefault();var f=gf.elements,body={name:f.name.value.trim(),parent_id:f.parent_id.value||null};
+        busy($('button[type=submit]',gf),api(f.id.value?'/admin/catalog/groups/'+encodeURIComponent(f.id.value):'/admin/catalog/groups',{method:f.id.value?'PATCH':'POST',body:body})).then(function(){toast('Zapisano grupę');load()})};
+      sf.onsubmit=function(e){e.preventDefault();var f=sf.elements,ed=f.eid.value;
+        var body={name:f.name.value.trim(),group_id:f.group_id.value,prompt:f.prompt.value,host:f.host.value,enabled:f.on_air.checked,on_air:f.on_air.checked};
+        ['bpm','density','brightness'].forEach(function(k){if(f[k].value!=='')body[k]=num(f[k].value)});
+        if(!ed)body.id=f.id.value.trim();
+        busy($('button[type=submit]',sf),api(ed?'/admin/catalog/stations/'+encodeURIComponent(ed):'/admin/catalog/stations',{method:ed?'PATCH':'POST',body:body})).then(function(){toast('Zapisano stację');load()})};
+      $$('button[data-a]',v).forEach(function(b){b.onclick=function(){
+        var a=b.dataset.a,row=b.closest('[data-sid]'),grp=b.closest('[data-gid]');
+        if(a==='eg'){var g=groups.filter(function(x){return String(x.id)===grp.dataset.gid})[0];setf(gf,{id:g.id,name:g.name,parent_id:pick(g,'parent_id','parent')||''});$('#gt',v).textContent='Edytuj grupę: '+g.id;gf.scrollIntoView({behavior:'smooth'});return}
+        var s=stations.filter(function(x){return String(x.id)===row.dataset.sid})[0];
+        if(a==='sp'){var np=($('textarea[data-p]',row).value||'').trim();busy(b,api('/admin/catalog/stations/'+encodeURIComponent(s.id),{method:'PATCH',body:{prompt:np}})).then(function(){s.prompt=np;toast('Zapisano prompt Lyria: '+s.id)});return}
+        if(a==='es'){setf(sf,{eid:s.id,id:s.id,name:s.name,group_id:pick(s,'group_id','group'),prompt:pick(s,'prompt','lyria_prompt'),bpm:s.bpm,density:s.density,brightness:s.brightness,host:pick(s,'host','host_name'),on_air:on(s)});sf.elements.id.readOnly=true;$('#st',v).textContent='Edytuj stację: '+s.id;sf.scrollIntoView({behavior:'smooth'})}
+        if(a==='tg'){var nv=!on(s);busy(b,api('/admin/catalog/stations/'+encodeURIComponent(s.id),{method:'PATCH',body:{enabled:nv,on_air:nv}})).then(function(){toast(nv?'Na antenie':'Zdjęta z anteny');load()})}
+        if(a==='ds'){if(!confirm('Usunąć stację '+s.id+'?'))return;busy(b,api('/admin/catalog/stations/'+encodeURIComponent(s.id),{method:'DELETE'})).then(function(){toast('Usunięto');load()})}
+      }});
+      var cs=$('#catSearch',v);
+      if(cs)cs.oninput=function(){var q=cs.value.trim().toLowerCase();$$('.st[data-sid]',v).forEach(function(el){el.style.display=!q||el.dataset.search.indexOf(q)>=0?'':'none'})};
+    });
+  }
+  return load();
+}
+
+/* ---------- 5. tokens ---------- */
+function tokNum(t){ // flexible: number or object
+  if(t==null)return {tok:0,cost:0,lyria:0};
+  if(typeof t==='number')return {tok:t,cost:0,lyria:0};
+  var tok=pick(t,'total_tokens','tokens');
+  if(tok===undefined)tok=num(pick(t,'input_tokens','prompt_tokens'))+num(pick(t,'output_tokens','completion_tokens'));
+  return {tok:num(tok),cost:num(pick(t,'cost_usd','cost','total_cost')),lyria:num(pick(t,'lyria_seconds','audio_seconds','lyria_audio_seconds'))};
+}
+function tTokens(v){
+  return api('/admin/tokens?days=30').then(function(d){
+    function card(l,t){var n=tokNum(t);return '<div class="card kpi" style="margin:0"><div class="l">'+l+'</div><div class="v">'+fmt(n.tok)+'</div><div class="muted">tokeny</div><div style="margin-top:6px">Koszt: <b>$'+n.cost.toFixed(2)+'</b></div><div class="muted">Audio Lyria: '+fmt(n.lyria/60)+' min</div></div>'}
+    function tbl(rows,first){
+      rows=rows||[];if(!rows.length)return '<p class="muted">Brak danych</p>';
+      var keys=Object.keys(rows[0]);
+      return '<div class="scroll"><table><tr>'+keys.map(function(k){return '<th>'+esc(k)+'</th>'}).join('')+'</tr>'+rows.map(function(r){return '<tr>'+keys.map(function(k){var x=r[k];return '<td>'+esc(typeof x==='number'?fmt(x):(x&&typeof x==='object'?JSON.stringify(x):x))+'</td>'}).join('')+'</tr>'}).join('')+'</table></div>';
+    }
+    v.innerHTML=head('Zużycie Tokenów','Tokeny i koszt audio Lyria z ostatnich 24h, 7 i 30 dni.')+
+    '<div class="grid kpis" style="margin-bottom:16px">'+card('24 godziny',d.totals_24h)+card('7 dni',d.totals_7d)+card('30 dni',d.totals_30d)+'</div>'+
+    '<div class="card"><h2>Dzienne zużycie (30 dni)</h2><canvas id="bc" height="260"></canvas></div>'+
+    '<div class="grid g2"><div class="card"><h2>Wg funkcji</h2>'+tbl(d.by_feature)+'</div><div class="card"><h2>Wg modelu</h2>'+tbl(d.by_model)+'</div></div>';
+    var cv=$('#bc',v),W=cv.width=cv.clientWidth*2,H=cv.height=520,g=cv.getContext('2d');
+    var days=d.daily||[];g.fillStyle='#0B0D14';g.fillRect(0,0,W,H);g.font='20px sans-serif';
+    if(!days.length){g.fillStyle='#8A90A6';g.fillText('Brak danych',40,H/2);return}
+    var vals=days.map(function(x){return tokNum(x).tok});var mx=Math.max.apply(null,vals.concat([1]));
+    var bw=(W-80)/days.length;
+    g.strokeStyle='#1D2030';g.fillStyle='#8A90A6';
+    for(var i=0;i<=4;i++){var y=H-50-(H-90)*i/4;g.beginPath();g.moveTo(70,y);g.lineTo(W,y);g.stroke();g.fillText(fmt(mx*i/4),2,y-4)}
+    days.forEach(function(x,i){var h=(H-90)*vals[i]/mx;g.fillStyle='#FF6B4A';g.fillRect(74+i*bw+bw*0.15,H-50-h,bw*0.7,h);
+      if(days.length<=16||i%Math.ceil(days.length/12)===0){g.fillStyle='#8A90A6';g.fillText(String(pick(x,'day','date')||'').slice(5),74+i*bw,H-20)}});
+  });
+}
+
+/* ---------- 6. users / ramowka / leads ---------- */
+function tPeople(v){
+  return Promise.all([api('/admin/users'),api('/admin/ramowka'),api('/admin/leads'),api('/admin/catalog').catch(function(){return {}})]).then(function(r){
+    var users=r[0].users||[],hours=r[1].hours||[],spots=r[1].spots||[],leads=r[2].leads||[],stations=r[3].stations||[];
+    var hmap={};hours.forEach(function(h){hmap[num(pick(h,'hour','h'))]=h});
+    function sopts(sel){return '<option value="">-</option>'+stations.map(function(s){return '<option value="'+esc(s.id)+'"'+(String(s.id)===String(sel)?' selected':'')+'>'+esc(s.name||s.id)+'</option>'}).join('')}
+    var urows=users.map(function(u){return '<tr data-id="'+esc(u.id)+'"><td>'+esc(u.email)+(u.is_online?' <span class="pill ok">online</span>':'')+'</td><td class="muted">'+fdate(u.created_at)+'</td><td>'+(u.email_verified?'<span class="pill ok">tak</span>':'<span class="pill off">nie</span>')+'</td><td><span class="pill '+(u.plan==='plus'?'ac':'')+'">'+esc(u.plan||'free')+'</span> <span class="muted">'+(u.plus_until?'do '+fdate(u.plus_until):'')+'</span></td>'+
+      '<td><div class="row"><button class="btn ok" data-a="plus">Nadaj Plus +30d</button><button class="btn" data-a="ver">'+(u.email_verified?'Cofnij weryfikację':'Zweryfikuj')+'</button><button class="btn" data-a="free">Plan free</button></div></td></tr>'}).join('')||'<tr><td colspan="5" class="muted">Brak</td></tr>';
+    var hrows='';for(var h=0;h<24;h++){var x=hmap[h]||{};hrows+='<tr data-h="'+h+'"><td>'+String(h).padStart(2,'0')+':00</td><td><select class="hs">'+sopts(x.station_id)+'</select></td><td><input class="hl" value="'+esc(x.slot_label||'')+'" placeholder="Nazwa slotu"></td><td><button class="btn" data-a="sh">'+ic('save')+' Zapisz</button></td></tr>'}
+    var srows=spots.map(function(s){return '<tr data-id="'+esc(s.id)+'"><td>'+esc(s.id)+'</td><td>'+esc(pick(s,'title','name','label')||'')+'<div class="muted">'+esc(pick(s,'text','script','body')||'')+'</div></td><td><span class="pill '+(pick(s,'enabled','active')===false?'off':'ok')+'">'+(pick(s,'enabled','active')===false?'wyłączony':'aktywny')+'</span></td><td><audio controls preload="none" style="height:32px;width:200px" data-src="'+API+'/ramowka/spot/'+encodeURIComponent(s.id)+'.wav"></audio></td><td><div class="row"><button class="btn" data-a="spt">'+(pick(s,'enabled','active')===false?'Włącz':'Wyłącz')+'</button></div></td></tr>'}).join('')||'<tr><td colspan="5" class="muted">Brak spotów</td></tr>';
+    var STAT=[['new','Nowy'],['contacted','Skontaktowano'],['qualified','Zakwalifikowany'],['won','Wygrany'],['lost','Utracony']];
+    var lrows=leads.map(function(l){var s=l.status||'new';return '<tr data-id="'+esc(l.id)+'"><td>'+esc(pick(l,'company','name','business')||'-')+'<div class="muted">'+esc(pick(l,'contact','person')||'')+'</div></td><td>'+esc(l.email||'')+'<div class="muted">'+esc(l.phone||'')+'</div></td><td class="muted">'+esc(pick(l,'message','note','notes')||'')+'</td><td class="muted">'+fdate(l.created_at)+'</td><td><select class="ls">'+STAT.map(function(o){return '<option value="'+o[0]+'"'+(o[0]===s?' selected':'')+'>'+o[1]+'</option>'}).join('')+(STAT.some(function(o){return o[0]===s})?'':'<option selected>'+esc(s)+'</option>')+'</select></td></tr>'}).join('')||'<tr><td colspan="5" class="muted">Brak leadów</td></tr>';
+    v.innerHTML=head('Użytkownicy, Auto-Ramówka i Leady','Zarządzanie kontami, ramówką 24h, spotami i leadami zrobi.my.')+
+    '<div class="card"><h2>Zarejestrowani użytkownicy ('+users.length+')</h2><div class="scroll"><table id="ut"><tr><th>Email</th><th>Utworzono</th><th>Zweryfikowany</th><th>Plan</th><th>Akcje</th></tr>'+urows+'</table></div></div>'+
+    '<div class="card"><h2>Auto-Ramówka 24h</h2><div class="scroll"><table id="ht"><tr><th>Godzina</th><th>Stacja</th><th>Etykieta</th><th></th></tr>'+hrows+'</table></div></div>'+
+    '<div class="card"><h2>Spoty audio zrobi.my</h2><div class="scroll"><table id="sp"><tr><th>ID</th><th>Treść</th><th>Status</th><th>Podgląd</th><th></th></tr>'+srows+'</table></div>'+
+    '<form id="spf" class="row" style="margin-top:12px"><label>Tytuł<input name="title" required></label><label style="flex:1;min-width:240px">Tekst spotu<input name="text" required style="width:100%"></label><button class="btn pri" type="submit">'+ic('plus')+' Dodaj spot</button></form></div>'+
+    '<div class="card"><h2>Leady SME zrobi.my ('+leads.length+')</h2><div class="scroll"><table id="lt"><tr><th>Firma</th><th>Kontakt</th><th>Wiadomość</th><th>Data</th><th>Status</th></tr>'+lrows+'</table></div></div>';
+    var reload=function(){go('people')};
+    $$('#ut button',v).forEach(function(b){b.onclick=function(){
+      var id=b.closest('tr').dataset.id,u=users.filter(function(x){return String(x.id)===id})[0],a=b.dataset.a,body;
+      if(a==='plus')body={plan:'plus',plus_days:30,email_verified:!!u.email_verified};
+      else if(a==='ver')body={plan:u.plan||'free',email_verified:!u.email_verified};
+      else body={plan:'free',email_verified:!!u.email_verified};
+      busy(b,api('/admin/users/'+encodeURIComponent(id),{method:'PATCH',body:body})).then(function(){toast('Zaktualizowano');reload()})}});
+    $$('#ht button',v).forEach(function(b){b.onclick=function(){var tr=b.closest('tr');
+      busy(b,api('/admin/ramowka/hours/'+tr.dataset.h,{method:'PUT',body:{station_id:$('.hs',tr).value,slot_label:$('.hl',tr).value}})).then(function(){toast('Zapisano '+tr.dataset.h+':00')})}});
+    $$('#sp button',v).forEach(function(b){b.onclick=function(){var id=b.closest('tr').dataset.id,s=spots.filter(function(x){return String(x.id)===id})[0];var nv=pick(s,'enabled','active')===false;
+      busy(b,api('/admin/ramowka/spots/'+encodeURIComponent(id),{method:'PATCH',body:{enabled:nv,active:nv}})).then(function(){toast('Zaktualizowano');reload()})}});
+    $$('#sp audio',v).forEach(function(a){a.addEventListener('play',function(){if(a.src)return;
+      fetch(a.dataset.src,{headers:authHeaders(),credentials:'include'}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.blob()}).then(function(b){a.src=URL.createObjectURL(b);a.play()}).catch(function(e){toast('Audio: '+e.message,true)})})});
+    $('#spf',v).onsubmit=function(e){e.preventDefault();var f=this.elements;
+      busy($('button',this),api('/admin/ramowka/spots',{method:'POST',body:{title:f.title.value,text:f.text.value}})).then(function(){toast('Dodano spot');reload()})};
+    $$('#lt .ls',v).forEach(function(s){s.onchange=function(){var id=s.closest('tr').dataset.id;api('/admin/leads/'+encodeURIComponent(id),{method:'PATCH',body:{status:s.value}}).then(function(){toast('Status zapisany')}).catch(function(e){toast(e.message,true)})}});
+  });
+}
+
+go(cur);
+})();
+</script>
+</body>
+</html>

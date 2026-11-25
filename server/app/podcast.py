@@ -7,6 +7,7 @@ is generated and cached under data/podcasts/<episode_id>/.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import random
@@ -18,14 +19,14 @@ from pathlib import Path
 
 from .archive import ArchiveRegistry
 from .bumpers import Runner, make_voiced_bumper, subprocess_runner
-from .news import GeminiClient
+from .gemini_client import GeminiClient
 
 log = logging.getLogger("dosradio.podcast")
 
 MAX_EPISODES_KEPT = 30
 MIN_TURNS = 4
 MUSIC_SEGMENTS_PER_BREAK = (4, 6)  # 30 s each -> 2-3 minute music interludes
-MANIFEST_VERSION = 2  # v2 = episodes with radio bumpers; older cached episodes regenerate
+MANIFEST_VERSION = 4  # v4 = 5-act segmented spoken parts (intro, part_1..3, outro) + summary
 
 # Two distinct Polish-speaking hosts: warm curious lead and calm witty co-host.
 PODCAST_HOSTS = (
@@ -44,7 +45,10 @@ _EPISODE_ID_RE = re.compile(r"^[a-z0-9-]+$")
 
 def slugify(text: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
-    return slug[:40].rstrip("-")
+    if len(slug) <= 40:
+        return slug.rstrip("-")
+    digest = hashlib.sha256(text.strip().encode("utf-8")).hexdigest()[:8]
+    return f"{slug[:31].rstrip('-')}-{digest}"
 
 
 def intro_bumper_text(title: str) -> str:
@@ -53,16 +57,31 @@ def intro_bumper_text(title: str) -> str:
 
 def build_podcast_prompt(topic: str, today: date) -> str:
     return "\n".join([
-        f"Dzisiaj jest {today.isoformat()}. Przygotuj scenariusz podcastu w duecie po polsku (format NotebookLM Audio Overview).",
-        f"Temat rozmowy: {topic}.",
-        "Prowadzący: Ania (ciekawska, ciepła, zadaje pytania) i Michał (spokojny, konkretny, z lekkim humorem).",
-        "Struktura: krótkie przywitanie w stylu „Rozmowy DOS Radio”, rozmowa w trzech częściach "
-        "(wprowadzenie, szczegóły, wnioski i jedna praktyczna rzecz do zrobienia), krótkie pożegnanie.",
-        "Zasady: 10-14 wypowiedzi na przemian, każda 2-4 zdania, naturalny mówiony język polski, "
+        f"Dzisiaj jest {today.isoformat()}. Przygotuj scenariusz żywej audycji radiowej w duecie po polsku dla DOS Radio.",
+        f"Temat audycji: {topic}.",
+        "Prowadzący: Ania (ciekawska, ciepła, zadaje celne pytania) i Michał (konkretny, błyskotliwy, z lekkim humorem).",
+        "Audycja MUSI mieć wyraźną budowę radiową podzieloną na części (między częściami radio puści muzykę):",
+        "1) WEJŚCIE: energetyczne przywitanie słuchaczy na antenie i zapowiedź, o czym opowie dzisiejsza audycja;",
+        "2) CZĘŚĆ 1: wprowadzenie i główny haczyk tematu, zakończone zapowiedzią krótkiej przerwy muzycznej;",
+        "3) CZĘŚĆ 2: pogłębienie tematu, konkretne przykłady i ciekawostki;",
+        "4) CZĘŚĆ 3 i WYJŚCIE: praktyczny wniosek dla słuchacza, podziękowanie za wspólny odsłuch i oddanie głosu muzyce.",
+        "Zasady: 9-12 wypowiedzi na przemian, każda 2-3 zdania, naturalny mówiony język polski, "
         "nie wymyślaj faktów ani liczb, zero markdownu, zero emoji, bez list punktowanych.",
-        'Zwróć WYŁĄCZNIE JSON: {"title":"...","turns":[{"speaker":0,"text":"..."},{"speaker":1,"text":"..."}]}',
-        "gdzie speaker 0 to Ania, a 1 to Michał. Pomiń komentarze meta o muzyce czy przerwach.",
+        'Zwróć WYŁĄCZNIE JSON: {"title":"...","summary":"1 krótkie zdanie o czym opowiada audycja","turns":[{"speaker":0,"text":"..."},{"speaker":1,"text":"..."}]}',
+        "gdzie speaker 0 to Ania, a 1 to Michał.",
     ])
+
+
+def parse_script_with_summary(reply_text: str) -> tuple[str, str, list[dict]]:
+    start, end = reply_text.find("{"), reply_text.rfind("}")
+    summary = ""
+    if 0 <= start < end:
+        try:
+            summary = str(json.loads(reply_text[start:end + 1]).get("summary") or "").strip()[:240]
+        except Exception:
+            summary = ""
+    title, turns = parse_script(reply_text)
+    return title, summary, turns
 
 
 def parse_script(reply_text: str) -> tuple[str, list[dict]]:
@@ -164,33 +183,35 @@ class PodcastService:
 
     async def _generate(self, episode_id: str, topic: str, workdir: Path) -> dict:
         reply = await self.client.chat(build_podcast_prompt(topic, date.today()))
-        title, turns = parse_script(reply)
+        title, summary, turns = parse_script_with_summary(reply)
+        sections = split_into_sections(turns, 3)
 
         parts: list[dict] = []
-        sections = split_into_sections(turns)
-        music_runs = self._pick_music_runs(len(sections) - 1)
         turn_index = 0
-        await self._add_bumper(parts, workdir, intro_bumper_text(title))
-        for section_index, section in enumerate(sections):
-            for turn in section:
+        await self._add_bumper(parts, workdir, intro_bumper_text(title), section="intro")
+        for sec_idx, sec_turns in enumerate(sections):
+            sec_tag = f"part_{sec_idx + 1}"
+            for turn in sec_turns:
                 file_name = f"v{turn_index:02d}.wav"
                 host = PODCAST_HOSTS[turn["speaker"]]
                 try:
                     audio = await self.client.speak(turn["text"], host["voice"], host["style"])
                 except Exception as error:
                     log.warning("podcast tts turn %d failed: %s", turn_index, error)
-                    continue  # skip the turn; the conversation stays playable
+                    continue
                 (workdir / file_name).write_bytes(audio)
-                parts.append({"kind": "voice", "file": file_name, "speaker": turn["speaker"]})
+                is_first = turn_index == 0
+                is_last = sec_idx == len(sections) - 1 and turn is sec_turns[-1]
+                eff_sec = "intro" if is_first and not any(p.get("kind") == "bumper" for p in parts) else ("outro" if is_last else sec_tag)
+                parts.append({
+                    "kind": "voice",
+                    "section": eff_sec,
+                    "file": file_name,
+                    "speaker": host["name"],
+                    "text": turn["text"],
+                })
                 turn_index += 1
-            if section_index < len(music_runs) and music_runs[section_index]:
-                await self._add_bumper(parts, workdir, BUMPER_TEXTS["break-out"])
-                for segment in music_runs[section_index]:
-                    file_name = f"m{len(parts):02d}.opus"
-                    shutil.copyfile(segment, workdir / file_name)
-                    parts.append({"kind": "music", "file": file_name, "station": self.station_id})
-                await self._add_bumper(parts, workdir, BUMPER_TEXTS["break-in"])
-        await self._add_bumper(parts, workdir, BUMPER_TEXTS["outro"])
+        await self._add_bumper(parts, workdir, BUMPER_TEXTS["outro"], section="outro")
 
         if not any(part["kind"] == "voice" for part in parts):
             raise RuntimeError("podcast generation produced no voice parts")
@@ -200,11 +221,21 @@ class PodcastService:
             "version": MANIFEST_VERSION,
             "topic": topic,
             "title": title,
+            "summary": summary or topic[:220],
             "station": self.station_id,
             "created_at": time.time(),
             "hosts": [host["name"] for host in PODCAST_HOSTS],
-            "parts": [{"kind": part["kind"], "url": f"/radio-api/plus/podcast/{episode_id}/{part['file']}"}
-                      for part in parts],
+            "parts": [
+                {
+                    "kind": part["kind"],
+                    "section": part.get("section", "part_1"),
+                    "speaker": part.get("speaker", PODCAST_HOSTS[0]["name"]),
+                    "text": part.get("text", ""),
+                    "file": part["file"],
+                    "url": f"/radio-api/plus/podcast/{episode_id}/{part['file']}",
+                }
+                for part in parts
+            ],
         }
         tmp = workdir / "manifest.json.tmp"
         tmp.write_text(json.dumps(manifest, ensure_ascii=False))
@@ -212,8 +243,8 @@ class PodcastService:
         log.info("podcast %s generated: %d parts", episode_id, len(parts))
         return manifest
 
-    async def _add_bumper(self, parts: list[dict], workdir: Path, text: str) -> None:
-        """Voice a short host line over a music bed; a failed bumper never breaks the episode."""
+    async def _add_bumper(self, parts: list[dict], workdir: Path, text: str, section: str = "intro") -> None:
+        """Voice a short host line; a failed bumper never breaks the episode."""
         host = PODCAST_HOSTS[0]
         file_name = f"b{len(parts):02d}.opus"
 
@@ -221,11 +252,11 @@ class PodcastService:
             return await self.client.speak(line, host["voice"], host["style"])
 
         try:
-            await make_voiced_bumper(speak, self.run, text, self._random_segment(), workdir / file_name)
+            await make_voiced_bumper(speak, self.run, text, None, workdir / file_name)
         except Exception as error:
             log.warning("podcast bumper %r skipped: %s", text, error)
             return
-        parts.append({"kind": "bumper", "file": file_name})
+        parts.append({"kind": "bumper", "section": section, "file": file_name, "speaker": host["name"], "text": text})
 
     def _random_segment(self) -> Path | None:
         segments = self.archives.get(self.station_id).list_segments()

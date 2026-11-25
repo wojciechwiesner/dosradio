@@ -1,24 +1,59 @@
 {
+  "id": "/",
   "name": "DOS Radio",
   "short_name": "DOS Radio",
-  "description": "Prywatna stacja ze sztuczną inteligencją. Muzyka generowana na żywo i spokojne wiadomości.",
+  "description": "Osobiste radio AI na żywo — 3 orbity muzyczne, prowadzący, pigułki wiedzy i znajomi na antenie.",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0b0c10",
-  "theme_color": "#0b0c10",
+  "background_color": "#07060a",
+  "theme_color": "#07060a",
   "orientation": "portrait-primary",
+  "categories": ["music", "news", "entertainment"],
   "icons": [
     {
       "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
     },
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Orbita 2.5D",
+      "short_name": "Orbita",
+      "url": "/?view=orbita",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Widok klasyczny",
+      "short_name": "Klasyczny",
+      "url": "/?view=classic",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "Auto-Ramówka 24/7",
+      "short_name": "Ramówka 24/7",
+      "url": "/?ramowka=1",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }
   ]
 }

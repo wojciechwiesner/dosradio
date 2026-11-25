@@ -7,22 +7,22 @@ const L = obj => obj[getLang()] || obj.pl;
 /* ---------- Opening: the host explains the radio (always first) ---------- */
 export const introScript = (host) => L({
   pl: [
-    `Cześć, tu ${host}. To DOS Radio: muzyka powstaje na żywo, osobno dla każdej z dwudziestu pięciu stacji.`,
+    `Cześć, tu ${host}. To DOS Radio: muzyka powstaje na żywo, osobno dla każdej stacji.`,
     'Przeciągnij tarczę, żeby zmienić stację. Księżyce wokół głośnika to tematy wiadomości, wybierz te, które chcesz.',
     'Wpisz dowolny temat, a nagramy o nim podcast. Twoje źródła i maile idą na antenę przed resztą świata.',
-    'Pierwsza godzina jest za darmo. Zostań.',
+    'Pierwsza godzina jest za darmo, a później wystarczy, że się zarejestrujesz. To jest prawdziwe twoje radio — twoja muzyka, twoje zasady, twój styl.',
   ],
   en: [
-    `Hi, I'm ${host}. This is DOS Radio: the music is composed live, separately for each of twenty-five stations.`,
+    `Hi, I'm ${host}. This is DOS Radio: the music is composed live, separately for each station.`,
     'Drag the dial to change station. The moons around the speaker are news topics, pick the ones you want.',
     'Type any topic and we will record a podcast about it. Your own sources and mail go on air before the rest of the world.',
-    'The first hour is free. Stay.',
+    'The first hour is free, and after that all you need to do is register. This is truly your radio — your music, your rules, your style.',
   ],
   ru: [
-    `Привет, это ${host}. Это DOS Radio: музыка рождается вживую, отдельно для каждой из двадцати пяти станций.`,
+    `Привет, это ${host}. Это DOS Radio: музыка рождается вживую, отдельно для каждой станции.`,
     'Потяни шкалу, чтобы сменить станцию. Луны вокруг динамика это темы новостей, выбери нужные.',
     'Напиши любую тему, и мы запишем о ней подкаст. Твои источники и письма выходят в эфир раньше остального мира.',
-    'Первый час бесплатно. Оставайся.',
+    'Первый час бесплатно, а потом достаточно просто зарегистрироваться. Это по-настоящему твоё радио — твоя музыка, твои правила, твой стиль.',
   ],
 });
 

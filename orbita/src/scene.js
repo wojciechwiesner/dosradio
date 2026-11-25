@@ -5,7 +5,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { STATIONS, N, CATS, TOPIC_IDS } from './data.js';
+import { STATIONS, N, CATS, TOPIC_IDS, groupById, RING_RADII } from './data.js';
 
 const C = h => new THREE.Color(h);
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -19,6 +19,7 @@ export function createScene(canvas, cb) {
   let dpr = Math.min(devicePixelRatio || 1, 1.75);
   const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 200);
   const camBase = new THREE.Vector3(0, 3.0, 13), lookAt = new THREE.Vector3(0, -1.1, 0);
+  camera.position.copy(camBase); camera.lookAt(lookAt);
   const bgScene = new THREE.Scene(), coreScene = new THREE.Scene();
 
   /* ---------- fluid (velocity rg, density b), one pass ---------- */
@@ -189,27 +190,55 @@ export function createScene(canvas, cb) {
     const tp = todPalette(st.hour), u = fieldMat.uniforms;
     u.uLine.value.copy(srgb(tp.line)).lerp(palette.cat, 0.22); u.uAccent.value.copy(srgb(tp.accent)).lerp(palette.accent, 0.3); u.uBg.value.copy(srgb(tp.bg));
     u.uPhase.value = st.phase; u.uRing.value = Math.min(st.ringT, 9); u.uLow.value = f.low; u.uMid.value = f.mid; u.uLevel.value = f.level;
-    u.uNA.value = st.a; u.uNB.value = st.b; u.uMorph.value = st.morph; u.uHostMix.value = hostMix; u.uAspect.value = camera.aspect;
+    u.uNA.value = st.a; u.uNB.value = st.b; u.uMorph.value = st.morph; u.uHostMix.value = s.hide3dRings ? 2.2 : hostMix; u.uAspect.value = camera.aspect;
   }
 
-  /* ---------- dial ---------- */
-  const RING_R = 5.3;
-  const ring = new THREE.Group(); ring.position.set(0, -2.15, 0); ring.rotation.x = 0.06; bgScene.add(ring);
+  /* ---------- 3-ring 2.5D astrolabe + mobile corner thumb-turntable ---------- */
+  const ring = new THREE.Group(); ring.position.set(0, -1.55, 0); ring.rotation.x = -0.14; bgScene.add(ring);
   const dialG = new THREE.Group(); ring.add(dialG);
-  const ringMat = new THREE.LineBasicMaterial({ color: C('#3b3550') });
-  { const pts = []; for (let i = 0; i <= 256; i++) { const a = i / 256 * Math.PI * 2; pts.push(new THREE.Vector3(Math.sin(a) * RING_R, 0, Math.cos(a) * RING_R)); } ring.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), ringMat));
-    const tk = []; for (let i = 0; i < N * 5; i++) { const a = i / (N * 5) * Math.PI * 2, l = i % 5 ? 0.12 : 0.32; tk.push(new THREE.Vector3(Math.sin(a) * (RING_R - l), 0, Math.cos(a) * (RING_R - l)), new THREE.Vector3(Math.sin(a) * RING_R, 0, Math.cos(a) * RING_R)); }
-    dialG.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(tk), new THREE.LineBasicMaterial({ color: C('#5a5270') }))); }
-  const hitGeo = new THREE.SphereGeometry(0.45, 8, 6), hitMat = new THREE.MeshBasicMaterial({ visible: false });
-  const satGeo = new THREE.IcosahedronGeometry(0.12, 2);
-  const sats = STATIONS.map((s, i) => {
-    const a = i * STEP, m = new THREE.Mesh(satGeo, new THREE.MeshBasicMaterial({ color: C(CATS[s.cat].color) }));
-    m.position.set(Math.sin(a) * RING_R, 0.22, Math.cos(a) * RING_R);
-    const hit = new THREE.Mesh(hitGeo, hitMat); hit.userData.station = i; m.add(hit); dialG.add(m);
-    return { mesh: m, hit, base: C(CATS[s.cat].color), glow: 0 };
+  const ringColors = ['#35d0b5', '#8b7cf8', '#ff6b3d'];
+  const ringLines = RING_RADII.map((R, ri) => {
+    const pts = [];
+    for (let i = 0; i <= 192; i++) {
+      const a = (i / 192) * Math.PI * 2;
+      pts.push(new THREE.Vector3(Math.sin(a) * R, 0, Math.cos(a) * R));
+    }
+    const mat = new THREE.LineBasicMaterial({ color: C(ringColors[ri]).multiplyScalar(1.15), transparent: true, opacity: 0.85 });
+    const ln = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
+    ring.add(ln);
+    const tk = [], ticksN = 48 + ri * 16;
+    for (let i = 0; i < ticksN; i++) {
+      const a = (i / ticksN) * Math.PI * 2, l = i % 4 ? 0.08 : 0.22;
+      tk.push(new THREE.Vector3(Math.sin(a) * (R - l), 0, Math.cos(a) * (R - l)), new THREE.Vector3(Math.sin(a) * R, 0, Math.cos(a) * R));
+    }
+    const tickSeg = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(tk), new THREE.LineBasicMaterial({ color: C('#7a7096'), transparent: true, opacity: 0.6 }));
+    dialG.add(tickSeg);
+    return { line: ln, mat, tickSeg };
   });
-  const needleMat = new THREE.MeshBasicMaterial({ color: C('#ff6b3d').multiplyScalar(3) });
-  const needle = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.9, 0.035), needleMat); needle.position.set(0, 0.3, RING_R + 0.02); ring.add(needle);
+  const hitGeo = new THREE.SphereGeometry(0.46, 8, 6), hitMat = new THREE.MeshBasicMaterial({ visible: false });
+  const satGeo = new THREE.IcosahedronGeometry(0.135, 2);
+  const haloGeo = new THREE.RingGeometry(0.21, 0.27, 24);
+  let sats = [];
+  function rebuildSats() {
+    for (const o of sats) dialG.remove(o.mesh);
+    sats = STATIONS.map((s, i) => {
+      const R = RING_RADII[(s.ring || 2) - 1] || RING_RADII[1];
+      const a = typeof s.ringAngle === 'number' ? s.ringAngle : (i / Math.max(1, STATIONS.length)) * Math.PI * 2;
+      const col = CATS[s.cat]?.color || '#ff6b3d';
+      const m = new THREE.Mesh(satGeo, new THREE.MeshBasicMaterial({ color: C(col), transparent: true, opacity: 1 }));
+      m.position.set(Math.sin(a) * R, 0.16 + ((s.ring || 2) - 1) * 0.04, Math.cos(a) * R);
+      const halo = new THREE.Mesh(haloGeo, new THREE.MeshBasicMaterial({ color: C('#10b981').multiplyScalar(2.4), side: THREE.DoubleSide, transparent: true, opacity: 0 }));
+      halo.rotation.x = -Math.PI / 2;
+      m.add(halo);
+      const hit = new THREE.Mesh(hitGeo, hitMat); hit.userData.station = i; m.add(hit); dialG.add(m);
+      return { mesh: m, halo, hit, base: C(col), glow: 0 };
+    });
+  }
+  rebuildSats();
+  const needleMat = new THREE.MeshBasicMaterial({ color: C('#ff6b3d').multiplyScalar(2.8) });
+  const needle = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.12, RING_RADII[2] - RING_RADII[0] + 0.7), needleMat);
+  needle.position.set(0, 0.24, (RING_RADII[0] + RING_RADII[2]) * 0.5);
+  ring.add(needle);
   const ARC = 64, arcGeo = new THREE.BufferGeometry(); arcGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array((ARC + 1) * 3), 3));
   const arcMat = new THREE.LineBasicMaterial({ color: C('#ff6b3d').multiplyScalar(2.2) });
   const arc = new THREE.Line(arcGeo, arcMat); arc.frustumCulled = false; arc.visible = false; bgScene.add(arc);
@@ -307,7 +336,7 @@ export function createScene(canvas, cb) {
     comp.uniforms.uCat.value.copy(palette.cat); comp.uniforms.uHost.value.copy(palette.host); comp.uniforms.uHot.value.copy(palette.hot);
     sMat.uniforms.uHue.value = (h - hsl.h) * Math.PI * 2 + hueDrift; sMat.uniforms.uTint.value.copy(palette.cat);
     needleMat.color.copy(palette.accent).multiplyScalar(3); arcMat.color.copy(palette.accent).multiplyScalar(2.2);
-    ringMat.color.copy(palette.cat).multiplyScalar(0.28);
+    ringLines.forEach((rl, ri) => rl.mat.color.copy(C(ringColors[ri])).lerp(palette.cat, 0.35).multiplyScalar(0.95));
     cssTimer += dt;
     if (cssTimer > 0.1) { cssTimer = 0; const r = document.documentElement.style; r.setProperty('--accent', '#' + palette.accent.getHexString(THREE.SRGBColorSpace)); r.setProperty('--live', '#' + palette.cat.getHexString(THREE.SRGBColorSpace)); }
   }
@@ -330,8 +359,11 @@ export function createScene(canvas, cb) {
     hostMix += ((s.hosts ? 1 : 0) - hostMix) * Math.min(1, dt * 2.6);
     duo += ((s.hosts?.duo ? 1 : 0) - duo) * Math.min(1, dt * 3);
     const e = hostMix * hostMix * (3 - 2 * hostMix);
-    speakerGroup.scale.setScalar(1 - e * 0.5);
-    speakerGroup.position.set(0, 0.15 + Math.sin(elapsed * 0.6) * 0.05 + e * 1.35, -e * 2.4);
+    const spkScale = (s.hide3dRings ? 0.52 : 1) * (1 - e * 0.5);
+    speakerGroup.scale.setScalar(spkScale);
+    const spkX = s.hide3dRings ? (s.leftHand ? 1.45 : -1.45) : 0;
+    const spkY = (s.hide3dRings ? 1.55 : 0.15) + Math.sin(elapsed * 0.6) * 0.05 + e * 1.35;
+    speakerGroup.position.set(spkX, spkY, -e * 2.4);
     speakerGroup.rotation.y += ((-0.42 + pointer.nx * 0.28 + Math.sin(elapsed * 0.3) * 0.06) - speakerGroup.rotation.y) * Math.min(1, dt * 2.5);
     speakerGroup.rotation.x += ((0.12 - pointer.ny * 0.2) - speakerGroup.rotation.x) * Math.min(1, dt * 2.5);
     ripple += dt * (3 + f.level * 5) * timeScale;
@@ -355,12 +387,49 @@ export function createScene(canvas, cb) {
       u.mat.uniforms.uGlow.value += ((talking ? 0.12 + u.mouth * 0.15 : 0) - u.mat.uniforms.uGlow.value) * Math.min(1, dt * 8);
     }
 
-    /* satellites */
-    const tuned = s.tunedIdx, blend = s.blendIdx;
+    /* satellites + 2.5D hybrid / mobile corner thumb-turntable */
+    ring.visible = !s.hide3dRings;
+    if (sats.length !== STATIONS.length) rebuildSats();
+    const isMob = innerWidth <= 760;
+    const targetX = isMob ? (s.leftHand ? -0.85 : 0.85) : 0;
+    const targetY = isMob ? -0.75 : -1.55;
+    const targetZ = 0;
+    const targetRx = isMob ? -0.16 : -0.14;
+    const targetRz = isMob ? (s.leftHand ? -0.08 : 0.08) : 0;
+    const kLerp = Math.min(1, dt * 7);
+    ring.position.x += (targetX - ring.position.x) * kLerp;
+    ring.position.y += (targetY - ring.position.y) * kLerp;
+    ring.position.z += (targetZ - ring.position.z) * kLerp;
+    ring.rotation.x += (targetRx - ring.rotation.x) * kLerp;
+    ring.rotation.z += (targetRz - ring.rotation.z) * kLerp;
+
+    const rFilter = s.ringFilter || 'all';
+    const favSet = s.favorites || null;
+    const friendSet = s.friendStations || null;
+    ringLines.forEach((rl, ri) => {
+      const matchR = rFilter === 'all' || rFilter === 'fav' || Number(rFilter) === ri + 1;
+      rl.mat.opacity += ((matchR ? 0.72 : 0.16) - rl.mat.opacity) * kLerp;
+      rl.tickSeg.material.opacity += ((matchR ? 0.45 : 0.08) - rl.tickSeg.material.opacity) * kLerp;
+    });
+
+    const tuned = s.tunedIdx, blend = s.blendIdx, activeGrp = s.activeGroup ? groupById(s.activeGroup) : null;
     sats.forEach((o, i) => {
-      o.glow += ((i === tuned ? 1 : i === s.needleIdx ? 0.6 : i === blend ? 0.5 : 0) - o.glow) * Math.min(1, dt * 6);
-      o.mesh.scale.setScalar(1 + o.glow * 0.45 + (i === tuned ? kick * 0.3 : 0));
-      o.mesh.material.color.copy(i === tuned ? palette.cat : o.base).multiplyScalar(0.6 + o.glow * 1.25);
+      const stObj = STATIONS[i];
+      if (!stObj || stObj.enabled === false) { o.mesh.visible = false; return; }
+      o.mesh.visible = true;
+      const passFilter = rFilter === 'all'
+        || (rFilter === 'fav' ? !!favSet?.has(stObj.id) : stObj.ring === Number(rFilter))
+        || i === tuned;
+      const hasFriend = !!friendSet?.has(stObj.id);
+      const inGroup = activeGrp && stObj.group === activeGrp.id;
+      const targetGlow = i === tuned ? 1 : hasFriend ? 0.85 : inGroup ? 0.72 : i === s.needleIdx ? 0.6 : i === blend ? 0.5 : 0;
+      o.glow += (targetGlow - o.glow) * Math.min(1, dt * 6);
+      o.mesh.material.opacity += ((passFilter ? 1 : 0.18) - o.mesh.material.opacity) * kLerp;
+      o.mesh.scale.setScalar((passFilter ? 1 : 0.68) + o.glow * 0.48 + (i === tuned ? kick * 0.32 : 0));
+      const baseCol = i === tuned ? palette.cat : hasFriend ? tmpC.set('#10b981') : inGroup ? tmpC.set(activeGrp.color) : o.base;
+      o.mesh.material.color.copy(baseCol).multiplyScalar(0.62 + o.glow * 1.25);
+      o.halo.material.opacity = hasFriend ? 0.75 + Math.sin(elapsed * 4) * 0.25 : 0;
+      if (hasFriend) o.halo.scale.setScalar(1 + kick * 0.35);
     });
     dialG.rotation.y = s.phi;
 
@@ -411,15 +480,15 @@ export function createScene(canvas, cb) {
   }
 
   /* projection helpers for DOM labels */
-  function project(obj, out) { obj.getWorldPosition(tmpV); const z = tmpV.z; tmpV.project(camera); out.x = (tmpV.x * 0.5 + 0.5) * innerWidth; out.y = (-tmpV.y * 0.5 + 0.5) * innerHeight; out.z = z; return out; }
+  function project(obj, out) { obj.getWorldPosition(tmpV); const z = tmpV.z; tmpV.project(camera); out.x = (tmpV.x * 0.5 + 0.5) * innerWidth; out.y = (-tmpV.y * 0.5 + 0.5) * innerHeight; out.z = z; out.behind = tmpV.z > 1; return out; }
   function pick(clientX, clientY) {
     raycaster.setFromCamera(new THREE.Vector2(clientX / innerWidth * 2 - 1, -(clientY / innerHeight) * 2 + 1), camera);
     const hits = raycaster.intersectObjects([...sats.map(o => o.hit), ...moons.map(m => m.mesh.children[0])], false);
     return hits[0]?.object.userData || null;
   }
   return {
-    render, project, pick, camera,
-    satObj: i => sats[i].mesh, moonObj: i => moons[i].mesh,
+    render, project, pick, camera, rebuildSats,
+    satObj: i => sats[i]?.mesh || dialG, moonObj: i => moons[i].mesh,
     headObj: id => (id === 'B' ? hostB : hostA).userData.head,
     hostVisible: () => hostMix, duoAmount: () => duo,
   };

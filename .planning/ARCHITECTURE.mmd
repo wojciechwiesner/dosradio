@@ -1,12 +1,30 @@
 graph TD
-    subgraph Client ["Frontend / Client"]
-        UI["UI / Web Client"]
+    subgraph PWA ["DOS Radio PWA (dosradio.theones.io)"]
+        Classic["Widok Klasyczny + Dedykacje (src/ui/dosradio.ts)"]
+        Orbita["Widok Orbita 3D + Dedykacje (orbita/src/main.js)"]
+        Admin["Panel Admina + Inline Lyria Prompts (/admin.html)"]
+        Classic <-->|"dosradio.view.v1"| Orbita
     end
 
-    subgraph Backend ["Backend Service"]
-        API["API Service"]
-        DB[("Database")]
-        API --> DB
+    subgraph ZrobiMy ["B2B Portal MŚP (www.zrobi.my)"]
+        ROI["Kalkulator ROI AI (src/calculator.ts)"]
+        Widget["Odtwarzacz Auto-Ramówka (src/radioWidget.ts)"]
+        LeadForm["Formularz Audytu MŚP (src/leads.ts)"]
     end
 
-    UI <--> API
+    subgraph Backend ["FastAPI Backend (:3015 server/app/)"]
+        Stream["StreamHub Ogg/MP3 + DJ Bass-Swap Mixer (stream.py / mixer.py)"]
+        Catalog["8 Grup i 42 Stacje: Techno/Rave + B2B (catalog.py / catalog_extra.py)"]
+        Voice["Orbita Voice + Dedykacje ?d=token (orbita_voice.py / dedications.py)"]
+        Plus["Pure-Voice Podcasts v3 & YT Pills (podcast.py / pill_service.py)"]
+        Ramowka["Auto-Ramówka 24/7 + Spoty (auto_ramowka.py)"]
+        AdminAPI["Admin & Telemetry API (admin_api.py / telemetry.py)"]
+        Recorder["Lyria Recorder + Gemini News/TTS (recorder.py / news.py)"]
+        DB[("SQLite WAL + Opus/WAV Cache")]
+    end
+
+    Classic & Orbita & Widget -->|"stream.ogg / stream.mp3"| Stream
+    Classic & Orbita --> Voice & Plus & Ramowka
+    LeadForm -->|"POST /radio-api/leads/zrobimy"| Ramowka
+    Admin <-->|"PATCH /admin/catalog/stations/{id}"| AdminAPI
+    Stream & Catalog & Voice & Plus & Ramowka & AdminAPI & Recorder --> DB

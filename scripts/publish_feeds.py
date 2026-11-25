@@ -29,6 +29,7 @@ OUT_DIR = Path.home() / ".local" / "share" / "dosradio-feeds"
 REMOTE = "borg-ts:/var/www/dosradio.theones.io/feeds"
 PUBLIC_BASE = "https://dosradio.theones.io/feeds"
 AP_OPS_URL = "http://127.0.0.1:8790/api/ops"
+AP_RADIO_URL = "http://127.0.0.1:8790/api/radio"  # newest company news from ap_improve (topics, blockers, done)
 AGENDA_SENDER = "calendar-notification@google.com"
 
 
@@ -63,8 +64,15 @@ def todays_agenda(today: date) -> list[AgendaItem]:
 
 
 def current_ap_items() -> list[AgendaItem]:
+    """Newest company news first (ap_improve /api/radio, optional), then the ticket-queue signals."""
+    news: list[AgendaItem] = []
+    try:
+        with urllib.request.urlopen(AP_RADIO_URL, timeout=10) as response:
+            news = [AgendaItem(title=item["title"]) for item in json.load(response).get("items", [])]
+    except Exception as err:  # noqa: BLE001 - older ap_improve without /api/radio: queue signals only
+        print(f"[feeds] ap radio skipped: {type(err).__name__}: {err}", file=sys.stderr)
     with urllib.request.urlopen(AP_OPS_URL, timeout=10) as response:
-        return ap_items(json.load(response))
+        return news + ap_items(json.load(response))
 
 
 def safely(label: str, producer) -> list[AgendaItem]:

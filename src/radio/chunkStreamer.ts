@@ -8,7 +8,15 @@
  * - Each segment gets a short fade in/out and overlaps the next one, which hides encoder edges.
  */
 
-const FADE_S = 0.08;
+const FADE_SAME_S = 0.04;
+const FADE_DIFF_S = 2.4;
+
+function isConsecutiveSegment(prev: string | null, next: string | null): boolean {
+  if (!prev || !next) return false;
+  const m1 = prev.match(/^(.+)_(\d+)\.\w+$/);
+  const m2 = next.match(/^(.+)_(\d+)\.\w+$/);
+  return Boolean(m1 && m2 && m1[1] === m2[1] && Number(m2[2]) === Number(m1[2]) + 1);
+}
 const SCHEDULE_AHEAD_S = 15;
 const FAILURES_BEFORE_ERROR = 3;
 
@@ -26,6 +34,7 @@ export interface ChunkStreamerEvents {
 
 interface LoadedChunk extends ChunkInfo {
   buffer: AudioBuffer;
+  consecutive: boolean;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -111,9 +120,11 @@ export class ChunkStreamer {
 
     const startAt = Math.max(this.ctx.currentTime + 0.05, this.nextStartTime);
     const duration = chunk.buffer.duration;
+    const inFade = chunk.consecutive ? FADE_SAME_S : Math.min(FADE_DIFF_S, duration * 0.25);
+    const outFade = Math.min(FADE_DIFF_S, duration * 0.25);
     fade.gain.setValueAtTime(0, startAt);
-    fade.gain.linearRampToValueAtTime(1, startAt + FADE_S);
-    fade.gain.setValueAtTime(1, Math.max(startAt + FADE_S, startAt + duration - FADE_S));
+    fade.gain.linearRampToValueAtTime(1, startAt + inFade);
+    fade.gain.setValueAtTime(1, Math.max(startAt + inFade, startAt + duration - outFade));
     fade.gain.linearRampToValueAtTime(0, startAt + duration);
 
     source.onended = () => {
@@ -122,14 +133,16 @@ export class ChunkStreamer {
     };
     source.start(startAt);
     this.sources.add(source);
-    this.nextStartTime = startAt + duration - FADE_S;
+    this.nextStartTime = startAt + duration - outFade;
     this.events.onChunk({ source: chunk.source, hours: chunk.hours, segment: chunk.segment });
   }
 
   private async fetchChunk(): Promise<LoadedChunk | null> {
-    const after = this.lastSegment ? `&after=${encodeURIComponent(this.lastSegment)}` : '';
+    const prevSeg = this.lastSegment;
+    const after = prevSeg ? `&after=${encodeURIComponent(prevSeg)}` : '';
+    const lp = prevSeg ? '0' : '0.3';
     try {
-      const response = await fetch(`/radio-api/station/${this.stationId}/next-chunk?live_prob=0.3${after}`, {
+      const response = await fetch(`/radio-api/station/${this.stationId}/next-chunk?live_prob=${lp}${after}`, {
         credentials: 'same-origin',
       });
       if (response.status === 402) {
@@ -140,10 +153,12 @@ export class ChunkStreamer {
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const segment = response.headers.get('x-dosradio-segment');
       const buffer = await this.ctx.decodeAudioData(await response.arrayBuffer());
+      const consecutive = isConsecutiveSegment(prevSeg, segment);
       this.lastSegment = segment;
       this.failures = 0;
       return {
         buffer,
+        consecutive,
         segment,
         source: (response.headers.get('x-dosradio-source') || 'archive') as 'live' | 'archive',
         hours: parseFloat(response.headers.get('x-dosradio-hours') || '0'),

@@ -58,6 +58,20 @@ DOS Radio v1.0.0 — publiczne radio AI (Lyria RealTime, 14 stacji z prowadzący
   - [ ] U3a beatgrid: zrewertowany przez autora (0e1095d), brak numpy/librosa na prod — NIE wdrożone
   - [ ] U3b beat-aligned mix: commit 5da230e niekompletny (usuwa _feed/_drain/_publish, test_stream nie zbiera się) — ODRZUCONY, wymaga przepisania
 - [x] Moje pigułki: user_pills + GET /radio-api/plus/pills; pigułka Dr. K przypisana do user 13
+- [x] **Orbita Voice Recordings (2026-11-18):** nagrania głosowe WAV na starcie Orbity (`/radio-api/orbita/intro/{station}/{0..3}.wav` — Kuba i wszyscy prowadzący), `/radio-api/showcase` (duet Kuba+Ola i Marek+Ola), `/radio-api/orbita/nudge/5min.wav`, cache dyskowy `data/voice/orbita/` + prewarm przy starcie
+- [x] **Phase 10: Ecosystem v2.0 — DJ Phrase Mixer, Classic<->Orbita PWA, 6 Music Groups + 7 Genres, Auto-Ramowka 24/7, Admin Cockpit & `zrobi.my` B2B Portal (2026-11-18):**
+  - [x] Silnik miksera (`server/app/mixer.py`, `stream.py`): 15 ms micro-declick dla ciągłych cięć intra-session + 16-beatowy (~7.8s) beatmatched DJ mix z midpoint bass-swap 150 Hz oraz 6.5s equal-power crossfade dla ambientu/klasyki/folku
+  - [x] Przełącznik widoku `Klasyczny <-> Orbita 3D` w aplikacji i PWA (`manifest.webmanifest`, `sw.js`, `?view=orbita`)
+  - [x] 6 grup i podgrup muzycznych z graniem całej grupy (`/radio-api/group/{id}/stream.ogg`) + 7 nowych gatunków (`stranger-synth`, `muzyka-filmowa`, `cyber-noir`, `muzyka-klasyczna`, `instrumentalna-akustyczna`, `etno-world`, `slowianski-folk`)
+  - [x] Tryb `Auto-Ramówka 24/7` (muzyka wg pory dnia co godzinę, wiadomości co 20 min, podcasty, dżingle, spoty wdrożeń AI `zrobi.my`)
+  - [x] Panel Admina `/admin.html` + `server/app/admin_api.py`, `catalog.py`, `telemetry.py` (odsłuch `.opus`, Tester Miksera DJ z wykresem obwiedni, tokeny, userzy online/zarejestrowani, CRUD grup/stacji, edytor ramówki i leady)
+  - [x] Osobny projekt B2B `/Users/wojciechwiesner/Projects/active/zrobimy` (`www.zrobi.my`) dla właścicieli firm MŚP (kalkulator ROI AI, diagnostyk procesów, odtwarzacz Auto-Ramówki, formularz spięty z `/radio-api/leads/zrobimy`)
+
+- [x] **Phase 11: Techno/Rave & B2B Spaces Expansion, Personal Dedications, Admin Prompt Editor & Universal MP3/Ogg DJ Mix (2026-11-18):**
+  - [x] 8 stacji w grupie `techno-rave` (`berlin-bcco-techno`, `raw-techno`, `hypnotic-techno`, `etno-techno`, `tribal-techno`, `goa-trance`, `hard-dance`, `tekk`) + 3 zestawy `przestrzenie-b2b` (`salon-beauty-spa`, `lobby-hotelowe`, `poczekalnia`) — łącznie 42 stacje w 8 grupach
+  - [x] Dedykacje głosowe (`POST /radio-api/dedications`, `/orbita.html?d=...`, `/?d=...`) z limitem 200 znaków i cache'owanym powitaniem WAV prowadzącego
+  - [x] Edytor promptów Lyria inline przy każdej stacji w `/admin.html` + wyszukiwarka promptów (`PATCH /radio-api/admin/catalog/stations/{id}`)
+  - [x] Uniwersalny stream DJ miksera `/radio-api/station/{id}/stream.mp3` dla Safari/WebKit/iOS (koniec spadania do surowych chunków 80 ms) + korekta duckingu (`musicBus=1.0`, `DUCK_LEVEL=0.24`, pre-duck 320 ms, fade-in 1.8 s) + zaktualizowane hasło o darmowej pierwszej godzinie
 
 ## Next Steps (Backlog / v1.3)
 - [ ] Podpięcie produkcyjnych kluczy Stripe (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`) na serwerze

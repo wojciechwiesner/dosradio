@@ -1,8 +1,7 @@
-"""News per category: Gemini with Google Search grounding, validated, cached; TTS rendered once and shared by all listeners."""
+"""News per category: Gemini with Google Search grounding (sourced RSS fallback), validated, cached; TTS rendered once and shared by all listeners."""
 from __future__ import annotations
 
 import asyncio
-import base64
 import hashlib
 import io
 import json
@@ -17,13 +16,10 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
-import httpx
-
 from .hosts import NEWSROOM_VOICES
 from .radio_script import sentence, strip_emoji, word_count
 
 log = logging.getLogger("dosradio.news")
-API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 NEWS_ITEM_COUNT = 6
 NEWS_WINDOW_HOURS = 48
 HEADLINE_MAX_WORDS = 18
@@ -184,67 +180,7 @@ def normalize_loudness(wav: bytes, target_lufs: float = TARGET_LUFS) -> bytes:
         return dst_path.read_bytes()
 
 
-class GeminiClient:
-    def __init__(self, api_key: str, news_model: str, tts_model: str) -> None:
-        self.api_key = api_key
-        self.news_model = news_model
-        self.tts_model = tts_model
-        self.http = httpx.AsyncClient(timeout=httpx.Timeout(180.0, connect=15.0))
-
-    async def _call(self, model: str, body: dict) -> dict:
-        response = await self.http.post(
-            f"{API_BASE}/{model}:generateContent",
-            headers={"x-goog-api-key": self.api_key, "content-type": "application/json"},
-            json=body,
-        )
-        data = response.json()
-        if response.status_code != 200 or "error" in data:
-            message = data.get("error", {}).get("message", "unknown error")
-            raise RuntimeError(f"{model} HTTP {response.status_code}: {message}")
-        return data
-
-    async def news(self, category: str, attempts: int = 2) -> list[Story]:
-        """One retry: grounded search sometimes times out or returns prose instead of JSON."""
-        last_error: Exception | None = None
-        for _ in range(attempts):
-            try:
-                data = await self._call(self.news_model, {
-                    "contents": [{"parts": [{"text": build_news_prompt(category, date.today())}]}],
-                    "tools": [{"google_search": {}}],
-                })
-                parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-                return parse_stories("".join(part.get("text", "") for part in parts), category)
-            except Exception as error:
-                last_error = error
-                log.warning("news %s attempt failed: %s: %s", category, type(error).__name__, error)
-        raise RuntimeError(f"{type(last_error).__name__}: {last_error}") from last_error
-
-    async def chat(self, prompt: str) -> str:
-        """Single-shot text generation with the news model (no search grounding)."""
-        data = await self._call(self.news_model, {"contents": [{"parts": [{"text": prompt}]}]})
-        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-        return "".join(part.get("text", "") for part in parts)
-
-    async def speak(self, text: str, voice: str, style: str = "") -> bytes:
-        """Pure text in contents — Gemini TTS reads everything in contents verbatim."""
-        data = await self._call(self.tts_model, {
-            "contents": [{"parts": [{"text": text}]}],
-            "generationConfig": {
-                "responseModalities": ["AUDIO"],
-                "speechConfig": {"voiceConfig": {"prebuiltVoiceConfig": {"voiceName": voice}}},
-            },
-        })
-        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-        inline = next((part["inlineData"] for part in parts if "inlineData" in part), None)
-        if not inline:
-            raise RuntimeError(f"{self.tts_model} returned no audio")
-        audio = base64.b64decode(inline["data"])
-        if "wav" not in inline.get("mimeType", ""):
-            rate_match = re.search(r"rate=(\d+)", inline.get("mimeType", ""))
-            audio = pcm_to_wav(audio, int(rate_match.group(1)) if rate_match else 24000)
-        return await asyncio.to_thread(normalize_loudness, audio)
-
-
+# GeminiClient (provider chain with fallback) lives in gemini_client.py.
 
 
 STORY_AUDIO_MAX_AGE_S = 48 * 3600
@@ -256,7 +192,7 @@ class NewsService:
     Editions are persisted to disk, so a restart reuses the current hour instead of paying again.
     """
 
-    def __init__(self, client: GeminiClient, audio_dir: Path, refresh_seconds: int) -> None:
+    def __init__(self, client: Any, audio_dir: Path, refresh_seconds: int) -> None:
         self.client = client
         self.audio_dir = audio_dir
         self.audio_dir.mkdir(parents=True, exist_ok=True)

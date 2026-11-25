@@ -2,15 +2,40 @@
 import { PublicRadioEngine, type HostMode } from '../radio/publicRadioEngine';
 import { airedRemote, radioApi, type AccessState } from '../radio/radioApi';
 import { availableCategories, categoryLabel, sanitizeCategories, type NewsCategory, type QueuedStory } from '../radio/newsQueue';
-import { STATIONS, stationById, type Station } from '../radio/stations';
+import {
+  applyCatalog,
+  computeAutoRamowkaSlot,
+  getActiveGroups,
+  getActiveStations,
+  groupById,
+  stationsForGroup,
+  stationById,
+  type MusicGroupId,
+  type Station,
+} from '../radio/stations';
 import { intervalLabel, normalizeInterval } from '../radio/radioClock';
 import { initBackgroundAudio } from '../audio/backgroundAudio';
-import { applyOnboardingChoice, isOnboarded, loadPrefs, markOnboarded, nextGenreChoice, programmeOptions, sanitizeDayTopic, savePrefs as persistPrefs, type OnboardingChoice } from './prefs';
+import {
+  applyOnboardingChoice,
+  isOnboarded,
+  loadPrefs,
+  markOnboarded,
+  nextGenreChoice,
+  programmeOptions,
+  resolveInitialView,
+  sanitizeDayTopic,
+  savePrefs as persistPrefs,
+  saveViewPref,
+  type OnboardingChoice,
+  type ViewMode,
+} from './prefs';
 import { initUpcoming } from './upcoming';
 import { initRamowkaSettings } from './ramowkaSettings';
 import { openOnboarding } from './onboarding';
 import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from './plus';
 import { initProgrammeLine } from './pill';
+import { wireClassicDedications } from './dedicationModal';
+import { wireClassicSocialStudio } from './socialCreatorStudio';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -52,25 +77,141 @@ function setStatus(text: string, isError = false): void {
   statusLine.classList.toggle('error', isError);
 }
 
-function renderStations(): void {
-  $('stations').replaceChildren(...STATIONS.map((station) => {
-    const button = document.createElement('button');
-    const isBlend = station.id === prefs.blend;
-    button.className = `station${station.id === prefs.station ? ' active' : ''}${isBlend ? ' blend' : ''}`;
-    button.dataset.id = station.id;
-    button.title = station.tagline;
-    const name = document.createElement('b');
-    name.textContent = station.name;
-    const bpm = document.createElement('em');
-    bpm.textContent = `${station.bpm}`;
-    button.append(name, bpm);
-    button.addEventListener('click', () => void chooseStation(station));
-    return button;
-  }));
+function updateNowPlayingHeader(): void {
   const current = stationById(prefs.station);
   const blended = prefs.blend ? stationById(prefs.blend) : null;
-  $('nowStation').textContent = blended ? `${current.name} + ${blended.name}` : current.name;
-  $('nowTagline').textContent = current.host ? `${current.tagline} (prowadzi: ${current.host})` : current.tagline;
+  const activePlayGroup = prefs.playGroup ? groupById(prefs.playGroup) : null;
+  if (activePlayGroup) {
+    $('nowStation').textContent = `Grupa: ${activePlayGroup.name} · ${current.name}`;
+    $('nowTagline').textContent = `${activePlayGroup.tagline} · ${current.host ? `prowadzi: ${current.host}` : current.tagline}`;
+  } else {
+    $('nowStation').textContent = blended ? `${current.name} + ${blended.name}` : current.name;
+    $('nowTagline').textContent = current.host ? `${current.tagline} (prowadzi: ${current.host})` : current.tagline;
+  }
+}
+
+function renderGroupFilters(): void {
+  const bar = document.getElementById('groupFilterBar');
+  if (!bar) return;
+  const groups = getActiveGroups();
+  const totalCount = getActiveStations().filter((s) => s.enabled !== false).length;
+
+  const allBtn = document.createElement('button');
+  allBtn.type = 'button';
+  const allSelected = !prefs.activeGroup;
+  allBtn.className = `group-filter-pill${allSelected ? ' active' : ''}`;
+  allBtn.setAttribute('role', 'tab');
+  allBtn.setAttribute('aria-selected', String(allSelected));
+  const allLabel = document.createElement('span');
+  allLabel.textContent = 'Wszystkie';
+  const allCount = document.createElement('span');
+  allCount.className = 'group-count';
+  allCount.textContent = `(${totalCount})`;
+  allBtn.append(allLabel, allCount);
+  allBtn.addEventListener('click', () => {
+    prefs.activeGroup = null;
+    savePrefs();
+    renderGroupFilters();
+    renderStations();
+  });
+
+  const groupBtns = groups.map((group) => {
+    const stationsInGroup = stationsForGroup(group.id);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    const isSelected = prefs.activeGroup === group.id;
+    btn.className = `group-filter-pill${isSelected ? ' active' : ''}`;
+    btn.style.setProperty('--group-color', group.color);
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', String(isSelected));
+    btn.dataset.group = group.id;
+    const dot = document.createElement('span');
+    dot.className = 'group-dot';
+    const label = document.createElement('span');
+    label.textContent = group.name;
+    const count = document.createElement('span');
+    count.className = 'group-count';
+    count.textContent = `(${stationsInGroup.length})`;
+    btn.append(dot, label, count);
+    btn.addEventListener('click', () => {
+      prefs.activeGroup = prefs.activeGroup === group.id ? null : group.id;
+      savePrefs();
+      renderGroupFilters();
+      renderStations();
+    });
+    return btn;
+  });
+
+  bar.replaceChildren(allBtn, ...groupBtns);
+}
+
+function renderStations(): void {
+  renderGroupFilters();
+  const container = $('stations');
+  container.classList.add('grouped-stations');
+  const groups = getActiveGroups().filter((g) => !prefs.activeGroup || g.id === prefs.activeGroup);
+
+  const cards = groups.map((group) => {
+    const groupStations = stationsForGroup(group.id);
+    const card = document.createElement('div');
+    const isPlayingGroup = prefs.playGroup === group.id;
+    card.className = `music-group-card${isPlayingGroup ? ' is-playing-group' : ''}`;
+    card.dataset.groupId = group.id;
+    card.style.setProperty('--group-color', group.color);
+
+    const head = document.createElement('div');
+    head.className = 'music-group-head';
+
+    const titleWrap = document.createElement('div');
+    titleWrap.className = 'music-group-title';
+    const h3 = document.createElement('h3');
+    const dot = document.createElement('span');
+    dot.className = 'group-dot';
+    const nameNode = document.createElement('span');
+    nameNode.textContent = `${group.name} (${groupStations.length})`;
+    h3.append(dot, nameNode);
+
+    const tagline = document.createElement('span');
+    tagline.className = 'music-group-tagline';
+    tagline.textContent = group.tagline;
+    titleWrap.append(h3, tagline);
+
+    const playGroupBtn = document.createElement('button');
+    playGroupBtn.type = 'button';
+    playGroupBtn.className = 'group-play-btn';
+    playGroupBtn.dataset.playGroup = group.id;
+    playGroupBtn.setAttribute('aria-pressed', String(isPlayingGroup));
+    playGroupBtn.innerHTML = `${isPlayingGroup && engine.isPlaying ? PAUSE_SVG : PLAY_SVG}<span>${isPlayingGroup ? 'Gra cała grupa' : 'Graj grupę'}</span>`;
+    playGroupBtn.addEventListener('click', () => void chooseGroup(group.id));
+
+    head.append(titleWrap, playGroupBtn);
+
+    const grid = document.createElement('div');
+    grid.className = 'music-group-grid';
+    grid.append(
+      ...groupStations.map((station) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        const isBlend = station.id === prefs.blend;
+        button.className = `station${station.id === prefs.station ? ' active' : ''}${isBlend ? ' blend' : ''}`;
+        button.dataset.id = station.id;
+        button.title = station.tagline;
+        const name = document.createElement('b');
+        name.textContent = station.name;
+        const bpm = document.createElement('em');
+        bpm.textContent = `${station.bpm}`;
+        button.append(name, bpm);
+        button.addEventListener('click', (ev) => void chooseStation(station, ev.shiftKey));
+        return button;
+      }),
+    );
+
+    card.append(head, grid);
+    return card;
+  });
+
+  container.replaceChildren(...cards);
+  updateNowPlayingHeader();
 }
 
 function renderCategories(): void {
@@ -205,11 +346,21 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     }
   },
   onLevel: renderLevel,
+  onStationChange: (st, groupId) => {
+    prefs.station = st.id;
+    prefs.playGroup = groupId;
+    savePrefs();
+    renderStations();
+    bgAudio.updateMetadata(st.name, groupId ? `DOS Radio · ${groupById(groupId)?.name ?? ''}` : 'DOS Radio', st.host);
+  },
 });
 engine.interval = prefs.interval;
 engine.newsEnabled = prefs.newsEnabled;
 engine.setProgramme(programmeOptions(prefs));
 engine.setVolume(prefs.volume);
+if (prefs.playGroup) {
+  void engine.setGroup(prefs.playGroup, stationById(prefs.station));
+}
 (window as unknown as { dosRadio: PublicRadioEngine }).dosRadio = engine; // debug handle for runtime probes
 
 async function refreshAccess(): Promise<AccessState> {
@@ -282,9 +433,35 @@ async function chooseStation(station: Station, shift = false): Promise<void> {
   const next = nextGenreChoice(prefs.station, prefs.blend, station.id, shift);
   prefs.station = next.station;
   prefs.blend = next.blend;
+  prefs.playGroup = null;
   savePrefs();
   renderStations();
+  bgAudio.updateMetadata(station.name, 'DOS Radio', station.host);
   try { await engine.setStation(station); } catch (error) { setStatus((error as Error).message, true); }
+}
+
+async function chooseGroup(groupId: MusicGroupId): Promise<void> {
+  if (prefs.playGroup === groupId) {
+    prefs.playGroup = null;
+    savePrefs();
+    renderStations();
+    await engine.setGroup(null, stationById(prefs.station));
+    return;
+  }
+  const groupStations = stationsForGroup(groupId);
+  const targetStation = groupStations.find((s) => s.id === prefs.station) ?? groupStations[0] ?? stationById(prefs.station);
+  prefs.playGroup = groupId;
+  prefs.station = targetStation.id;
+  prefs.blend = null;
+  savePrefs();
+  renderStations();
+  bgAudio.updateMetadata(targetStation.name, `DOS Radio · ${groupById(groupId)?.name ?? ''}`, targetStation.host);
+  try {
+    await engine.setGroup(groupId, targetStation);
+    if (!engine.isPlaying) await togglePlay();
+  } catch (error) {
+    setStatus((error as Error).message, true);
+  }
 }
 
 async function toggleCategory(id: NewsCategory): Promise<void> {
@@ -469,6 +646,13 @@ const bgAudio = initBackgroundAudio(
 initPlus({
   onStatus: (text, isError) => setStatus(text, isError),
   stopRadio: () => { if (engine.isPlaying) engine.stop(); },
+  setVoiceBed: async (active, keepLock = active) => {
+    engine.setExternalVoiceBed(active, keepLock);
+    if (active && !engine.isPlaying) {
+      await togglePlay();
+      engine.setExternalVoiceBed(active, keepLock);
+    }
+  },
   enqueuePill: async (pill) => {
     if (!engine.enqueuePill(pill)) { setStatus('Ta pigułka jest już w programie.'); return; }
     setStatus(`W programie: ${pill.title}. Wejdzie w najbliższej przerwie, po wiadomościach.`);
@@ -519,12 +703,263 @@ document.querySelectorAll('.mood-chip').forEach((btn) => {
 const tickClock = () => { $('clock').textContent = new Date().toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }); };
 tickClock();
 setInterval(tickClock, 5000);
+
+// --- Auto-Ramówka 24/7 -----------------------------------------------------------
+const autoRamowkaBtn = $<HTMLButtonElement>('autoRamowkaBtn');
+const autoRamowkaBar = $('autoRamowkaBar');
+const ramowkaSlotText = $('ramowkaSlotText');
+const ramowkaSpotText = $('ramowkaSpotText');
+const ramowkaCtaLink = $<HTMLAnchorElement>('ramowkaCtaLink');
+
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('ramowka') === '1') {
+  prefs.autoRamowka = true;
+  savePrefs();
+}
+
+function renderAutoRamowkaUi(slotLabel: string, hours: string, host: string, spotTitle: string, ctaLabel: string, ctaUrl: string): void {
+  const active = Boolean(prefs.autoRamowka);
+  autoRamowkaBtn.setAttribute('aria-pressed', String(active));
+  autoRamowkaBtn.classList.toggle('active', active);
+  autoRamowkaBar.hidden = !active;
+  ramowkaSlotText.textContent = `AUTO-RAMÓWKA 24/7 · ${slotLabel} (${hours}) · Prowadzi ${host}`;
+  ramowkaSpotText.textContent = spotTitle;
+  ramowkaCtaLink.querySelector('span')!.textContent = ctaLabel;
+  ramowkaCtaLink.href = ctaUrl;
+}
+
+async function syncRamowkaState(): Promise<void> {
+  const fallback = computeAutoRamowkaSlot(new Date());
+  if (!prefs.autoRamowka) {
+    renderAutoRamowkaUi(fallback.label, fallback.hours, fallback.host, fallback.spotTitle, fallback.ctaLabel, fallback.ctaUrl);
+    engine.setAutoRamowka(false);
+    return;
+  }
+  const remote = await radioApi.ramowkaState();
+  const groupId = (remote?.slot?.groupId ?? remote?.slot?.group ?? fallback.groupId) as MusicGroupId;
+  const stationId = remote?.slot?.stationId ?? remote?.slot?.station ?? fallback.stationId;
+  const label = remote?.slot?.label ?? fallback.label;
+  const hours = remote?.slot?.hours ?? fallback.hours;
+  const targetStation = stationById(stationId);
+  const host = remote?.slot?.host ?? targetStation.host ?? fallback.host;
+  const spotId = remote?.spot?.id ?? fallback.spotId;
+  const spotTitle = remote?.spot?.title ?? fallback.spotTitle;
+  const ctaLabel = remote?.spot?.cta_label ?? fallback.ctaLabel;
+  const ctaUrl = remote?.spot?.cta_url ?? fallback.ctaUrl;
+
+  renderAutoRamowkaUi(label, hours, host, spotTitle, ctaLabel, ctaUrl);
+  prefs.interval = 20;
+  showInterval();
+  engine.setAutoRamowka(true, spotId);
+
+  if (prefs.playGroup !== groupId || prefs.station !== targetStation.id) {
+    prefs.playGroup = groupId;
+    prefs.station = targetStation.id;
+    savePrefs();
+    renderStations();
+    await engine.setGroup(groupId, targetStation);
+  }
+}
+
+autoRamowkaBtn.addEventListener('click', () => {
+  prefs.autoRamowka = !prefs.autoRamowka;
+  if (prefs.autoRamowka) {
+    prefs.interval = 20;
+  } else {
+    prefs.playGroup = null;
+    void engine.setGroup(null, stationById(prefs.station));
+  }
+  savePrefs();
+  void syncRamowkaState();
+  setStatus(
+    prefs.autoRamowka
+      ? 'Włączono Auto-Ramówkę 24/7 — stacja i prowadzący dopasowani do pory dnia, serwis co 20 minut.'
+      : 'Wyłączono Auto-Ramówkę 24/7 — ręczny wybór stacji.',
+  );
+});
+
+// --- View Switcher (Klasyczny <-> Orbita 3D) ------------------------------------
+const viewClassicBtn = $<HTMLButtonElement>('viewClassicBtn');
+const viewOrbitaBtn = $<HTMLButtonElement>('viewOrbitaBtn');
+const orbitaShell = $('orbitaShell');
+const orbitaFrame = $<HTMLIFrameElement>('orbitaFrame');
+let currentView: ViewMode = resolveInitialView(localStorage, window.location.search);
+let orbitaLoaded = false;
+
+function renderViewButtons(view: ViewMode): void {
+  const isOrbita = view === 'orbita';
+  viewClassicBtn.classList.toggle('active', !isOrbita);
+  viewClassicBtn.setAttribute('aria-pressed', String(!isOrbita));
+  viewOrbitaBtn.classList.toggle('active', isOrbita);
+  viewOrbitaBtn.setAttribute('aria-pressed', String(isOrbita));
+}
+
+function switchView(view: ViewMode): void {
+  currentView = view;
+  saveViewPref(localStorage, view);
+  renderViewButtons(view);
+
+  if (view === 'orbita') {
+    const wasPlaying = engine.isPlaying;
+    orbitaShell.hidden = false;
+    if (!orbitaLoaded) {
+      orbitaLoaded = true;
+      const fwd = new URLSearchParams(window.location.search);
+      fwd.set('embed', '1');
+      orbitaFrame.src = `/orbita.html?${fwd.toString()}`;
+      orbitaFrame.addEventListener(
+        'load',
+        () => {
+          orbitaFrame.contentWindow?.postMessage(
+            {
+              type: 'dosradio:activate-orbita',
+              wasPlaying,
+              station: prefs.station,
+              playGroup: prefs.playGroup ?? null,
+              autoRamowka: Boolean(prefs.autoRamowka),
+            },
+            '*',
+          );
+          if (wasPlaying) engine.stop();
+        },
+        { once: true },
+      );
+    } else {
+      orbitaFrame.contentWindow?.postMessage(
+        {
+          type: 'dosradio:activate-orbita',
+          wasPlaying,
+          station: prefs.station,
+          playGroup: prefs.playGroup ?? null,
+          autoRamowka: Boolean(prefs.autoRamowka),
+        },
+        '*',
+      );
+      if (wasPlaying) engine.stop();
+    }
+  } else {
+    orbitaShell.hidden = true;
+    orbitaFrame.contentWindow?.postMessage({ type: 'dosradio:suspend-orbita' }, '*');
+    prefs = loadPrefs(localStorage);
+    renderStations();
+    renderCategories();
+    showInterval();
+    void syncRamowkaState();
+  }
+}
+
+viewClassicBtn.addEventListener('click', () => switchView('classic'));
+viewOrbitaBtn.addEventListener('click', () => switchView('orbita'));
+
+window.addEventListener('message', (ev) => {
+  const data = ev.data as {
+    type?: string;
+    view?: ViewMode;
+    wasPlaying?: boolean;
+    station?: string;
+    playGroup?: MusicGroupId | null;
+    autoRamowka?: boolean;
+  } | null;
+  if (!data || typeof data.type !== 'string') return;
+  if (data.type === 'dosradio:orbita-audio-started') {
+    if (engine.isPlaying) engine.stop();
+  } else if (data.type === 'dosradio:switch-view') {
+    const targetView: ViewMode = data.view === 'orbita' ? 'orbita' : 'classic';
+    prefs = loadPrefs(localStorage);
+    if (typeof data.station === 'string') prefs.station = stationById(data.station).id;
+    if (data.playGroup !== undefined) prefs.playGroup = data.playGroup;
+    if (typeof data.autoRamowka === 'boolean') prefs.autoRamowka = data.autoRamowka;
+    savePrefs();
+    switchView(targetView);
+    if (targetView === 'classic') {
+      if (prefs.playGroup) {
+        void engine.setGroup(prefs.playGroup, stationById(prefs.station));
+      } else {
+        void engine.setStation(stationById(prefs.station));
+      }
+      if (data.wasPlaying && !engine.isPlaying) {
+        void startPlayback();
+      }
+    }
+  }
+});
+
+// --- Dynamic Catalog Sync & Presence Heartbeat ----------------------------------
+async function syncCatalogFromServer(): Promise<void> {
+  const payload = await radioApi.catalog();
+  if (payload) {
+    applyCatalog(payload);
+    renderStations();
+  }
+}
+
+const CLIENT_ID_KEY = 'dosradio.client_id.v1';
+function getClientId(): string {
+  try {
+    let cid = localStorage.getItem(CLIENT_ID_KEY);
+    if (!cid) {
+      cid = `cli-${Math.random().toString(36).slice(2, 10)}-${Date.now().toString(36)}`;
+      localStorage.setItem(CLIENT_ID_KEY, cid);
+    }
+    return cid;
+  } catch {
+    return 'cli-anon';
+  }
+}
+
+function sendPresenceHeartbeat(): void {
+  if (!engine.isPlaying || currentView !== 'classic') return;
+  void radioApi.presence({
+    client_id: getClientId(),
+    station: prefs.station,
+    group: prefs.playGroup ?? null,
+    view: 'classic',
+    ramowka: Boolean(prefs.autoRamowka),
+  });
+}
+
+setInterval(() => {
+  sendPresenceHeartbeat();
+  if (prefs.autoRamowka && currentView === 'classic') {
+    void syncRamowkaState();
+  }
+}, 60_000);
+
 renderStations();
 renderCategories();
 engine.setHostMode(prefs.hostMode);
 renderHostMode(prefs.hostMode);
 const initialStation = stationById(prefs.station);
 bgAudio.updateMetadata(initialStation.name, 'DOS Radio', initialStation.host);
+wireClassicDedications(
+  engine,
+  (sid) => {
+    const st = stationById(sid);
+    prefs.station = st.id;
+    prefs.playGroup = null;
+    savePrefs();
+    engine.setStation(st);
+    renderStations();
+  },
+  setStatus,
+);
+wireClassicSocialStudio(
+  engine,
+  (sid) => {
+    const st = stationById(sid);
+    prefs.station = st.id;
+    prefs.playGroup = null;
+    savePrefs();
+    engine.setStation(st);
+    renderStations();
+  },
+  setStatus,
+);
+void syncCatalogFromServer();
+void syncRamowkaState();
+if (currentView === 'orbita') {
+  switchView('orbita');
+}
 
 // Register PWA service worker
 if ('serviceWorker' in navigator) {

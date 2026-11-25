@@ -117,7 +117,8 @@ def checkout(body: CheckoutRequest, request: Request) -> dict:
 
 def _grant_plus(db: Database, user_id: int) -> None:
     with db.connect() as conn:
-        conn.execute("UPDATE users SET plan = 'plus', plus_until = ? WHERE id = ?", (time.time() + PLUS_DAYS * 86400, user_id))
+        until = time.time() + PLUS_DAYS * 86400
+        conn.execute("UPDATE users SET plan = 'plus', plus_until = ?, plus_paid_until = ? WHERE id = ?", (until, until, user_id))
 
 
 def _field(obj: Any, key: str) -> Any:

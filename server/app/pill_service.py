@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .archive import ArchiveRegistry
 from .bumpers import Runner, subprocess_runner
-from .news import GeminiClient
+from .gemini_client import GeminiClient
 from .podcast import PODCAST_HOSTS
 from .youtube_pill import (
     NO_SUBTITLES_MESSAGE, PillError, build_parts, download_audio, extract_video_id, fetch_metadata,
@@ -121,7 +121,7 @@ class PillService:
             shutil.rmtree(out_dir, ignore_errors=True)
             out_dir.mkdir(parents=True)
             try:
-                parts = await build_parts(self._speak, self.run, out_dir, source, meta, segments, self._random_segment())
+                parts = await build_parts(self._speak, self.run, out_dir, source, meta, segments, None)
             except Exception:
                 shutil.rmtree(out_dir, ignore_errors=True)
                 raise

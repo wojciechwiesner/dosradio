@@ -106,6 +106,22 @@ export DOSRADIO_DATA_DIR="./data"
 uvicorn app.main:app --port 3015 --reload
 ```
 
+### Fallback LLM i TTS (gdy Gemini nie działa)
+
+Każde wywołanie tekstu i mowy idzie łańcuchem: Gemini bezpośrednio, potem endpoint
+OpenAI-compatible (domyślnie `llm.borg.tools`). Po 429 albo 401 Gemini jest pomijane
+przez czas cooldownu (429: `retryDelay`/`Retry-After`, inaczej 10 min, z podwajaniem przy
+kolejnych; 401: 30 min). Newsy w fallbacku powstają wyłącznie z prawdziwych pozycji RSS
+(`server/app/news_fallback.py`); kategoria bez świeżego źródła zwraca błąd, nic nie jest
+wymyślane. TTS fallback to `grok-tts` z jedną tabelą głosów (`server/app/tts_fallback.py`).
+
+```bash
+export DOSRADIO_LLM_FALLBACK_URL="https://llm.borg.tools/v1"   # domyślnie
+export DOSRADIO_LLM_FALLBACK_TOKEN="token"                       # pusty = brak fallbacku
+export DOSRADIO_LLM_FALLBACK_MODELS="grok-4.20-0309-non-reasoning,gemini-3.1-flash-lite,grok-4.3"
+export DOSRADIO_TTS_FALLBACK_MODEL="grok-tts"                    # domyślnie
+```
+
 ### Uruchomienie frontendu
 ```bash
 npm install

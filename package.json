@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "node orbita/build.mjs && tsc --noEmit && vite build",
     "build:orbita": "node orbita/build.mjs",
     "preview": "vite preview",
     "test": "vitest run"
@@ -16,6 +16,7 @@
   },
   "devDependencies": {
     "jsdom": "^29.1.1",
+    "three": "0.170.0",
     "typescript": "^5.5.4",
     "vite": "^5.4.2",
     "vitest": "^2.0.5"

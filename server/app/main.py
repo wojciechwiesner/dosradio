@@ -22,7 +22,8 @@ from pydantic import BaseModel, Field
 from .auth import AccessService, build_router, client_ip
 from .config import load_settings
 from .db import Database
-from .news import CATEGORIES, GeminiClient, NewsService
+from .gemini_client import build_gemini_client
+from .news import CATEGORIES, NewsService
 from .archive import ArchiveRegistry
 from .stream import build_stream_router
 from .recorder import StationRecorder, STATION_SPECS
@@ -31,24 +32,53 @@ from .notifier import trigger_telegram_alert
 from .hosts import BORROWED_HOSTS, HOSTS, host_for
 from .personal_news import PersonalNews
 from .podcast import PodcastService
+from .podcast_quota import PodcastQuota
 from .plus_api import build_plus_router
 from .host_clips import build_router as build_host_clips_router
 from .weather import WeatherService
 from .voice_routes import build_voice_router
 from .aired import build_aired_router
+from .orbita_voice import build_orbita_voice_router, prewarm_orbita_voice
+from .dedications import build_dedications_router
+from .catalog import CatalogService
+from .telemetry import TelemetryService
+from .auto_ramowka import RamowkaService, build_ramowka_router
+from .admin_api import build_admin_router
+from .custom_radios import CustomRadioService, build_custom_radios_router
+from .og_preview import build_og_router
+from .social_api import build_social_router
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("dosradio")
 
 settings = load_settings()
 db = Database(settings.data_dir / "dosradio.db")
-access = AccessService(db, settings.secret, settings.trial_seconds)
-gemini = GeminiClient(settings.gemini_api_key, settings.news_model, settings.tts_model)
-news = NewsService(gemini, settings.data_dir / "audio", settings.news_refresh_seconds)
 archives = ArchiveRegistry(settings.data_dir / "archive")
-recorder = StationRecorder(settings.gemini_api_key, archives)
+catalog = CatalogService(db, archives)
+custom_radios = CustomRadioService(db, catalog)
+telemetry = TelemetryService(db)
+ramowka_service = RamowkaService(db, catalog, data_dir=settings.data_dir)
+access = AccessService(db, settings.secret, settings.trial_seconds, settings.device_keys)
+gemini = build_gemini_client(
+    settings.gemini_api_key,
+    settings.news_model,
+    settings.tts_model,
+    on_usage=lambda feature, model, inp, out, aud: telemetry.record_tokens(
+        feature=feature, model=model, prompt_tokens=inp, output_tokens=out, audio_seconds=aud
+    ),
+)
+news = NewsService(gemini, settings.data_dir / "audio", settings.news_refresh_seconds)
+recorder = StationRecorder(
+    settings.gemini_api_key,
+    archives,
+    specs_provider=catalog.active_specs,
+    on_segment_recorded=lambda sid, secs: telemetry.record_tokens(
+        feature=f"lyria:{sid}", model="lyria-realtime-exp", prompt_tokens=0, output_tokens=0, audio_seconds=secs
+    ),
+)
 mood_recorder = MoodRecorder(settings.gemini_api_key)
 podcasts = PodcastService(gemini, settings.data_dir / "podcasts", archives)
+podcast_quota = PodcastQuota(db)  # one daily limit shared by the Plus panel and website links
 personal = PersonalNews(db, news)
 news.on_personal_refresh = personal.refresh_all
 weather = WeatherService()
@@ -95,6 +125,7 @@ async def lifespan(_: FastAPI):
     if settings.prewarm:
         tasks.append(asyncio.create_task(news.hourly_loop()))  # one edition per topic per hour
         tasks.append(asyncio.create_task(prewarm_hosts()))
+        tasks.append(asyncio.create_task(prewarm_orbita_voice(gemini.speak, static_audio_dir)))
     yield
     recorder.running = False
     for task in tasks:
@@ -104,9 +135,78 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url=None)
+
+
+@app.middleware("http")
+async def device_cors(request: Request, call_next):
+    """Let a keyed shared device (kiosk page opened from file://) read JSON responses.
+
+    Only simple GETs carrying a valid ?device= key get the header, so browsers and
+    other origins keep the default same-origin behaviour.
+    """
+    response = await call_next(request)
+    if request.method == "GET" and access.device_for_key(request.query_params.get(DEVICE_KEY_QUERY)):
+        response.headers["Access-Control-Allow-Origin"] = "*"
+    return response
+
+
 app.include_router(build_router(access))
-app.include_router(build_plus_router(access, db, news, podcasts, personal))
+app.include_router(build_plus_router(access, db, news, podcasts, personal, quota=podcast_quota))
 app.include_router(build_host_clips_router(gemini.speak, static_audio_dir))
+app.include_router(build_orbita_voice_router(gemini.speak, static_audio_dir))
+app.include_router(
+    build_dedications_router(
+        speak=gemini.speak,
+        audio_dir=static_audio_dir,
+        db_path=settings.data_dir / "dosradio.db",
+        station_lookup=lambda sid: next(
+            (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
+            ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
+        ),
+    )
+)
+app.include_router(build_ramowka_router(
+    db=db,
+    catalog=catalog,
+    telemetry=telemetry,
+    gemini=gemini,
+    data_dir=settings.data_dir,
+    ramowka_service=ramowka_service,
+))
+app.include_router(build_admin_router(
+    db=db,
+    access=access,
+    archives=archives,
+    catalog=catalog,
+    telemetry=telemetry,
+    ramowka_service=ramowka_service,
+    recorder=recorder,
+))
+app.include_router(build_custom_radios_router(custom_radios, access=access))
+app.include_router(build_social_router(
+    db=db,
+    access=access,
+    podcasts=podcasts,
+    quota=podcast_quota,
+    station_lookup=lambda sid: next(
+        (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
+        ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
+    ),
+))
+app.include_router(build_og_router(
+    db=db,
+    podcasts=podcasts,
+    custom_radios=custom_radios,
+    station_lookup=lambda sid: next(
+        (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
+        ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
+    ),
+    html_candidates=[
+        Path("/var/www/dosradio.theones.io/index.html"),
+        Path(__file__).resolve().parents[2] / "dist" / "index.html",
+        Path(__file__).resolve().parents[2] / "index.html",
+    ],
+))
 
 # Billing (Stripe) router — optional module, loaded only when present.
 try:
@@ -117,7 +217,16 @@ except ImportError:
     pass
 
 
+DEVICE_KEY_HEADER = "x-dosradio-device"
+DEVICE_KEY_QUERY = "device"
+
+
 def require_access(request: Request) -> None:
+    # Shared devices (salon kiosk) send their key as a header, or as ?device= for
+    # <audio> elements that cannot set headers.
+    device_key = request.headers.get(DEVICE_KEY_HEADER) or request.query_params.get(DEVICE_KEY_QUERY)
+    if access.device_for_key(device_key):
+        return
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
     if not access.resolve(request.cookies, ip).allowed:
         raise HTTPException(402, "Darmowa godzina minęła. Załóż konto i odbierz 30 dni Plus za darmo.")
@@ -192,9 +301,7 @@ async def generate_mood_station(body: MoodRequest, request: Request) -> dict:
         "Zwróć WYŁĄCZNIE czysty JSON: {\"name\": \"...\", \"tagline\": \"...\", \"prompt\": \"...\", \"bpm\": 120, \"density\": 0.5, \"brightness\": 0.5}"
     )
     try:
-        data = await gemini._call(settings.news_model, {"contents": [{"parts": [{"text": prompt}]}]})
-        parts = data.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-        raw = "".join(p.get("text", "") for p in parts)
+        raw = await gemini.generate_text(prompt, feature="mood")
         s, e = raw.find("{"), raw.rfind("}")
         parsed = json.loads(raw[s:e+1])
         # Validate and clamp
@@ -256,7 +363,13 @@ async def jingle_audio(station_id: str) -> FileResponse:
     return FileResponse(path, media_type="audio/wav", headers={"cache-control": "public, max-age=604800"})
 
 
-app.include_router(build_stream_router(archives, require_access))
+app.include_router(
+    build_stream_router(
+        archives,
+        require_access,
+        group_resolver=lambda gid: [s["id"] for s in catalog.stations_in_group(gid, only_enabled=True)],
+    )
+)
 
 @app.api_route("/radio-api/station/{station_id}/next-chunk", methods=["GET", "HEAD"])
 async def next_station_chunk(
@@ -267,7 +380,7 @@ async def next_station_chunk(
 ) -> FileResponse:
     """Next 30-second Opus segment for a listener: continues the recording after `after`, else 70/30 jump."""
     require_access(request)
-    if station_id not in STATION_SPECS:
+    if station_id not in STATION_SPECS and catalog.get_station(station_id) is None:
         raise HTTPException(404, f"Nieznana stacja: {station_id}")
     arch = archives.get(station_id)
     path, is_live = arch.pick_next(live_probability=live_prob, after=after)
