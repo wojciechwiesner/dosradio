@@ -71,8 +71,8 @@ DEFAULT_SPOTS: list[dict[str, Any]] = [
     {
         "id": "jingle-ramowka-1",
         "kind": "jingle",
-        "title": "Auto-Ramówka DOS Radio",
-        "script": "Słuchasz Auto-Ramówki DOS Radio. Co godzinę inna muzyka, co dwadzieścia minut konkretne wiadomości, zero szumu.",
+        "title": "Auto-Ramówka AmbiRadio",
+        "script": "Słuchasz Auto-Ramówki AmbiRadio. Co godzinę inna muzyka, co dwadzieścia minut konkretne wiadomości, zero szumu.",
         "voice": "Orus",
         "cta_label": "",
         "cta_url": "",
@@ -82,7 +82,7 @@ DEFAULT_SPOTS: list[dict[str, Any]] = [
         "id": "jingle-ramowka-2",
         "kind": "jingle",
         "title": "Rytm pracy i technologii",
-        "script": "DOS Radio w trybie Auto-Ramówki. Zmieniamy klimat muzyczny z każdą pełną godziną i podajemy sprawdzone informacje ze świata technologii oraz biznesu.",
+        "script": "AmbiRadio w trybie Auto-Ramówki. Zmieniamy klimat muzyczny z każdą pełną godziną i podajemy sprawdzone informacje ze świata technologii oraz biznesu.",
         "voice": "Kore",
         "cta_label": "",
         "cta_url": "",
@@ -91,8 +91,8 @@ DEFAULT_SPOTS: list[dict[str, Any]] = [
     {
         "id": "jingle-ramowka-3",
         "kind": "jingle",
-        "title": "Czysty sygnał DOS Radio",
-        "script": "Tu Auto-Ramówka DOS Radio. Muzyka instrumentalna dopasowana do pory dnia, krótkie serwisy informacyjne i rozmowy o praktycznej technologii.",
+        "title": "Czysty sygnał AmbiRadio",
+        "script": "Tu Auto-Ramówka AmbiRadio. Muzyka instrumentalna dopasowana do pory dnia, krótkie serwisy informacyjne i rozmowy o praktycznej technologii.",
         "voice": "Charon",
         "cta_label": "",
         "cta_url": "",
@@ -105,7 +105,7 @@ DEFAULT_SPOTS: list[dict[str, Any]] = [
         "script": "Prowadzisz firmę i wiesz, że wypadałoby już wdrożyć sztuczną inteligencję, ale nie wiesz od czego zacząć? Na zrobi kropka my nie sprzedajemy kursów z pisania promptów. Prześwietlamy procesy w Twojej firmie i w pięć dni pokazujemy czarno na białym, gdzie automatyzacja zwróci się w pierwszym miesiącu. Sprawdź na zrobi kropka my.",
         "voice": "Orus",
         "cta_label": "Umów audyt AI na zrobi.my",
-        "cta_url": "https://zrobi.my?utm_source=dosradio&utm_medium=auto_ramowka&spot=zrobimy-audyt-5dni",
+        "cta_url": "https://zrobi.my?utm_source=ambiradio&utm_medium=auto_ramowka&spot=zrobimy-audyt-5dni",
         "sort_order": 4,
     },
     {
@@ -115,7 +115,7 @@ DEFAULT_SPOTS: list[dict[str, Any]] = [
         "script": "Ile godzin dziennie Twoi handlowcy przepisują zapytania z maili do wycen i arkuszy? Zespół zrobi kropka my wdraża asystentów AI, którzy przygotowują gotowy szkic oferty w dwie minuty na bazie Twojego cennika i historii zamówień. Wejdź na zrobi kropka my.",
         "voice": "Charon",
         "cta_label": "Umów audyt AI na zrobi.my",
-        "cta_url": "https://zrobi.my?utm_source=dosradio&utm_medium=auto_ramowka&spot=zrobimy-wyceny-b2b",
+        "cta_url": "https://zrobi.my?utm_source=ambiradio&utm_medium=auto_ramowka&spot=zrobimy-wyceny-b2b",
         "sort_order": 5,
     },
     {
@@ -125,7 +125,7 @@ DEFAULT_SPOTS: list[dict[str, Any]] = [
         "script": "Dokumenty kosztowe, opisy faktur, uzgodnienia z księgowością. Zamiast zatrudniać kolejną osobę do przepisywania PDF-ów, zobacz jak polskie firmy odzyskują czterdzieści godzin miesięcznie dzięki wdrożeniom pod klucz. Szczegóły na zrobi kropka my.",
         "voice": "Orus",
         "cta_label": "Umów audyt AI na zrobi.my",
-        "cta_url": "https://zrobi.my?utm_source=dosradio&utm_medium=auto_ramowka&spot=zrobimy-faktury-ksef",
+        "cta_url": "https://zrobi.my?utm_source=ambiradio&utm_medium=auto_ramowka&spot=zrobimy-faktury-ksef",
         "sort_order": 6,
     },
     {
@@ -135,7 +135,7 @@ DEFAULT_SPOTS: list[dict[str, Any]] = [
         "script": "Klient dzwoni po siedemnastej albo pisze w weekend, a nikt nie odbiera? Wdrażamy polskojęzycznych asystentów głosowych i mailowych spiętych z Twoim kalendarzem i CRM. Konkretna inżynieria, bez korporacyjnego lania wody. Zrobi kropka my.",
         "voice": "Kore",
         "cta_label": "Umów audyt AI na zrobi.my",
-        "cta_url": "https://zrobi.my?utm_source=dosradio&utm_medium=auto_ramowka&spot=zrobimy-recepcja-247",
+        "cta_url": "https://zrobi.my?utm_source=ambiradio&utm_medium=auto_ramowka&spot=zrobimy-recepcja-247",
         "sort_order": 7,
     },
     {
@@ -145,7 +145,7 @@ DEFAULT_SPOTS: list[dict[str, Any]] = [
         "script": "Nie musisz budować własnego działu IT, żeby korzystać z AI bezpiecznie i na własnych danych. Na zrobi kropka my zamawiasz konkretny efekt biznesowy: audyt, wdrożenie pod klucz i stałą opiekę. Wejdź na zrobi kropka my.",
         "voice": "Charon",
         "cta_label": "Umów audyt AI na zrobi.my",
-        "cta_url": "https://zrobi.my?utm_source=dosradio&utm_medium=auto_ramowka&spot=zrobimy-dzial-ai",
+        "cta_url": "https://zrobi.my?utm_source=ambiradio&utm_medium=auto_ramowka&spot=zrobimy-dzial-ai",
         "sort_order": 8,
     },
 ]
@@ -159,7 +159,7 @@ FEATURED_PODCAST_TOPICS: list[dict[str, Any]] = [
         "turns": [
             {
                 "speaker": 0,
-                "text": "Rozmowy DOS Radio. Dzisiaj bierzemy na warsztat temat, który boli prawie każdego właściciela firmy usługowej i produkcyjnej: wyceny, które utknęły w skrzynce mailowej.",
+                "text": "Rozmowy AmbiRadio. Dzisiaj bierzemy na warsztat temat, który boli prawie każdego właściciela firmy usługowej i produkcyjnej: wyceny, które utknęły w skrzynce mailowej.",
             },
             {
                 "speaker": 1,
@@ -183,7 +183,7 @@ FEATURED_PODCAST_TOPICS: list[dict[str, Any]] = [
         "turns": [
             {
                 "speaker": 0,
-                "text": "Rozmowy DOS Radio. Ile kosztuje firmę telefon od klienta, którego nikt nie odebrał o siedemnastej trzydzieści?",
+                "text": "Rozmowy AmbiRadio. Ile kosztuje firmę telefon od klienta, którego nikt nie odebrał o siedemnastej trzydzieści?",
             },
             {
                 "speaker": 1,
@@ -207,7 +207,7 @@ FEATURED_PODCAST_TOPICS: list[dict[str, Any]] = [
         "turns": [
             {
                 "speaker": 0,
-                "text": "Rozmowy DOS Radio. Czterdzieści godzin miesięcznie — tyle średnio w trzydziestoosobowej firmie zajmuje ręczne opisywanie dokumentów i sprawdzanie załączników.",
+                "text": "Rozmowy AmbiRadio. Czterdzieści godzin miesięcznie — tyle średnio w trzydziestoosobowej firmie zajmuje ręczne opisywanie dokumentów i sprawdzanie załączników.",
             },
             {
                 "speaker": 1,
@@ -231,7 +231,7 @@ FEATURED_PODCAST_TOPICS: list[dict[str, Any]] = [
         "turns": [
             {
                 "speaker": 0,
-                "text": "Rozmowy DOS Radio. Mówimy dużo o automatyzacji, ale najważniejszym zasobem w firmie pozostaje uwaga zespołu.",
+                "text": "Rozmowy AmbiRadio. Mówimy dużo o automatyzacji, ale najważniejszym zasobem w firmie pozostaje uwaga zespołu.",
             },
             {
                 "speaker": 1,
@@ -239,7 +239,7 @@ FEATURED_PODCAST_TOPICS: list[dict[str, Any]] = [
             },
             {
                 "speaker": 0,
-                "text": "Stąd w Auto-Ramówce DOS Radio zasada jest prosta: równe pasma muzyki instrumentalnej i zwięzły serwis dopiero co dwadzieścia minut.",
+                "text": "Stąd w Auto-Ramówce AmbiRadio zasada jest prosta: równe pasma muzyki instrumentalnej i zwięzły serwis dopiero co dwadzieścia minut.",
             },
             {
                 "speaker": 1,

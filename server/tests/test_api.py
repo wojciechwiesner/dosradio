@@ -1,4 +1,4 @@
-"""DOS Radio API tests: trial/registration gate, news validation, spoken time. No network."""
+"""AmbiRadio API tests: trial/registration gate, news validation, spoken time. No network."""
 from __future__ import annotations
 
 import os

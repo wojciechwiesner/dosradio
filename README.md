@@ -1,14 +1,14 @@
-# DOS Radio 📻
+# AmbiRadio
 
-> **Prywatna stacja radiowa ze sztuczną inteligencją.** Muzyka generowana w locie przez Google Lyria RealTime, 14 stacji z dedykowanymi prowadzącymi, AI Mood Composer, cogodzinne wydania wiadomości i pełne PWA z odtwarzaniem w tle na telefonie.
+> **AmbiRadio — Ambitnie dla Ciebie.** Prywatna stacja radiowa ze sztuczną inteligencją. Muzyka generowana w locie przez Google Lyria RealTime, 14 stacji z dedykowanymi prowadzącymi, AI Mood Composer, cogodzinne wydania wiadomości i pełne PWA z odtwarzaniem w tle na telefonie.
 
-🌐 **Live:** [https://dosradio.theones.io](https://dosradio.theones.io)
+**Live:** [https://ambiradio.com](https://ambiradio.com) (stary adres https://dosradio.theones.io nadal działa)
 
 ---
 
-## Czym jest DOS Radio?
+## Czym jest AmbiRadio?
 
-DOS Radio to eksperyment z formatem radiowym przyszłości stworzony dla osób pracujących głęboko (np. programistów, osób z ADHD), które potrzebują ciągłego, nieinwazyjnego tła muzycznego i spokojnych, krótkich wejść głosowych bez dotykania telefonu czy przełączania zakładek.
+AmbiRadio to eksperyment z formatem radiowym przyszłości stworzony dla osób pracujących głęboko (np. programistów, osób z ADHD), które potrzebują ciągłego, nieinwazyjnego tła muzycznego i spokojnych, krótkich wejść głosowych bez dotykania telefonu czy przełączania zakładek.
 
 Muzyka nie pochodzi z żadnej bazy gotowych plików ani serwisów streamingowych — powstaje na żywo z wag promptów i parametrów DSP modelu **Google Lyria RealTime**.
 
@@ -146,7 +146,7 @@ npm run build
 
 ## Licencja & Prawa autorskie
 
-Cała muzyka w DOS Radio jest generowana w czasie rzeczywistym przez model sztucznej inteligencji i nie pochodzi z nagrań artystów, płyt ani serwisów streamingowych. Nie odtwarzamy cudzych utworów. Sygnał audio zawiera niesłyszalny cyfrowy znak wodny SynthID oznaczający treść wygenerowaną przez AI.
+Cała muzyka w AmbiRadio jest generowana w czasie rzeczywistym przez model sztucznej inteligencji i nie pochodzi z nagrań artystów, płyt ani serwisów streamingowych. Nie odtwarzamy cudzych utworów. Sygnał audio zawiera niesłyszalny cyfrowy znak wodny SynthID oznaczający treść wygenerowaną przez AI.
 
 Kod: MIT License.
 

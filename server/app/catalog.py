@@ -396,7 +396,7 @@ def _build_default_stations() -> list[dict[str, Any]]:
             {
                 "group_id": "fokus-puls",
                 "name": station_id.replace("-", " ").title(),
-                "tagline": "Muzyka instrumentalna DOS Radio",
+                "tagline": "Muzyka instrumentalna AmbiRadio",
                 "category": "fokus",
                 "host": "Kuba",
                 "sort_order": 99,

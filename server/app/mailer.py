@@ -1,4 +1,4 @@
-"""Verification e-mails for new DOS Radio accounts, sent over SMTP."""
+"""Verification e-mails for new AmbiRadio accounts, sent over SMTP."""
 from __future__ import annotations
 
 import logging
@@ -6,31 +6,33 @@ import os
 import smtplib
 from email.message import EmailMessage
 
+from .config import BRAND_TAGLINE, public_base_url
+
 log = logging.getLogger("dosradio.mailer")
 
 VERIFY_TTL_SECONDS = 24 * 3600
-SITE_URL = os.environ.get("DOSRADIO_SITE_URL", "https://dosradio.theones.io")
+SITE_URL = os.environ.get("DOSRADIO_SITE_URL", "").strip().rstrip("/") or public_base_url()
 
-SUBJECT = "Potwierdź swój adres e-mail — DOS Radio"
+SUBJECT = "Potwierdź swój adres e-mail — AmbiRadio"
 
 
 def build_verification_email(to_email: str, token: str) -> EmailMessage:
     link = f"{SITE_URL}/?verify={token}"
     message = EmailMessage()
     message["Subject"] = SUBJECT
-    message["From"] = os.environ.get("DOSRADIO_SMTP_FROM", "DOS Radio <noreply@theones.io>")
+    message["From"] = os.environ.get("DOSRADIO_SMTP_FROM", "AmbiRadio <noreply@theones.io>")
     message["To"] = to_email
     message.set_content(
         "Cześć!\n"
         "\n"
-        "Ktoś (mam nadzieję, że Ty) właśnie założył konto w DOS Radio na ten adres e-mail.\n"
+        "Ktoś (mam nadzieję, że Ty) właśnie założył konto w AmbiRadio na ten adres e-mail.\n"
         "Kliknij poniższy link, aby potwierdzić konto i słuchać bez limitu:\n"
         "\n"
         f"{link}\n"
         "\n"
         "Link jest ważny 24 godziny. Jeśli to nie Ty, po prostu zignoruj tę wiadomość.\n"
         "\n"
-        "— DOS Radio · https://dosradio.theones.io\n"
+        f"— {BRAND_TAGLINE} · {SITE_URL}\n"
     )
     return message
 

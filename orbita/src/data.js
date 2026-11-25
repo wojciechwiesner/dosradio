@@ -1,4 +1,4 @@
-/* Shared data + storage. Keys mirror dosradio.theones.io so both apps share state. */
+/* Shared data + storage. Keys mirror the classic AmbiRadio page so both apps share state. */
 export const MUSIC_GROUPS = [
   {
     id: 'fokus-puls',
@@ -193,16 +193,16 @@ export function computeAutoRamowkaSlot(now = new Date()) {
   } catch { /* fallback */ }
   const spots = [
     { id: 'zrobimy-ai', title: 'zrobi.my — Automatyzacja AI i agenci głosowi dla firm' },
-    { id: 'dosradio-ramowka', title: 'DOS Radio — Auto-Ramówka 24/7 i własne pasma muzyczne' },
+    { id: 'dosradio-ramowka', title: 'AmbiRadio — Auto-Ramówka 24/7 i własne pasma muzyczne' },
     { id: 'zrobimy-wdrozenia', title: 'zrobi.my — Dedykowane wdrożenia AI w 14 dni' },
   ];
   const spot = spots[Math.floor((h * 60 + now.getMinutes()) / 20) % spots.length];
-  if (h >= 6 && h < 9) return { id: 'poranny-rozruch', label: 'Poranny Rozruch', hours: '06:00–09:00', groupId: 'fokus-puls', stationId: 'poranna-kawa', host: 'Zosia', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka' };
-  if (h >= 9 && h < 13) return { id: 'gleboki-fokus', label: 'Głęboki Fokus', hours: '09:00–13:00', groupId: 'fokus-puls', stationId: 'dos-groove', host: 'Kuba', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka' };
-  if (h >= 13 && h < 17) return { id: 'popoludniowy-puls', label: 'Popołudniowy Puls', hours: '13:00–17:00', groupId: 'synth-filmowa', stationId: 'stranger-synth', host: 'Igor', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka' };
-  if (h >= 17 && h < 20) return { id: 'zlota-godzina', label: 'Złota Godzina', hours: '17:00–20:00', groupId: 'etno-folk', stationId: 'organic-house', host: 'Rafał', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka' };
-  if (h >= 20 && h < 24) return { id: 'wieczorny-klub-synth', label: 'Wieczorny Klub & Synth', hours: '20:00–24:00', groupId: 'klub-energia', stationId: 'melodic-house', host: 'Lena', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka' };
-  return { id: 'nocna-cisza', label: 'Nocna Cisza', hours: '00:00–06:00', groupId: 'chill-noc', stationId: 'warm-jazz', host: 'Helena', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka' };
+  if (h >= 6 && h < 9) return { id: 'poranny-rozruch', label: 'Poranny Rozruch', hours: '06:00–09:00', groupId: 'fokus-puls', stationId: 'poranna-kawa', host: 'Zosia', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka' };
+  if (h >= 9 && h < 13) return { id: 'gleboki-fokus', label: 'Głęboki Fokus', hours: '09:00–13:00', groupId: 'fokus-puls', stationId: 'dos-groove', host: 'Kuba', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka' };
+  if (h >= 13 && h < 17) return { id: 'popoludniowy-puls', label: 'Popołudniowy Puls', hours: '13:00–17:00', groupId: 'synth-filmowa', stationId: 'stranger-synth', host: 'Igor', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka' };
+  if (h >= 17 && h < 20) return { id: 'zlota-godzina', label: 'Złota Godzina', hours: '17:00–20:00', groupId: 'etno-folk', stationId: 'organic-house', host: 'Rafał', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka' };
+  if (h >= 20 && h < 24) return { id: 'wieczorny-klub-synth', label: 'Wieczorny Klub & Synth', hours: '20:00–24:00', groupId: 'klub-energia', stationId: 'melodic-house', host: 'Lena', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka' };
+  return { id: 'nocna-cisza', label: 'Nocna Cisza', hours: '00:00–06:00', groupId: 'chill-noc', stationId: 'warm-jazz', host: 'Helena', spotId: spot.id, spotTitle: spot.title, ctaLabel: 'Zamów wdrożenie AI · zrobi.my', ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka' };
 }
 export const CATS = {
   fokus: { color: '#8f6bff' }, chill: { color: '#35d0b5' }, energia: { color: '#ff4f9a' }, noc: { color: '#4d7dff' },

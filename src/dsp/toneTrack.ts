@@ -1,6 +1,6 @@
 // SPEC-START: ToneTracker - detection of steady pitched artifacts (the Lyria "whine")
 // Lyria RealTime drifts into a narrow tone that stays on the SAME frequency for seconds (measured on the
-// DOS Radio archive: 463-469 Hz, 1318-1336 Hz, 1986-1998 Hz at +33 dB). Musical notes and Lyria's normal
+// AmbiRadio archive: 463-469 Hz, 1318-1336 Hz, 1986-1998 Hz at +33 dB). Musical notes and Lyria's normal
 // partials move or stop within a bar. So a peak is confirmed only when it is prominent AND sits on the same
 // bin for most of a multi-second window. Pure logic (no Web Audio) so it runs in unit tests.
 // Ported from synthapse src/dsp/toneTrack.ts (commit d77b54f), band widened to 300 Hz - 16 kHz.

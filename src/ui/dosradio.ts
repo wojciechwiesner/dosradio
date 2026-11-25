@@ -1,4 +1,4 @@
-/** dosradio.theones.io page: stations, news topics, trial countdown, registration. */
+/** AmbiRadio main page (ambiradio.com): stations, news topics, trial countdown, registration. */
 import { PublicRadioEngine, type HostMode } from '../radio/publicRadioEngine';
 import { airedRemote, radioApi, type AccessState } from '../radio/radioApi';
 import { availableCategories, categoryLabel, sanitizeCategories, type NewsCategory, type QueuedStory } from '../radio/newsQueue';
@@ -338,8 +338,8 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     const airText = $('onAirText');
     const isMusicOnly = hostModeBtn.dataset.mode === 'music-only';
     if (speaking) {
-      label.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'DOS Radio' : 'Prowadzący na żywo';
-      airText.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'DOS Radio' : 'Prowadzący na żywo';
+      label.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'AmbiRadio' : 'Prowadzący na żywo';
+      airText.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'AmbiRadio' : 'Prowadzący na żywo';
     } else {
       label.textContent = 'Wiadomości';
       airText.textContent = isMusicOnly ? 'Tylko muzyka' : (engine.isPlaying ? 'Muzyka' : 'Poza anteną');
@@ -351,7 +351,7 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     prefs.playGroup = groupId;
     savePrefs();
     renderStations();
-    bgAudio.updateMetadata(st.name, groupId ? `DOS Radio · ${groupById(groupId)?.name ?? ''}` : 'DOS Radio', st.host);
+    bgAudio.updateMetadata(st.name, groupId ? `AmbiRadio · ${groupById(groupId)?.name ?? ''}` : 'AmbiRadio', st.host);
   },
 });
 engine.interval = prefs.interval;
@@ -436,7 +436,7 @@ async function chooseStation(station: Station, shift = false): Promise<void> {
   prefs.playGroup = null;
   savePrefs();
   renderStations();
-  bgAudio.updateMetadata(station.name, 'DOS Radio', station.host);
+  bgAudio.updateMetadata(station.name, 'AmbiRadio', station.host);
   try { await engine.setStation(station); } catch (error) { setStatus((error as Error).message, true); }
 }
 
@@ -455,7 +455,7 @@ async function chooseGroup(groupId: MusicGroupId): Promise<void> {
   prefs.blend = null;
   savePrefs();
   renderStations();
-  bgAudio.updateMetadata(targetStation.name, `DOS Radio · ${groupById(groupId)?.name ?? ''}`, targetStation.host);
+  bgAudio.updateMetadata(targetStation.name, `AmbiRadio · ${groupById(groupId)?.name ?? ''}`, targetStation.host);
   try {
     await engine.setGroup(groupId, targetStation);
     if (!engine.isPlaying) await togglePlay();
@@ -642,7 +642,7 @@ const bgAudio = initBackgroundAudio(
   () => void engine.newsNow(),
 );
 
-// --- DOS Radio Plus ("Twoje źródła" + duet podcast) -------------------------------
+// --- AmbiRadio Plus ("Twoje źródła" + duet podcast) -------------------------------
 initPlus({
   onStatus: (text, isError) => setStatus(text, isError),
   stopRadio: () => { if (engine.isPlaying) engine.stop(); },
@@ -677,7 +677,7 @@ async function handleMoodSubmit(description: string): Promise<void> {
     $('nowStation').textContent = custom.name;
     $('nowTagline').textContent = custom.tagline;
     await engine.setStation(custom);
-    bgAudio.updateMetadata(custom.name, 'DOS Radio', 'Twój nastrój');
+    bgAudio.updateMetadata(custom.name, 'AmbiRadio', 'Twój nastrój');
     setStatus(`Gra nastrój: ${custom.name} · ${custom.tagline}`);
     if (!engine.isPlaying) await togglePlay();
   } catch (err) {
@@ -930,7 +930,7 @@ renderCategories();
 engine.setHostMode(prefs.hostMode);
 renderHostMode(prefs.hostMode);
 const initialStation = stationById(prefs.station);
-bgAudio.updateMetadata(initialStation.name, 'DOS Radio', initialStation.host);
+bgAudio.updateMetadata(initialStation.name, 'AmbiRadio', initialStation.host);
 wireClassicDedications(
   engine,
   (sid) => {

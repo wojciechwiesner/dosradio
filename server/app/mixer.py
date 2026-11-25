@@ -1,6 +1,6 @@
 """Mix engine: join two recordings seamlessly with phrase-length DJ crossfades and downbeat bass-swap.
 
-Two distinct boundary regimes exist in DOS Radio streams:
+Two distinct boundary regimes exist in AmbiRadio streams:
   1. Intra-session (consecutive 30s slices of the same 3-minute Lyria recording, gap <= 45s):
      `join_intra_session` performs a 15 ms equal-power de-click splice without cutting beats.
   2. Inter-session (two different recordings/sessions or station rotation):

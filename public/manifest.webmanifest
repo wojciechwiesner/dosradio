@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "DOS Radio",
-  "short_name": "DOS Radio",
-  "description": "Osobiste radio AI na żywo — 3 orbity muzyczne, prowadzący, pigułki wiedzy i znajomi na antenie.",
+  "name": "AmbiRadio",
+  "short_name": "AmbiRadio",
+  "description": "AmbiRadio — Ambitnie dla Ciebie. Osobiste radio AI na żywo: 3 orbity muzyczne, prowadzący, pigułki wiedzy i znajomi na antenie.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

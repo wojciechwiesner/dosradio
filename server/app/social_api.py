@@ -160,7 +160,7 @@ def build_social_router(
                 "error": out.get("podcast_error", ""),
                 "parts": [],
             }
-        inv_title = pod_title or (f"Pozdrowienie dla: {out.get('to_name')}" if out.get("kind") == "greeting" else "Audycja specjalna DOS Radio")
+        inv_title = pod_title or (f"Pozdrowienie dla: {out.get('to_name')}" if out.get("kind") == "greeting" else "Audycja specjalna AmbiRadio")
         inv_about = pod_summary or "wyjątkowe wejście prowadzących przygotowane specjalnie dla Ciebie"
         out["invite"] = {
             "title": inv_title[:140],
@@ -214,7 +214,7 @@ def build_social_router(
         friend = social.add_friend(actor, body.name, email=body.email, phone=body.phone, channel=body.channel)
         if not body.with_greeting:
             return {"friend": friend}
-        msg = body.greeting_message.strip() or f"Wskakuj na wspólny odsłuch w DOS Radio!"
+        msg = body.greeting_message.strip() or f"Wskakuj na wspólny odsłuch w AmbiRadio!"
         ded = _make_dedication(body.station_id, body.name, sender, msg, actor)
         drop = social.create_drop(
             prefix="w", from_key=actor, from_name=sender,
@@ -222,7 +222,7 @@ def build_social_router(
             to_name=body.name.strip(), kind="greeting", station_id=ded["station_id"],
             message=msg, dedication_token=ded["id"],
         )
-        invite_txt = f"Cześć {body.name.strip()}! {sender} zaprasza Cię do DOS Radio i zostawił pozdrowienie u prowadzącego:"
+        invite_txt = f"Cześć {body.name.strip()}! {sender} zaprasza Cię do AmbiRadio i zostawił pozdrowienie u prowadzącego:"
         links = build_share_links("w", drop["token"], invite_txt, email=friend.get("email", ""), phone=friend.get("phone", ""))
         return {"friend": friend, "drop_token": drop["token"], "drop": _enrich_drop(drop), **links}
 
@@ -283,7 +283,7 @@ def build_social_router(
             topic_prompt += f"\nPozdrów słuchacza {to_name} od {sender}. {body.comment}".strip()
             background_tasks.add_task(_generate_drop_podcast_bg, drop["token"], topic_prompt)
 
-        links = build_share_links("w", drop["token"], f"{sender} wrzuca Ci materiał na antenę DOS Radio:", email=email_t, phone=phone_t)
+        links = build_share_links("w", drop["token"], f"{sender} wrzuca Ci materiał na antenę AmbiRadio:", email=email_t, phone=phone_t)
         return {"token": drop["token"], "drop": _enrich_drop(drop), **links}
 
     @router.post("/url-podcast-link")

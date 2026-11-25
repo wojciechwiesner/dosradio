@@ -74,35 +74,35 @@ def build_dedication_script(
     if code == "en":
         if message:
             return (
-                f"Hey {to_name}! This is {host_name} on DOS Radio. "
+                f"Hey {to_name}! This is {host_name} on AmbiRadio. "
                 f"{from_name} sends warm greetings and shares the station {station_name} especially for you, "
                 f"with a message: \"{message}\". Make yourself comfortable — this music is playing live for you right now. Enjoy the listen!"
             )
         return (
-            f"Hey {to_name}! This is {host_name} on DOS Radio. "
+            f"Hey {to_name}! This is {host_name} on AmbiRadio. "
             f"{from_name} sends warm greetings and invites you to listen to {station_name} together. "
             "Make yourself comfortable — the music is playing live for you right now!"
         )
     if code == "ru":
         if message:
             return (
-                f"Привет, {to_name}! Это {host_name} на DOS Radio. "
+                f"Привет, {to_name}! Это {host_name} на AmbiRadio. "
                 f"{from_name} передаёт тебе тёплый привет и делится станцией {station_name} со словами: «{message}». "
                 "Устраивайся поудобнее — эта музыка звучит специально для тебя. Приятного прослушивания!"
             )
         return (
-            f"Привет, {to_name}! Это {host_name} на DOS Radio. "
+            f"Привет, {to_name}! Это {host_name} на AmbiRadio. "
             f"{from_name} передаёт тебе тёплый привет и приглашает послушать станцию {station_name}. "
             "Устраивайся поудобнее — музыка уже играет для тебя!"
         )
     if message:
         return (
-            f"Cześć {to_name}! Tu {host_name} z DOS Radio. "
+            f"Cześć {to_name}! Tu {host_name} z AmbiRadio. "
             f"Mam dla ciebie gorące pozdrowienia od {from_name}, który udostępnia specjalnie dla ciebie stację {station_name} "
             f"z dedykacją: „{message}”. Rozgość się i podkręć głośność — to jest twoja chwila, zapraszam do słuchania!"
         )
     return (
-        f"Cześć {to_name}! Tu {host_name} z DOS Radio. "
+        f"Cześć {to_name}! Tu {host_name} z AmbiRadio. "
         f"{from_name} przesyła ci gorące pozdrowienia i udostępnia specjalnie dla ciebie stację {station_name}. "
         "Rozgość się i zostań z nami — muzyka gra już specjalnie dla ciebie!"
     )

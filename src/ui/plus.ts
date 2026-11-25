@@ -1,5 +1,5 @@
 /**
- * DOS Radio Plus panel: "Twoje źródła" (own keywords + RSS feeds), the duet podcast
+ * AmbiRadio Plus panel: "Twoje źródła" (own keywords + RSS feeds), the duet podcast
  * generator (with radio bumpers) and the YouTube pill form from pill.ts. Mounted for
  * Plus subscribers only; non-Plus listeners never see the panel, and the server gates
  * every /radio-api/plus route anyway.
@@ -322,7 +322,7 @@ async function playManifest(manifest: Pick<PodcastManifest, 'title' | 'parts'>, 
             const sd = (await sr.json()) as { skip?: boolean; spot?: { title?: string; audio_url?: string } };
             if (!sd.skip && sd.spot?.audio_url) {
               await options.setVoiceBed?.(true, true);
-              await player.play(sd.spot.title || 'Ciekawostka DOS Radio', [{ kind: 'voice', url: sd.spot.audio_url }], options.onStatus);
+              await player.play(sd.spot.title || 'Ciekawostka AmbiRadio', [{ kind: 'voice', url: sd.spot.audio_url }], options.onStatus);
             }
           } catch { /* non-fatal */ }
         }

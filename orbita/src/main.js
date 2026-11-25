@@ -328,7 +328,7 @@ const escapeHtml = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': 
 function renderCaption() {
   const h = hostState, el = $('#captions');
   if (!h || !h.caption) { el.hidden = true; return; }
-  el.hidden = false; $('#capWho').textContent = h.speaking ? (h.who === 'clip' ? (h.title || 'DOS Radio') : h.name || 'DOS Radio') : t('music');
+  el.hidden = false; $('#capWho').textContent = h.speaking ? (h.who === 'clip' ? (h.title || 'AmbiRadio') : h.name || 'AmbiRadio') : t('music');
   $('#capText').textContent = h.caption.length > 260 ? h.caption.slice(0, 257) + '…' : h.caption;
 }
 

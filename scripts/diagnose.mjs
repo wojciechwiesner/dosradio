@@ -1,4 +1,4 @@
-// Diagnose DOS Radio in real Chrome: what plays, does the EQ move, does the host speak, what the status says.
+// Diagnose AmbiRadio in real Chrome: what plays, does the EQ move, does the host speak, what the status says.
 // Usage: RADIO_BASE=https://dosradio.theones.io OUT=/tmp/x.json node scripts/diagnose.mjs
 import { chromium } from 'playwright';
 import { writeFileSync } from 'node:fs';

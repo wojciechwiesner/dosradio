@@ -25,7 +25,7 @@ log = logging.getLogger("dosradio.news_fallback")
 
 ATOM = "{http://www.w3.org/2005/Atom}"
 FEED_TIMEOUT_S = 8.0
-FEED_USER_AGENT = "Mozilla/5.0 (compatible; DOSRadio/1.0; +https://heloradio.com)"
+FEED_USER_AGENT = "Mozilla/5.0 (compatible; AmbiRadio/1.0; +https://ambiradio.com)"
 MIN_SUMMARY_CHARS = 80
 MAX_SUMMARY_CHARS = 900
 FALLBACK_MIN_WORDS = 30

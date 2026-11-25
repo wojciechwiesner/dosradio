@@ -1,4 +1,4 @@
-/* Radio engine: port of the dosradio.theones.io player (break scheduler, programme planner, pill queue,
+/* Radio engine: port of the classic AmbiRadio player (break scheduler, programme planner, pill queue,
    host clips, ducking) plus podcasts, the opening intro and on-screen hosts/captions. */
 import { t, getLang, fmtClock, topicLabel, stationName } from './i18n.js';
 import { AiredStore, PillQueue, coHostFor } from './data.js';
@@ -454,7 +454,7 @@ export class RadioEngine {
       if (myEpoch !== this.voiceEpoch || !this.podcastActive || !this.playing) return;
       const sp = data.spot;
       this.events.onPodcastHud?.({
-        phase: sp.kind === 'ciekawostka' ? 'CIEKAWOSTKA DOS RADIO' : 'SPOT DOS RADIO',
+        phase: sp.kind === 'ciekawostka' ? 'CIEKAWOSTKA AMBIRADIO' : 'SPOT AMBIRADIO',
         title: sp.title,
         subtitle: sp.text,
         ctaLabel: sp.cta_label || 'Sprawdź Plus',

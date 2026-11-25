@@ -1,5 +1,5 @@
 /**
- * DOS Radio engine for dosradio.theones.io.
+ * AmbiRadio engine for the public web player.
  *
  * Features:
  * - 14 stations with named hosts (Kuba, Ola, Rafał, Ida, Zosia, Lena, Tadek, Max, Igor, Wiktor, Helena, Marta, Szymon, Marek).

@@ -63,7 +63,7 @@ class Access:
     email: str | None
     trial_started: bool
     trial_remaining: int  # seconds, 0 when used up
-    plus: bool = False  # active DOS Radio Plus subscription
+    plus: bool = False  # active AmbiRadio Plus subscription
 
     def as_dict(self) -> dict:
         return {

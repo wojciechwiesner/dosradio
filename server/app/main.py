@@ -1,4 +1,4 @@
-"""DOS Radio API: accounts + 1 h trial, AI news per category, shared TTS cache, Lyria RealTime WebSocket proxy.
+"""AmbiRadio API: accounts + 1 h trial, AI news per category, shared TTS cache, Lyria RealTime WebSocket proxy.
 
 The Gemini key never leaves the server. Run: uvicorn app.main:app --port 3015
 """
@@ -134,7 +134,7 @@ async def lifespan(_: FastAPI):
     await weather.aclose()
 
 
-app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(title="AmbiRadio API", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 
 @app.middleware("http")
@@ -433,7 +433,7 @@ async def personal_group(request: Request) -> dict:
     current = access.resolve(request.cookies, ip)
     user = db.find_user_by_email(current.email or "") if current.registered else None
     if user is None or not current.plus:
-        group["error"] = "Własne źródła są w DOS Radio Plus."
+        group["error"] = "Własne źródła są w AmbiRadio Plus."
         return group
     prefs = db.get_news_preferences(int(user["id"])) or {}
     if not prefs.get("rss_feeds") and not prefs.get("keywords"):

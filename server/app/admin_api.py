@@ -1,4 +1,4 @@
-"""Protected Admin API router for DOS Radio: overview, tracks, mixer preview, tokens, users, catalog, ramówka, leads."""
+"""Protected Admin API router for AmbiRadio: overview, tracks, mixer preview, tokens, users, catalog, ramówka, leads."""
 from __future__ import annotations
 
 import asyncio

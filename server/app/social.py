@@ -8,6 +8,7 @@ import time
 from typing import Any
 from urllib.parse import quote
 
+from .config import public_base_url
 from .db import Database
 
 SOCIAL_SCHEMA = """
@@ -99,14 +100,14 @@ def build_share_links(
     email: str = "",
     phone: str = "",
 ) -> dict[str, str]:
-    public_base = os.environ.get("DOSRADIO_PUBLIC_URL", "https://dosradio.theones.io").rstrip("/")
+    public_base = public_base_url()
     share_url = f"{public_base}/orbita.html?{query_param}={token}"
     classic_url = f"{public_base}/?{query_param}={token}"
     full_msg = f"{invite_text.strip()} {share_url}".strip()
     digits = re.sub(r"\D", "", phone)
     wa = f"https://wa.me/{digits}?text={quote(full_msg)}" if digits else f"https://wa.me/?text={quote(full_msg)}"
     tg = f"https://t.me/share/url?url={quote(share_url)}&text={quote(invite_text.strip())}"
-    mailto = f"mailto:{email}?subject={quote('Wrzutka dla Ciebie na antenie DOS Radio')}&body={quote(invite_text.strip() + chr(10) + chr(10) + share_url)}"
+    mailto = f"mailto:{email}?subject={quote('Wrzutka dla Ciebie na antenie AmbiRadio')}&body={quote(invite_text.strip() + chr(10) + chr(10) + share_url)}"
     sms = f"sms:{phone}?body={quote(full_msg)}"
     return {
         "share_url": share_url,
