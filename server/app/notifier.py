@@ -1,4 +1,4 @@
-"""Telegram alerts for new user registrations on DOS Radio, including server health metrics."""
+"""Telegram alerts for new user registrations on AmbiRadio, including server health metrics."""
 from __future__ import annotations
 
 import asyncio
@@ -6,6 +6,8 @@ import logging
 import os
 import psutil
 import httpx
+
+from .config import public_base_url
 
 log = logging.getLogger("dosradio.telegram")
 
@@ -36,12 +38,12 @@ async def notify_new_user(email: str, total_users: int, archive_hours: float) ->
 
     load = get_system_load()
     msg = (
-        f"*Nowy słuchacz w DOS Radio!*\n\n"
+        f"*Nowy słuchacz w AmbiRadio!*\n\n"
         f"*Email:* `{email}`\n"
         f"*Łącznie kont:* {total_users}\n"
         f"*Archiwum muzyki:* ~{archive_hours:.1f}h nagrań\n"
         f"*Obciążenie serwera:* CPU: {load['cpu_pct']}%, RAM: {load['ram_used_gb']}G / {load['ram_total_gb']}G ({load['ram_pct']}%)\n\n"
-        f"[Otwórz DOS Radio](https://dosradio.theones.io)"
+        f"[Otwórz AmbiRadio]({public_base_url()})"
     )
 
     url = f"https://api.telegram.org/bot{token}/sendMessage"

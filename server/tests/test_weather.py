@@ -70,7 +70,7 @@ def test_coordinates_use_reverse_geocoding_with_user_agent():
     report = run_with(web, clock, lambda service: service.current(50.06, 19.94, None))
     assert report.city == "Zakopane"
     reverse = next(request for request in web.requests if request.url.host == REVERSE_HOST)
-    assert reverse.headers["user-agent"].startswith("DOSRadio/")
+    assert reverse.headers["user-agent"].startswith("AmbiRadio/")
 
 
 def test_nearby_coordinates_share_one_forecast_within_cache_window():

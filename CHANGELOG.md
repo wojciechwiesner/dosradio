@@ -1,13 +1,89 @@
 # Changelog
 
-All notable changes to DOS Radio are documented in this file.
+All notable changes to AmbiRadio (formerly DOS Radio) are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **Wave 1 integration** (`ow/ambi-integrate-w1`): rebrand + USD pricing, Classic redesign and entry split / start
+  wizard / 6 h trial merged into one branch. The redesign owns layout and styles, the rebrand owns brand strings
+  (ambiradio.com canonical/OG) and USD prices, the wizard owns the entry split, wizard and trial. Wizard and trial
+  styles now use the Classic tokens (square edges, one lime accent instead of the old orange), the trial pill reads
+  "Pełny dostęp 5 h 42 min" so the header stays on one row at 1440 px, the Plus modal sits above the mobile bottom
+  nav, and the leftover "darmowa godzina" texts in Orbita (PL/EN/RU) and the 5-minute nudge now say "pełny dostęp".
+  Screenshots: `docs/ambiradio/shots/integ-w1/`.
+- **Rebrand to AmbiRadio — "AmbiRadio — Ambitnie dla Ciebie"**: every user-facing "DOS Radio" string is now
+  "AmbiRadio" across `index.html` (title, description, canonical, OG/Twitter tags pointing at https://ambiradio.com),
+  `public/manifest.webmanifest`, `public/admin.html`, `src/**`, Orbita (`orbita/src/*`, PL/EN/RU i18n, rebuilt
+  `public/orbita.html`), and the backend (host jingles and TTS lines, podcasts, spots, Auto-Ramówka, dedications,
+  e-mail, Telegram, share texts, OG share cards). The tagline shows in the header, footer, page title, OG site name,
+  Orbita enter screen and the verification e-mail. Service worker cache bumped to `dosradio-shell-v5`.
+  Kept on purpose for backwards compatibility: localStorage keys (`dosradio.*`), API paths, `x-dosradio-*` headers,
+  postMessage types, env var names, logger names, file and DB names.
+- **Public base URL is configurable** (`server/app/config.py`): `DOSRADIO_PUBLIC_BASE_URL` (default
+  `https://ambiradio.com`; the older `DOSRADIO_PUBLIC_URL` still works) feeds share links, custom-radio links, the
+  verification e-mail, Telegram alerts and bot user agents. OG share pages keep using the request's own host, so
+  ambiradio.com and dosradio.theones.io both work. The OG brand domain defaults to ambiradio.com (was heloradio.com).
+- **Pricing in USD** (`server/app/billing.py`): AmbiRadio Plus $2.99/month and AmbiRadio Plus AI $6.99/month
+  (`currency: "usd"`, amounts in cents). Stripe price ids come from `DOSRADIO_PLUS_PRICE_USD` and
+  `DOSRADIO_PLUS_AI_PRICE_USD`; `DOSRADIO_PLUS_PRICE_PLN` is no longer read, so a PLN price can't be charged while
+  the UI shows dollars. `/radio-api/billing/status` now returns `currency`, `amount_cents` and `yearly_cents`
+  instead of `amount_pln`. The billing modal (`src/ui/billing.ts`, new `src/ui/pricing.ts`) and the Orbita Plus pane
+  show "$2.99 / mies." and "$6.99 / mies." plus "$29.90 / rok" and "$69.90 / rok" (yearly is display-only; there is
+  no yearly checkout yet).
+- **AmbiRadio Classic redesign** (`index.html`, `src/ui/dosradio.css`, `src/ui/pill.css`): raw, typographic
+  look on obsidian with one signal-lime accent, Space Grotesk + JetBrains Mono, 8px grid, square edges.
+  Big 88px Play next to the display-size station name; radio actions and share/Plus actions as consistent
+  icon + label rows; stations as a group tab strip plus a dense ruled list with BPM; "Na antenie dziś" as a quiet
+  timeline; programme settings moved into a "Twoja ramówka" section. Every control is at least 44px, has a
+  visible focus ring, there is no layout shift while audio loads, it works at 360px, and motion stops under
+  `prefers-reduced-motion`. Header wordmark "AmbiRadio — Ambitnie dla Ciebie"; title/meta/OG rebranded.
+  Tokens and rationale: `docs/ambiradio/classic-design.md`, screenshots in `docs/ambiradio/shots/ambi-classic-redesign/`.
+- The Plus badge (`src/ui/billing.ts`) now sits in the player's action row (`#plusSlot`) instead of floating.
+  The Plus, dedication and share/studio modals use the same tokens.
+
 ### Added
+- **Keyboard shortcuts in Classic** (`src/ui/keyboard.ts`): `Space` play/pause, `←`/`→` previous/next station;
+  ignored in form fields, open dialogs and Orbita. Tests: `tests/classicKeyboard.test.ts`.
+
+### Fixed
+- Mobile header (`src/ui/dosradio.css`): the top action buttons wrap instead of pushing the page 140 px wider
+  than a 390 px screen; the tagline now shows on mobile too. The Orbita plan card keeps "/ mies." on one line.
+- The Plus badge had no styles until the Plus modal was first opened.
+- The classic mobile bottom nav's "Orbita" and "Stacje" buttons targeted ids that do not exist
+  (`orbitaViewBtn`, `stationGrid`) and did nothing.
+- The dedication modal now closes on Escape and is announced as a dialog.
+
+### Added
+- **AmbiRadio entry split** (`src/ui/entrySplit.ts`, `entrySplit.css`): on the first visit the root page shows a
+  full-viewport choice, Classic (raw, functional) on the left and Orbita (immersive) on the right, each with a static
+  poster and a one-line description. Hover (or a first tap on touch screens) expands a half, a click chooses. The
+  choice lives in `localStorage` `dosradio.ui.version`; Orbita navigates to `/orbita.html` (also on later visits),
+  Classic stays. Verification, billing and `?view=` links always land in Classic. Mobile stacks the halves.
+  Both versions have a small "zmień wersję" link (`/?wersja=wybierz`).
+- **Start wizard** (`src/ui/onboarding.ts`, `src/ui/wizardContent.ts`) replaces the one-screen onboarding: three
+  skippable steps, (1) news topics as chips and how often, (2) podcasts: paste a link (turned into a podcast through
+  `POST /radio-api/plus/podcast`, new `source_url` in `radioApi.podcast`) or pick real Polish podcasts in Tech/AI,
+  Biznes, Sport, Kultura and Nauka (10 public RSS feeds, each checked with curl: HTTP 200, valid RSS, `language pl`),
+  whose feeds join "Moje źródła" through the news-preferences API, (3) a host personality (Kuba, Zosia, Marek or
+  music only), which tunes to that host's station. Plus setup is parked until the trial turns Plus on.
+- **6 h trial = full Plus** (`server/app/auth.py`, `db.py`, `plus_api.py`, `main.py`, `spots.py`):
+  `DOSRADIO_TRIAL_SECONDS` defaults to 21600. While the trial runs `/radio-api/me` reports `plus: true` and the new
+  `trial_plus: true`; every `/radio-api/plus` route, "Moje źródła" and spot-free listening work for the anonymous
+  listener. Their data is stored under a negative owner id (`trial_owners` table) and moves to the account on
+  `/radio-api/register`. Free-Plus limits (1 podcast per day) still apply. Tests: `server/tests/test_trial_plus.py`,
+  `tests/entryWizard.test.ts`.
+- **Calm trial indicator and soft register prompt** (`src/ui/trialNotice.ts`): the Classic pill shows hours and
+  minutes ("Pełny dostęp jeszcze 5 h 42 min", no ticking seconds); 30 minutes before the end a one-time,
+  non-blocking card offers the existing registration. Orbita shows the same 6 h clock and a 30-minute toast.
+
+### Fixed
+- The Classic trial pill was always visible: `.pill { display: inline-flex }` overrode its `hidden` attribute, and on
+  phones the header row then pushed the page to ~570 px wide. The header now wraps on narrow screens and modals sit
+  above the Classic mobile nav.
 - **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`
   (key >= 32 chars) grants a device such as the LUNA salon reception kiosk permanent access, sent as the
   `x-dosradio-device` header or `?device=` query (for `<audio>`). Keyed GETs also get `Access-Control-Allow-Origin: *`

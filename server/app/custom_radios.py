@@ -13,6 +13,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .auth import AccessService, client_ip
+from .config import public_base_url
 from .db import Database
 from .hosts import BORROWED_HOSTS
 
@@ -191,7 +192,7 @@ class CustomRadioService:
 
 def build_custom_radios_router(service: CustomRadioService, access: AccessService | None = None) -> APIRouter:
     router = APIRouter(prefix="/radio-api/custom-radios", tags=["custom-radios"])
-    public_base = os.environ.get("DOSRADIO_PUBLIC_URL", "https://dosradio.theones.io").rstrip("/")
+    public_base = public_base_url()
 
     @router.get("")
     async def list_radios() -> dict[str, Any]:

@@ -4,6 +4,22 @@ import { storage } from './data.js';
 import { defaultPodcast, defaultPodcastTitle, stoicPill, stoicPillTitle, toParts } from './content.js';
 
 const KEY = 'dosradio.orbita.freehour.v1';
+
+/* AmbiRadio prices in USD (cents). Server billing status wins when it reports USD; yearly is display-only. */
+const DEFAULT_PLANS = [
+  { id: 'plus', name: 'AmbiRadio Plus', currency: 'usd', amount_cents: 299, yearly_cents: 2990 },
+  { id: 'plus_ai', name: 'AmbiRadio Plus AI', currency: 'usd', amount_cents: 699, yearly_cents: 6990 },
+];
+const usd = cents => `$${(Math.round(cents) / 100).toFixed(2)}`;
+function planPrice(plans, id) {
+  const fallback = DEFAULT_PLANS.find(p => p.id === id) || DEFAULT_PLANS[0];
+  const live = (plans || []).find(p => p.id === id && p.currency === 'usd' && p.amount_cents);
+  return {
+    monthly: live?.amount_cents || fallback.amount_cents,
+    yearly: live?.yearly_cents || fallback.yearly_cents,
+    short: id === 'plus_ai' ? 'Plus AI' : 'Plus',
+  };
+}
 export const STEPS = ['news', 'orbit', 'stoic', 'podcast', 'source'];
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
@@ -23,7 +39,8 @@ export class Sales {
   }
   save() { storage.write(KEY, { done: [...this.done], stats: this.stats, credit: this.credit, nudged: [...this.nudged], demoRemaining: this.demoRemaining }); }
   get active() { const me = this.app.me; return !!me && !me.plus; }
-  get trial() { const me = this.app.me; return !!me && !me.registered && !me.plus; }
+  /* anonymous listener on the clock; during the 6 h trial they also have Plus (trial_plus) */
+  get trial() { const me = this.app.me; return !!me && !me.registered && (!!me.trial_plus || !me.plus); }
 
   mark(step) {
     if (this.done.has(step)) return;
@@ -79,6 +96,7 @@ export class Sales {
     if (this.app.api.live) this.app.me.trial_remaining = Math.max(0, (this.app.me.trial_remaining ?? 3600) - 1);
     else { this.demoRemaining = Math.max(0, this.demoRemaining - 1); if (this.demoRemaining % 10 === 0) this.save(); }
     const r = this.remaining();
+    if (r <= 1800 && r > 900 && !this.nudged.has(30)) { this.nudged.add(30); this.save(); this.app.toast(t('nudge30'), { action: t('register'), onAction: () => this.open('ended'), long: true }); }
     if (r <= 900 && !this.nudged.has(15)) { this.nudged.add(15); this.save(); this.app.toast(t('nudge15'), { action: t('podGo'), onAction: () => this.app.openTab('pods'), long: true }); }
     if (r <= 300 && !this.nudged.has(5)) { this.nudged.add(5); this.save(); const nudgeUrl = this.app.api.live ? this.app.api.orbitaNudgeUrl('5min', this.app.engine.station.id) : null; this.app.engine.announce(t('tts_5min'), 'host', nudgeUrl); this.app.toast(t('nudge5'), { action: t('register'), onAction: () => this.open('ended'), long: true }); }
     if (r <= 0) { this.app.engine.stop(); this.open('ended'); }
@@ -90,7 +108,8 @@ export class Sales {
     if (!this.trial) return;
     const r = this.remaining();
     document.getElementById('trialLeft').textContent = fmtLeft(r);
-    document.getElementById('trialRing').setAttribute('stroke-dashoffset', (50.3 * (1 - r / 3600)).toFixed(1));
+    this.trialTotal = Math.max(this.trialTotal || 0, r, 3600); // 6 h on live servers, 1 h in demo
+    document.getElementById('trialRing').setAttribute('stroke-dashoffset', (50.3 * (1 - r / this.trialTotal)).toFixed(1));
   }
   skipToEnd() { this.demoRemaining = 1; this.nudged.add(15); this.nudged.add(5); this.save(); if (!this.app.engine.playing) this.open('ended'); }
 
@@ -100,7 +119,7 @@ export class Sales {
 
   /* ---------------- plus pane ---------------- */
   paneHtml() {
-    const me = this.app.me || {}, plan = this.app.billing?.plans || [{ id: 'plus', amount_pln: 39 }, { id: 'plus_ai', amount_pln: 59 }];
+    const me = this.app.me || {}, plan = this.app.billing?.plans || DEFAULT_PLANS;
     let h = '';
     if (me.plus) h += `<section class="group"><h2>${t('plansTitle')}</h2><p class="lead"><span class="tag hot">${t('plusActive')}</span></p></section>`;
     else {
@@ -116,9 +135,11 @@ export class Sales {
     return h;
   }
   plansHtml(plans) {
-    const get = id => plans.find(p => p.id === id)?.amount_pln ?? (id === 'plus' ? 39 : 59);
-    const card = (id, name, feats, cta, featured) => `<div class="plan${featured ? ' featured' : ''}"><b>${name}</b><div class="price">${get(id)} <small>${t('currency')} ${t('perMonth')}</small></div><ul>${feats.map(f => `<li>${esc(f)}</li>`).join('')}</ul><button class="btn ${featured ? 'primary' : ''} small" type="button" data-plan="${id}">${cta}</button></div>`;
-    return `<div class="plans">${card('plus', 'Plus', t('planPlus'), t('choosePlus'), true)}${card('plus_ai', 'Plus+AI', t('planAi'), t('chooseAi'), false)}</div>`;
+    const card = (id, feats, cta, featured) => {
+      const { monthly, yearly, short } = planPrice(plans, id);
+      return `<div class="plan${featured ? ' featured' : ''}"><b>${short}</b><div class="price">${usd(monthly)} <small>${t('perMonth')}</small></div><div class="hint">${t('orYear', { p: `${usd(yearly)} ${t('perYear')}` })}</div><ul>${feats.map(f => `<li>${esc(f)}</li>`).join('')}</ul><button class="btn ${featured ? 'primary' : ''} small" type="button" data-plan="${id}">${cta}</button></div>`;
+    };
+    return `<div class="plans">${card('plus', t('planPlus'), t('choosePlus'), true)}${card('plus_ai', t('planAi'), t('chooseAi'), false)}</div>`;
   }
   bindPane(root) {
     root.querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => this.goStep(b.dataset.step)));
@@ -141,7 +162,7 @@ export class Sales {
   open(kind, authMode) {
     const box = document.getElementById('pwBox'), me = this.app.me || {};
     if (authMode) this.authMode = authMode;
-    const plans = this.app.billing?.plans || [{ id: 'plus', amount_pln: 39 }, { id: 'plus_ai', amount_pln: 59 }];
+    const plans = this.app.billing?.plans || DEFAULT_PLANS;
     let h = '';
     if (kind === 'ended') {
       const st = this.stats;
@@ -151,7 +172,7 @@ export class Sales {
     else h += `<h2 id="pwTitle">${t('plansTitle')}</h2>${kind === 'podcastUsed' ? `<p class="lead">${t('podUsed')}</p>` : kind === 'locked' ? `<p class="lead">${t('plusOnly')}</p>` : ''}`;
     if (kind !== 'auth' && me.registered) h += this.plansHtml(plans);
     if (!me.registered) h += this.authHtml(kind === 'auth' ? this.authMode : 'register');
-    if (kind !== 'auth' && !me.registered) h += `<details><summary class="hint" style="cursor:pointer">${t('plansTitle')}: 39 / 59 ${t('currency')} ${t('perMonth')}</summary><div style="margin-top:10px">${this.plansHtml(plans)}</div></details>`;
+    if (kind !== 'auth' && !me.registered) h += `<details><summary class="hint" style="cursor:pointer">${t('plansTitle')}: ${usd(planPrice(plans, 'plus').monthly)} / ${usd(planPrice(plans, 'plus_ai').monthly)} ${t('perMonth')}</summary><div style="margin-top:10px">${this.plansHtml(plans)}</div></details>`;
     h += `<p class="hint">${t('stripeNote')}</p><div class="row"><button class="btn small" type="button" data-close>${t('later')}</button></div>`;
     box.innerHTML = h;
     const pw = document.getElementById('paywall'); pw.hidden = false;

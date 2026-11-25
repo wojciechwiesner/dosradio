@@ -1,4 +1,4 @@
-"""Accounts, cookies and the listening allowance (1 h trial, then registration)."""
+"""Accounts, cookies and the listening allowance (6 h trial with full Plus, then registration)."""
 from __future__ import annotations
 
 import hashlib
@@ -63,7 +63,8 @@ class Access:
     email: str | None
     trial_started: bool
     trial_remaining: int  # seconds, 0 when used up
-    plus: bool = False  # active DOS Radio Plus subscription
+    plus: bool = False  # Plus features on: active AmbiRadio Plus subscription or a running trial
+    trial_plus: bool = False  # Plus comes from the anonymous trial, not from an account
 
     def as_dict(self) -> dict:
         return {
@@ -73,6 +74,7 @@ class Access:
             "trial_started": self.trial_started,
             "trial_remaining": self.trial_remaining,
             "plus": self.plus,
+            "trial_plus": self.trial_plus,
         }
 
 
@@ -114,7 +116,28 @@ class AccessService:
         if started is None:
             return Access(True, False, None, False, self.trial_seconds)
         remaining = max(0, int(self.trial_seconds - (now - started)))
-        return Access(remaining > 0, False, None, True, remaining)
+        # The whole trial is the full experience: Plus features until the last second.
+        return Access(remaining > 0, False, None, True, remaining, plus=remaining > 0, trial_plus=remaining > 0)
+
+    def trial_key(self, cookies: dict[str, str], ip: str) -> str:
+        """Stable key the trial listener's Plus data is stored under: the anon cookie, else the IP."""
+        keys = self._trial_keys(ip, cookies.get(ANON_COOKIE))
+        return keys[-1]
+
+    def plus_owner_id(self, cookies: dict[str, str], ip: str) -> int | None:
+        """Id the caller's Plus data lives under, or None without Plus.
+
+        Paid / welcome Plus: the account's users.id. Running trial: a negative trial owner id
+        (see Database.trial_owner_id), adopted by the account when the listener registers."""
+        current = self.resolve(cookies, ip)
+        if not current.plus:
+            return None
+        if current.registered:
+            user = self.db.find_user_by_email(current.email or "")
+            return int(user["id"]) if user is not None else None
+        if current.trial_plus:
+            return self.db.trial_owner_id(self.trial_key(cookies, ip))
+        return None
 
     def start_trial(self, cookies: dict[str, str], ip: str, now: float | None = None) -> str:
         anon_id = cookies.get(ANON_COOKIE) or secrets.token_urlsafe(16)
@@ -167,10 +190,14 @@ def build_router(access: AccessService) -> APIRouter:
         set_cookie(response, SESSION_COOKIE, token, 180 * 24 * 3600)
 
     @router.post("/register")
-    def register(body: Credentials, response: Response) -> dict:
+    def register(body: Credentials, request: Request, response: Response) -> dict:
         if access.db.find_user_by_email(body.email):
             raise HTTPException(409, "Konto z tym adresem już istnieje. Zaloguj się.")
         user_id = access.db.create_user(body.email, hash_password(body.password))
+        # Sources, podcasts and pills set up during the trial move onto the new account.
+        trial_owner = access.db.trial_owner_id(access.trial_key(request.cookies, ip_of(request)), create=False)
+        if trial_owner is not None:
+            access.db.adopt_trial_data(trial_owner, user_id)
         _send_verification(body.email, user_id)
         if getattr(access, "on_register", None):
             try:

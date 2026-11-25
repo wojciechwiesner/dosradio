@@ -51,7 +51,7 @@ export function initBackgroundAudio(
         navigator.mediaSession.metadata = new MediaMetadata({
           title,
           artist: hostName ? `${stationName} · ${hostName}` : stationName,
-          album: 'DOS Radio',
+          album: 'AmbiRadio',
           artwork: [
             { src: '/icon-192.png', sizes: '192x192', type: 'image/png' },
             { src: '/icon-512.png', sizes: '512x512', type: 'image/png' },

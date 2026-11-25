@@ -95,7 +95,7 @@ export function openDedicationModal(app, currentStationId) {
 
   const head = mk('div');
   head.append(
-    mk('div', { className: 'eyebrow' }, 'DOS RADIO · DEDYKACJA'),
+    mk('div', { className: 'eyebrow' }, 'AMBIRADIO · DEDYKACJA'),
     mk('h2', { id: 'dedTitle', style: 'margin:6px 0' }, c.title),
     mk('p', { className: 'hint', style: 'margin:0 0 12px' }, c.sub),
   );
@@ -170,7 +170,7 @@ export function openDedicationModal(app, currentStationId) {
       };
       if (typeof navigator.share === 'function') {
         shareBtn.style.display = '';
-        shareBtn.onclick = () => navigator.share({ title: `DOS Radio dla ${res.to_name}`, text: res.script, url: fullUrl }).catch(() => {});
+        shareBtn.onclick = () => navigator.share({ title: `AmbiRadio dla ${res.to_name}`, text: res.script, url: fullUrl }).catch(() => {});
       }
       if (res.audio_url) {
         prevBtn.style.display = '';

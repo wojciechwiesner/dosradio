@@ -20,7 +20,7 @@ import pytest
 os.environ.setdefault("GEMINI_API_KEY", "test-key")
 os.environ.setdefault("DOSRADIO_SECRET", "x" * 40)
 os.environ["DOSRADIO_PREWARM"] = "0"
-for name in ("STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "DOSRADIO_PLUS_PRICE_PLN"):
+for name in ("STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "DOSRADIO_PLUS_PRICE_PLN", "DOSRADIO_PLUS_PRICE_USD", "DOSRADIO_PLUS_AI_PRICE_USD"):
     os.environ.pop(name, None)
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -102,7 +102,13 @@ def test_status_anonymous(client):
     assert body["plus"] is False
     assert body["checkout_available"] is False
     assert [p["id"] for p in body["plans"]] == ["plus", "plus_ai"]
-    assert {p["amount_pln"] for p in body["plans"]} == {39, 59}
+    plans = {p["id"]: p for p in body["plans"]}
+    assert {p["currency"] for p in plans.values()} == {"usd"}
+    assert plans["plus"]["name"] == "AmbiRadio Plus"
+    assert plans["plus_ai"]["name"] == "AmbiRadio Plus AI"
+    assert (plans["plus"]["amount_cents"], plans["plus_ai"]["amount_cents"]) == (299, 699)
+    assert (plans["plus"]["yearly_cents"], plans["plus_ai"]["yearly_cents"]) == (2990, 6990)
+    assert all("amount_pln" not in p for p in plans.values())
 
 
 def test_checkout_requires_registration(client, db):
@@ -134,22 +140,46 @@ def test_checkout_creates_session_inline_price(client, db, monkeypatch, fake_str
     params = fake_stripe[0]
     assert params["mode"] == "subscription"
     assert params["metadata"] == {"user_id": str(user_id), "plan": "plus_ai"}
-    assert params["line_items"][0]["price_data"]["unit_amount"] == 5900
+    price_data = params["line_items"][0]["price_data"]
+    assert price_data["unit_amount"] == 699
+    assert price_data["currency"] == "usd"
+    assert price_data["recurring"] == {"interval": "month"}
+    assert price_data["product_data"] == {"name": "AmbiRadio Plus AI"}
     assert params["success_url"].endswith("/?billing=success")
     assert "subscription_data" not in params
 
 
 def test_checkout_uses_env_price_id_and_b2b_invoice(client, db, monkeypatch, fake_stripe):
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
-    monkeypatch.setenv("DOSRADIO_PLUS_PRICE_PLN", "price_test_39")
-    monkeypatch.setenv("DOSRADIO_SITE_URL", "https://dosradio.example")
+    monkeypatch.setenv("DOSRADIO_PLUS_PRICE_USD", "price_test_usd_299")
+    monkeypatch.setenv("DOSRADIO_SITE_URL", "https://ambiradio.example")
     login_user(client, db)
     response = client.post("/radio-api/billing/checkout", json={"plan": "plus", "b2b": True})
     assert response.status_code == 200
     params = fake_stripe[0]
-    assert params["line_items"][0] == {"price": "price_test_39", "quantity": 1}
+    assert params["line_items"][0] == {"price": "price_test_usd_299", "quantity": 1}
     assert params["subscription_data"]["collection_method"] == "send_invoice"
-    assert params["success_url"] == "https://dosradio.example/?billing=success"
+    assert params["success_url"] == "https://ambiradio.example/?billing=success"
+
+
+def test_checkout_plus_ai_env_price_id(client, db, monkeypatch, fake_stripe):
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
+    monkeypatch.setenv("DOSRADIO_PLUS_AI_PRICE_USD", "price_test_usd_699")
+    login_user(client, db)
+    assert client.post("/radio-api/billing/checkout", json={"plan": "plus_ai"}).status_code == 200
+    assert fake_stripe[0]["line_items"][0] == {"price": "price_test_usd_699", "quantity": 1}
+
+
+def test_checkout_ignores_legacy_pln_price_id(client, db, monkeypatch, fake_stripe):
+    """A PLN price id would charge zloty while the UI shows dollars, so it is not used any more."""
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
+    monkeypatch.setenv("DOSRADIO_PLUS_PRICE_PLN", "price_test_pln_39")
+    login_user(client, db)
+    assert client.post("/radio-api/billing/checkout", json={"plan": "plus"}).status_code == 200
+    item = fake_stripe[0]["line_items"][0]
+    assert "price" not in item
+    assert item["price_data"]["currency"] == "usd"
+    assert item["price_data"]["unit_amount"] == 299
 
 
 def test_webhook_missing_secret_503(client, db):

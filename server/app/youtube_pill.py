@@ -1,4 +1,4 @@
-"""YouTube "pigułka" (DOS Radio Plus): the most important ~20% of an episode as short audio blocks.
+"""YouTube "pigułka" (AmbiRadio Plus): the most important ~20% of an episode as short audio blocks.
 
 Pipeline, one small function per step: fetch_metadata -> fetch_subtitles -> parse_vtt ->
 select_segments (Gemini) -> download_audio + cut_audio -> build_parts (host summary voice +

@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 FAKE_SCRIPT = json.dumps({
     "title": "Testowy odcinek",
     "turns": [
-        {"speaker": 0, "text": "Cześć, tu Ania i witasz w Rozmowach DOS Radio, dziś mówimy o testach."},
+        {"speaker": 0, "text": "Cześć, tu Ania i witasz w Rozmowach AmbiRadio, dziś mówimy o testach."},
         {"speaker": 1, "text": "Dzień dobry, tu Michał. Testy to podstawa, zacznijmy od podstaw."},
         {"speaker": 0, "text": "Dokładnie, najpierw sprawdzamy bramki dostępu i walidację danych wejściowych."},
         {"speaker": 1, "text": "A na koniec zostawiamy sobie cache i odtwarzanie. Zaczynajmy więc."},

@@ -8,9 +8,11 @@ import socket
 from urllib.parse import urlparse
 import urllib.request
 
+from .config import public_base_url
+
 MAX_BYTES = 524_288
 MAX_TEXT_CHARS = 4500
-USER_AGENT = "DOSRadioBot/1.0 (+https://dosradio.theones.io)"
+USER_AGENT = f"AmbiRadioBot/1.0 (+{public_base_url()})"
 
 
 def _validate_public_url(url: str) -> str:

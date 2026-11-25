@@ -1,5 +1,5 @@
 /**
- * Thin client for the DOS Radio API (same origin). The Gemini key lives only on the server.
+ * Thin client for the AmbiRadio API (same origin). The Gemini key lives only on the server.
  */
 import type { CategoryNews, NewsCategory } from './newsQueue';
 import type { AiredRemote } from './airedStore';
@@ -11,7 +11,10 @@ export interface AccessState {
   email: string | null;
   trial_started: boolean;
   trial_remaining: number;
+  /** Plus features on (subscription or the running 6 h trial). */
   plus: boolean;
+  /** Plus comes from the anonymous trial; older servers omit it. */
+  trial_plus?: boolean;
 }
 
 export interface NewsPreferences {
@@ -169,12 +172,15 @@ export const radioApi = {
     request<{ categories: CategoryNews[] }>(`/radio-api/news?cats=${categories.join(',')}`),
   mood: (description: string) =>
     postJson<{ id: string; name: string; tagline: string; prompt: string; bpm: number; density: number; brightness: number }>('/radio-api/mood', { mood: description }),
-  // --- DOS Radio Plus ---
+  // --- AmbiRadio Plus ---
   newsPreferences: () => request<NewsPreferences>('/radio-api/plus/news-preferences'),
   saveNewsPreferences: (keywords: string[], rssFeeds: string[]) =>
     putJson<NewsPreferences>('/radio-api/plus/news-preferences', { keywords, rss_feeds: rssFeeds }),
   newsDigest: () => request<NewsDigest>('/radio-api/plus/news-digest'),
-  podcast: (topic?: string) => postJson<PodcastManifest>('/radio-api/plus/podcast', topic ? { topic } : {}),
+  podcast: (topic?: string, sourceUrl?: string) => postJson<PodcastManifest>('/radio-api/plus/podcast', {
+    ...(topic ? { topic } : {}),
+    ...(sourceUrl ? { source_url: sourceUrl } : {}),
+  }),
   myPodcasts: async () => (await request<{ podcasts: PodcastListItem[] }>('/radio-api/plus/podcasts')).podcasts,
   /** Host jingles and chatter for a station; null when the endpoint is missing or fails. */
   hostClips: async (stationId: string): Promise<HostClips | null> => {

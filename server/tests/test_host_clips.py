@@ -47,7 +47,7 @@ def test_every_host_has_four_jingles_naming_dos_radio_and_eight_chatter():
     for station_id, host in HOSTS.items():
         assert len(host.jingles) == JINGLES_PER_HOST, station_id
         assert len(host.chatter) == CHATTER_PER_HOST, station_id
-        assert all("DOS Radio" in line for line in host.jingles), station_id
+        assert all("AmbiRadio" in line for line in host.jingles), station_id
         for line in host.jingles + host.chatter:
             assert all(ord(char) < 0x2000 for char in line), (station_id, line)
 
