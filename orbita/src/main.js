@@ -7,6 +7,7 @@ import { createScene, STEP } from './scene.js';
 import { Sales } from './sales.js';
 import { radioPane, minePane, podsPane } from './panes.js';
 import { openDedicationModal, loadIncomingDedication } from './dedication.js';
+import { initOrbitaComments } from './comments.js';
 import { initOrbitaSocial, getClientId } from './social.js';
 import { stoicThoughts, stoicPill, stoicPillTitle, toParts, gmailSample } from './content.js';
 
@@ -962,6 +963,10 @@ function frame(now) {
   await loadIncomingDedication(app, prefs, dial);
   initOrbitaSocial({ app, STATIONS, byId, dial, renderCard, rebuildSatLabels });
   $('#dedicateBtn')?.addEventListener('click', () => { app.ensureEntered(); app.share(); });
+  initOrbitaComments(app, {
+    stationId: () => (byId[prefs.station] || STATIONS[0]).id,
+    hostName: () => (byId[prefs.station] || STATIONS[0]).host,
+  });
   renderCard();
   app.syncFavBtn?.();
   if (new URLSearchParams(location.search).get('embed') === '1') {

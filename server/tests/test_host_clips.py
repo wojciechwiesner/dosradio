@@ -41,7 +41,7 @@ def env(tmp_path):
     return SimpleNamespace(client=client, calls=calls, audio_dir=tmp_path)
 
 
-def test_every_host_has_four_jingles_naming_dos_radio_and_eight_chatter():
+def test_every_host_has_four_jingles_naming_ambiradio_and_eight_chatter():
     from app.hosts import HOSTS
 
     for station_id, host in HOSTS.items():
@@ -71,7 +71,9 @@ def test_clip_is_voiced_once_then_served_from_cache(env):
     second = env.client.get(f"/radio-api/host-clip/{STATION}/jingle/0.wav")
     assert second.status_code == 200 and second.content == FAKE_WAV
     assert env.calls == [(host.jingles[0], host.voice, host.style)]
-    assert (env.audio_dir / f"jingle-{STATION}-0.wav").read_bytes() == FAKE_WAV
+    from app.host_clips import clip_file_name
+
+    assert (env.audio_dir / clip_file_name(STATION, "jingle", 0, host.jingles[0])).read_bytes() == FAKE_WAV
 
 
 def test_head_request_serves_chatter_clip(env):

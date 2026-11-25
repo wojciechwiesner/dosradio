@@ -72,6 +72,32 @@ export interface HostClips {
   chatter: string[];
 }
 
+/** A listener comment as the API returns it (already moderated on the server). */
+export interface ListenerComment {
+  id: string;
+  station_id: string;
+  host_name: string;
+  nick: string;
+  text: string;
+  status: 'pending' | 'quiet' | 'aired' | 'skipped';
+  on_air: boolean;
+  created_at: number;
+  aired_at: number | null;
+  share_url: string;
+  classic_share_url: string;
+  clip_url?: string;
+  message?: string;
+}
+
+/** Next live host moment: a persona link or a listener comment read on air. */
+export interface HostBreak {
+  id: string;
+  kind: 'comment' | 'link';
+  text: string;
+  url: string;
+  comment: ListenerComment | null;
+}
+
 export interface RamowkaStateResponse {
   slot?: Partial<AutoRamowkaSlot> & {
     id?: string;
@@ -190,6 +216,17 @@ export const radioApi = {
       if (!response.ok) return null;
       const body = (await response.json()) as Partial<HostClips>;
       return { jingles: body.jingles ?? [], chatter: body.chatter ?? [] };
+    } catch {
+      return null;
+    }
+  },
+  /** Live host link or comment readout for the next break; null means "use the static clips". */
+  hostBreak: async (stationId: string): Promise<HostBreak | null> => {
+    try {
+      const response = await fetch(`/radio-api/host-break/${encodeURIComponent(stationId)}`, { credentials: 'same-origin' });
+      if (!response.ok) return null;
+      const body = (await response.json()) as { break?: HostBreak | null };
+      return body.break && typeof body.break.url === 'string' ? body.break : null;
     } catch {
       return null;
     }

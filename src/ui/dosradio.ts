@@ -39,6 +39,7 @@ import { REGISTER_PROMPT_AT_S, TRIAL_SECONDS, formatTrialCalm, shouldPromptRegis
 import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from './plus';
 import { initProgrammeLine } from './pill';
 import { wireClassicDedications } from './dedicationModal';
+import { wireClassicComments } from './commentBox';
 import { wireClassicSocialStudio } from './socialCreatorStudio';
 import { classicShortcut, stepStation } from './keyboard';
 import { startPlaybackFlow } from './playbackGate';
@@ -1027,6 +1028,7 @@ wireClassicDedications(
   },
   setStatus,
 );
+wireClassicComments(engine, setStatus);
 wireClassicSocialStudio(
   engine,
   (sid) => {

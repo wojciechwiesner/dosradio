@@ -5,7 +5,9 @@ and the same file is replayed for every listener, whatever station they are on.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
+
+from .host_personas import EMPTY_PERSONA, PERSONAS, Persona
 
 
 @dataclass(frozen=True)
@@ -17,7 +19,8 @@ class Host:
     greeting: str       # spoken on Play, ~10-15 s
     jingle: str         # short ident played when the stream recovers
     jingles: tuple[str, ...]  # short station idents, each one names AmbiRadio
-    chatter: tuple[str, ...]  # evergreen 1-2 sentence remarks played between songs
+    chatter: tuple[str, ...]  # evergreen 1-2 sentence remarks, offline fallback for live links
+    persona: Persona = field(default=EMPTY_PERSONA, compare=False)  # the host's soul, fed to LLM prompts
 
 
 HOSTS: dict[str, Host] = {
@@ -331,6 +334,8 @@ HOSTS: dict[str, Host] = {
     ),
 }
 
+HOSTS = {sid: replace(host, persona=PERSONAS.get(sid, EMPTY_PERSONA)) for sid, host in HOSTS.items()}
+
 NEWSROOM_VOICES: dict[str, tuple[str, str]] = {
     "ai": ("Kore", "a calm, confident, friendly Polish radio news reader"),
     "beauty": ("Leda", "a warm, stylish, upbeat Polish lifestyle news reader"),
@@ -369,7 +374,6 @@ def host_for(station_id: str | None) -> Host:
     borrowed = BORROWED_HOSTS.get(station_id or "")
     if borrowed:
         source, label = borrowed
-        from dataclasses import replace
         base = HOSTS[source]
         custom_jingle = base.jingle.replace(base.station_label, label)
         custom_greeting = f"Cześć, tu {base.name}. Wkraczamy w {label}, AmbiRadio. Zaczynamy."

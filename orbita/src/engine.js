@@ -234,8 +234,23 @@ export class RadioEngine {
     await this.airBreak(new Date(), true);
     if (this.playing && this.hostMode === 'with-host') { this.clearSchedule(); this.scheduleNextBreak(); }
   }
+  /* live break from the server (listener comment on air or persona link), once per listener */
+  async freshLiveBreak() {
+    if (!this.api.live || !this.api.hostBreak) return null;
+    const b = await this.api.hostBreak(this.station.id);
+    this.heardBreaks = this.heardBreaks || new Set();
+    if (!b || this.heardBreaks.has(b.id)) return null;
+    this.heardBreaks.add(b.id);
+    return { kind: 'voice', who: 'A', url: b.url, caption: b.comment ? `${b.comment.nick}: ${b.comment.text}` : b.text };
+  }
+  /* a listener just sent a comment: check for a live break sooner than the usual gap */
+  requestHostBreakSoon(ms = 40000) {
+    if (this.playing && this.hostMode === 'with-host' && !this.podcastActive) this.scheduleClip(ms);
+  }
   async airFiller() {
     this.events.onStatus(t('st_filler'));
+    const live = await this.freshLiveBreak();
+    if (live) { await this.hostMoment(live, 'host'); return; }
     const clips = this.api.live ? await this.api.hostClips(this.station.id) : null;
     const chatter = clips?.chatter || [];
     if (chatter.length) {
@@ -347,14 +362,15 @@ export class RadioEngine {
       }
     }
   }
-  scheduleClip() {
+  scheduleClip(soonMs = 0) {
     clearTimeout(this.clipTimer);
-    const wait = (6 + Math.random() * 6) * MIN;
+    const wait = soonMs || (6 + Math.random() * 6) * MIN;
     this.clipTimer = setTimeout(async () => {
       if (this.playing && this.hostMode === 'with-host' && !this.speaking && !this.podcastActive) {
-        const clips = this.api.live ? await this.api.hostClips(this.station.id) : null;
+        const live = await this.freshLiveBreak();
+        const clips = !live && this.api.live ? await this.api.hostClips(this.station.id) : null;
         const urls = clips ? [...clips.jingles, ...clips.chatter] : [];
-        const part = urls.length ? { kind: 'voice', url: urls[(Math.random() * urls.length) | 0], caption: t('tts_jingle') }
+        const part = live ? live : urls.length ? { kind: 'voice', url: urls[(Math.random() * urls.length) | 0], caption: t('tts_jingle') }
           : { kind: 'tts', who: 'A', text: Math.random() < 0.4 ? t('tts_jingle') : t('tts_chatter')[(Math.random() * 3) | 0] };
         await this.hostMoment(part, 'host');
       }

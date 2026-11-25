@@ -5,6 +5,7 @@ The Gemini key never leaves the server. Run: uvicorn app.main:app --port 3015
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -47,6 +48,9 @@ from .admin_api import build_admin_router
 from .custom_radios import CustomRadioService, build_custom_radios_router
 from .og_preview import build_og_router
 from .social_api import build_social_router
+from .comments import CommentService, build_comments_router
+from .custom_radios import resolve_actor_key
+from .news import story_headline
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("dosradio")
@@ -99,9 +103,10 @@ started_at = time.time()
 async def render_host_audio(station_id: str, kind: str) -> Path:
     """Greeting or jingle for one station host, voiced once and cached forever."""
     host = host_for(station_id)
-    path = static_audio_dir / f"{kind}-{station_id}.wav"
+    text = host.greeting if kind == "welcome" else host.jingle
+    digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]  # edited lines are voiced again
+    path = static_audio_dir / f"{kind}-{station_id}-{digest}.wav"
     if not path.exists():
-        text = host.greeting if kind == "welcome" else host.jingle
         audio = await gemini.speak(text, host.voice, host.style)
         tmp = path.with_suffix(".tmp")
         tmp.write_bytes(audio)
@@ -193,6 +198,23 @@ app.include_router(build_social_router(
         (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
         ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
     ),
+))
+def _headline_now() -> str | None:
+    """The news topic already in the programme, so hosts can mention what the day is about."""
+    queue = news.global_queue()
+    return story_headline(queue[0]) if queue else None
+
+
+comment_service = CommentService(db, generate=gemini.generate_text, headline=_headline_now)
+app.include_router(build_comments_router(
+    service=comment_service,
+    speak=gemini.speak,
+    audio_dir=static_audio_dir,
+    station_lookup=lambda sid: next(
+        (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
+        ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
+    ),
+    actor_key=lambda request: resolve_actor_key(request, access, db),
 ))
 app.include_router(build_og_router(
     db=db,

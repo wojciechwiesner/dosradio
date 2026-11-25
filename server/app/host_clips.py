@@ -1,6 +1,7 @@
 """Host jingles and chatter clips: listed per station, voiced on first request, then cached forever."""
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -38,6 +39,12 @@ def _clip_urls(station_id: str, kind: str, lines: tuple[str, ...]) -> list[str]:
     return [f"/radio-api/host-clip/{station_id}/{kind}/{position}.wav" for position in range(len(lines))]
 
 
+def clip_file_name(station_id: str, kind: str, position: int, text: str) -> str:
+    """Cache key carries a hash of the line, so an edited line (e.g. the AmbiRadio rebrand) is voiced again."""
+    digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]
+    return f"{kind}-{station_id}-{position}-{digest}.wav"
+
+
 def build_router(speak: SpeakFn, audio_dir: Path) -> APIRouter:
     router = APIRouter(prefix="/radio-api")
 
@@ -54,7 +61,7 @@ def build_router(speak: SpeakFn, audio_dir: Path) -> APIRouter:
         host = _host_or_404(station_id)
         lines = _lines_or_404(host, kind)
         position = _position_or_404(index, lines)
-        path = audio_dir / f"{kind}-{station_id}-{position}.wav"
+        path = audio_dir / clip_file_name(station_id, kind, position, lines[position])
         if not path.exists():
             try:
                 audio = await speak(lines[position], host.voice, host.style)

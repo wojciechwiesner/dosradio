@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field, field_validator
 
 from .auth import DEDICATION_PASS_COOKIE, AccessService, client_ip
 from .hosts import Host, host_for
+from .moderation import moderate_many
 
 logger = logging.getLogger("dosradio.dedications")
 
@@ -248,6 +249,14 @@ def build_dedications_router(
         ip_hash = hashlib.sha256(f"ded:{ip}".encode("utf-8")).hexdigest()[:16]
         if store.count_recent_by_ip(ip_hash) >= MAX_PER_HOUR_PER_IP:
             raise HTTPException(429, "Zbyt wiele dedykacji w ciągu godziny. Spróbuj za chwilę.")
+        cleaned, rejected = moderate_many(
+            {"to_name": body.to_name, "from_name": body.from_name, "message": body.message}, max_len=200,
+        )
+        if rejected is not None:
+            raise HTTPException(400, rejected.message)
+        if not cleaned["to_name"] or not cleaned["from_name"]:
+            raise HTTPException(400, "Podaj imiona bez linków i numerów telefonu.")
+        body = body.model_copy(update=cleaned)
         lang = body.lang if body.lang in LANGS else "pl"
         host = host_for(st["id"])
         station_name = str(st.get("name") or st["id"])
