@@ -51,6 +51,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The dedication modal now closes on Escape and is announced as a dialog.
 
 ### Added
+- **AmbiRadio entry split** (`src/ui/entrySplit.ts`, `entrySplit.css`): on the first visit the root page shows a
+  full-viewport choice, Classic (raw, functional) on the left and Orbita (immersive) on the right, each with a static
+  poster and a one-line description. Hover (or a first tap on touch screens) expands a half, a click chooses. The
+  choice lives in `localStorage` `dosradio.ui.version`; Orbita navigates to `/orbita.html` (also on later visits),
+  Classic stays. Verification, billing and `?view=` links always land in Classic. Mobile stacks the halves.
+  Both versions have a small "zmień wersję" link (`/?wersja=wybierz`).
+- **Start wizard** (`src/ui/onboarding.ts`, `src/ui/wizardContent.ts`) replaces the one-screen onboarding: three
+  skippable steps, (1) news topics as chips and how often, (2) podcasts: paste a link (turned into a podcast through
+  `POST /radio-api/plus/podcast`, new `source_url` in `radioApi.podcast`) or pick real Polish podcasts in Tech/AI,
+  Biznes, Sport, Kultura and Nauka (10 public RSS feeds, each checked with curl: HTTP 200, valid RSS, `language pl`),
+  whose feeds join "Moje źródła" through the news-preferences API, (3) a host personality (Kuba, Zosia, Marek or
+  music only), which tunes to that host's station. Plus setup is parked until the trial turns Plus on.
+- **6 h trial = full Plus** (`server/app/auth.py`, `db.py`, `plus_api.py`, `main.py`, `spots.py`):
+  `DOSRADIO_TRIAL_SECONDS` defaults to 21600. While the trial runs `/radio-api/me` reports `plus: true` and the new
+  `trial_plus: true`; every `/radio-api/plus` route, "Moje źródła" and spot-free listening work for the anonymous
+  listener. Their data is stored under a negative owner id (`trial_owners` table) and moves to the account on
+  `/radio-api/register`. Free-Plus limits (1 podcast per day) still apply. Tests: `server/tests/test_trial_plus.py`,
+  `tests/entryWizard.test.ts`.
+- **Calm trial indicator and soft register prompt** (`src/ui/trialNotice.ts`): the Classic pill shows hours and
+  minutes ("Pełny dostęp jeszcze 5 h 42 min", no ticking seconds); 30 minutes before the end a one-time,
+  non-blocking card offers the existing registration. Orbita shows the same 6 h clock and a 30-minute toast.
+
+### Fixed
+- The Classic trial pill was always visible: `.pill { display: inline-flex }` overrode its `hidden` attribute, and on
+  phones the header row then pushed the page to ~570 px wide. The header now wraps on narrow screens and modals sit
+  above the Classic mobile nav.
 - **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`
   (key >= 32 chars) grants a device such as the LUNA salon reception kiosk permanent access, sent as the
   `x-dosradio-device` header or `?device=` query (for `<audio>`). Keyed GETs also get `Access-Control-Allow-Origin: *`

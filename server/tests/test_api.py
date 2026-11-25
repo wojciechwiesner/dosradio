@@ -65,16 +65,16 @@ def test_parse_stories_keeps_only_sourced():
         parse_stories("Nie wiem.", "ai")
 
 
-def test_trial_defaults_to_one_hour(tmp_path, monkeypatch):
+def test_trial_defaults_to_six_hours(tmp_path, monkeypatch):
     monkeypatch.delenv("DOSRADIO_TRIAL_SECONDS", raising=False)
     monkeypatch.setenv("DOSRADIO_DATA_DIR", str(tmp_path))
     from app.config import load_settings
-    assert load_settings().trial_seconds == 3600
+    assert load_settings().trial_seconds == 21600
 
 
 def test_trial_then_register_then_login(client, captured_emails):
     me = client.get("/radio-api/me").json()
-    assert me == {"allowed": True, "registered": False, "email": None, "trial_started": False, "trial_remaining": 3600, "plus": False}
+    assert me == {"allowed": True, "registered": False, "email": None, "trial_started": False, "trial_remaining": 3600, "plus": False, "trial_plus": False}
 
     started = client.post("/radio-api/trial/start").json()
     assert started["trial_started"] is True and 3595 <= started["trial_remaining"] <= 3600

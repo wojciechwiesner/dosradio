@@ -3,9 +3,9 @@ from __future__ import annotations
 LANGS = {"pl", "en", "ru"}
 
 NUDGE_5MIN: dict[str, str] = {
-    "pl": "Zostało pięć minut darmowej godziny. Załóż konto, a zostanę z tobą na dłużej.",
-    "en": "Five minutes of your free hour left. Create an account and I’ll stay with you longer.",
-    "ru": "Осталось пять минут бесплатного часа. Создай аккаунт, и я останусь с тобой подольше.",
+    "pl": "Zostało pięć minut pełnego dostępu. Załóż konto, a zostanę z tobą na dłużej.",
+    "en": "Five minutes of full access left. Create an account and I’ll stay with you longer.",
+    "ru": "Осталось пять минут полного доступа. Создай аккаунт, и я останусь с тобой подольше.",
 }
 
 PODCAST_TITLES: dict[str, str] = {

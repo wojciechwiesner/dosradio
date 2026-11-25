@@ -1,7 +1,9 @@
 """AmbiRadio Plus endpoints: duet podcasts, YouTube pills and personalized news sources.
 
-Every route requires a registered listener with an active Plus subscription
-(HTTP 402 otherwise). Mounted by app.main through build_plus_router.
+Every route requires Plus: a registered listener with an active Plus subscription, or an
+anonymous listener inside the 6 h trial (full experience); HTTP 402 otherwise. Trial data is
+kept under a negative owner id and moves to the account on registration.
+Mounted by app.main through build_plus_router.
 """
 from __future__ import annotations
 
@@ -69,16 +71,16 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
     router = APIRouter(prefix="/radio-api/plus")
 
     def require_plus(request: Request) -> int:
-        """Active Plus subscription required; returns the caller's user id."""
+        """Plus (subscription or running trial) required; returns the id the caller's data lives under."""
         ip = client_ip({k.lower(): v for k, v in request.headers.items()},
                        request.client.host if request.client else None)
         current = access.resolve(request.cookies, ip)
-        if not current.registered or not current.plus:
+        if not current.plus:
             raise HTTPException(402, PLUS_MESSAGE)
-        user = db.find_user_by_email(current.email or "")
-        if user is None:
+        owner_id = access.plus_owner_id(request.cookies, ip)
+        if owner_id is None:
             raise HTTPException(401, "Sesja nieprawidłowa. Zaloguj się ponownie.")
-        return int(user["id"])
+        return owner_id
 
     # --- podcasts ---------------------------------------------------------------
     @router.post("/podcast")

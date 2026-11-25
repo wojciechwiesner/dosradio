@@ -11,7 +11,10 @@ export interface AccessState {
   email: string | null;
   trial_started: boolean;
   trial_remaining: number;
+  /** Plus features on (subscription or the running 6 h trial). */
   plus: boolean;
+  /** Plus comes from the anonymous trial; older servers omit it. */
+  trial_plus?: boolean;
 }
 
 export interface NewsPreferences {
@@ -174,7 +177,10 @@ export const radioApi = {
   saveNewsPreferences: (keywords: string[], rssFeeds: string[]) =>
     putJson<NewsPreferences>('/radio-api/plus/news-preferences', { keywords, rss_feeds: rssFeeds }),
   newsDigest: () => request<NewsDigest>('/radio-api/plus/news-digest'),
-  podcast: (topic?: string) => postJson<PodcastManifest>('/radio-api/plus/podcast', topic ? { topic } : {}),
+  podcast: (topic?: string, sourceUrl?: string) => postJson<PodcastManifest>('/radio-api/plus/podcast', {
+    ...(topic ? { topic } : {}),
+    ...(sourceUrl ? { source_url: sourceUrl } : {}),
+  }),
   myPodcasts: async () => (await request<{ podcasts: PodcastListItem[] }>('/radio-api/plus/podcasts')).podcasts,
   /** Host jingles and chatter for a station; null when the endpoint is missing or fails. */
   hostClips: async (stationId: string): Promise<HostClips | null> => {

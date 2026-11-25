@@ -39,7 +39,8 @@ export class Sales {
   }
   save() { storage.write(KEY, { done: [...this.done], stats: this.stats, credit: this.credit, nudged: [...this.nudged], demoRemaining: this.demoRemaining }); }
   get active() { const me = this.app.me; return !!me && !me.plus; }
-  get trial() { const me = this.app.me; return !!me && !me.registered && !me.plus; }
+  /* anonymous listener on the clock; during the 6 h trial they also have Plus (trial_plus) */
+  get trial() { const me = this.app.me; return !!me && !me.registered && (!!me.trial_plus || !me.plus); }
 
   mark(step) {
     if (this.done.has(step)) return;
@@ -95,6 +96,7 @@ export class Sales {
     if (this.app.api.live) this.app.me.trial_remaining = Math.max(0, (this.app.me.trial_remaining ?? 3600) - 1);
     else { this.demoRemaining = Math.max(0, this.demoRemaining - 1); if (this.demoRemaining % 10 === 0) this.save(); }
     const r = this.remaining();
+    if (r <= 1800 && r > 900 && !this.nudged.has(30)) { this.nudged.add(30); this.save(); this.app.toast(t('nudge30'), { action: t('register'), onAction: () => this.open('ended'), long: true }); }
     if (r <= 900 && !this.nudged.has(15)) { this.nudged.add(15); this.save(); this.app.toast(t('nudge15'), { action: t('podGo'), onAction: () => this.app.openTab('pods'), long: true }); }
     if (r <= 300 && !this.nudged.has(5)) { this.nudged.add(5); this.save(); const nudgeUrl = this.app.api.live ? this.app.api.orbitaNudgeUrl('5min', this.app.engine.station.id) : null; this.app.engine.announce(t('tts_5min'), 'host', nudgeUrl); this.app.toast(t('nudge5'), { action: t('register'), onAction: () => this.open('ended'), long: true }); }
     if (r <= 0) { this.app.engine.stop(); this.open('ended'); }
@@ -106,7 +108,8 @@ export class Sales {
     if (!this.trial) return;
     const r = this.remaining();
     document.getElementById('trialLeft').textContent = fmtLeft(r);
-    document.getElementById('trialRing').setAttribute('stroke-dashoffset', (50.3 * (1 - r / 3600)).toFixed(1));
+    this.trialTotal = Math.max(this.trialTotal || 0, r, 3600); // 6 h on live servers, 1 h in demo
+    document.getElementById('trialRing').setAttribute('stroke-dashoffset', (50.3 * (1 - r / this.trialTotal)).toFixed(1));
   }
   skipToEnd() { this.demoRemaining = 1; this.nudged.add(15); this.nudged.add(5); this.save(); if (!this.app.engine.playing) this.open('ended'); }
 
