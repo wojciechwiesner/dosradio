@@ -46,18 +46,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The Plus, dedication and share/studio modals use the same tokens.
 
 ### Added
+- **Orbita SOTA upgrade** (`orbita/src/scene.js`, `reactive.js`, `main.js`, `index.frag.html`): the scene reacts to
+  the real Web Audio analyser through a bass/mid/high band follower (auto-gain, attack/release, slew cap so nothing
+  flashes); adaptive quality tiers with device pixel ratio capped at 2 and a frame-time governor (drops bloom, streaks,
+  fluid rate and backdrop blur on slow GPUs); the render loop stops while the tab is hidden; per-category colour grade
+  in the final pass; slower, speed-capped camera and much lighter chromatic aberration. Calm view (`prefers-reduced-motion`
+  or key M, stored in `dosradio.orbita.calm.v1`): still camera, no streaks, pulses or fluid, 30 fps. Readable captions
+  (proportional face, solid backdrop, max 3 lines), a now-playing line, and the Classic core actions in the card:
+  play, station, share with dedication (S), comment (C), Plus (+). Merged on top of the rebrand: the tagline
+  "Ambitnie dla Ciebie" (PL/EN/RU) and the calm-view strings join the 6 h "pełny dostęp" trial wording and the USD
+  prices, and the "zmień wersję" link stays in the HUD. Perf script `scripts/orbita-perf.mjs`; numbers in
+  `docs/ambiradio/orbita-upgrade.md`. Tests: `tests/orbitaReactive.test.ts`, `tests/orbitaCalmScene.test.ts`.
 - **Keyboard shortcuts in Classic** (`src/ui/keyboard.ts`): `Space` play/pause, `←`/`→` previous/next station;
   ignored in form fields, open dialogs and Orbita. Tests: `tests/classicKeyboard.test.ts`.
-
-### Fixed
-- Mobile header (`src/ui/dosradio.css`): the top action buttons wrap instead of pushing the page 140 px wider
-  than a 390 px screen; the tagline now shows on mobile too. The Orbita plan card keeps "/ mies." on one line.
-- The Plus badge had no styles until the Plus modal was first opened.
-- The classic mobile bottom nav's "Orbita" and "Stacje" buttons targeted ids that do not exist
-  (`orbitaViewBtn`, `stationGrid`) and did nothing.
-- The dedication modal now closes on Escape and is announced as a dialog.
-
-### Added
 - **AmbiRadio entry split** (`src/ui/entrySplit.ts`, `entrySplit.css`): on the first visit the root page shows a
   full-viewport choice, Classic (raw, functional) on the left and Orbita (immersive) on the right, each with a static
   poster and a one-line description. Hover (or a first tap on touch screens) expands a half, a click chooses. The
@@ -79,17 +80,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Calm trial indicator and soft register prompt** (`src/ui/trialNotice.ts`): the Classic pill shows hours and
   minutes ("Pełny dostęp jeszcze 5 h 42 min", no ticking seconds); 30 minutes before the end a one-time,
   non-blocking card offers the existing registration. Orbita shows the same 6 h clock and a 30-minute toast.
-
-### Fixed
-- The Classic trial pill was always visible: `.pill { display: inline-flex }` overrode its `hidden` attribute, and on
-  phones the header row then pushed the page to ~570 px wide. The header now wraps on narrow screens and modals sit
-  above the Classic mobile nav.
 - **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`
   (key >= 32 chars) grants a device such as the LUNA salon reception kiosk permanent access, sent as the
   `x-dosradio-device` header or `?device=` query (for `<audio>`). Keyed GETs also get `Access-Control-Allow-Origin: *`
   so a `file://` kiosk can read news JSON. Tests: `server/tests/test_device_keys.py`.
 
 ### Fixed
+- Mobile header (`src/ui/dosradio.css`): the top action buttons wrap instead of pushing the page 140 px wider
+  than a 390 px screen; the tagline now shows on mobile too. The Orbita plan card keeps "/ mies." on one line.
+- The Plus badge had no styles until the Plus modal was first opened.
+- The classic mobile bottom nav's "Orbita" and "Stacje" buttons targeted ids that do not exist
+  (`orbitaViewBtn`, `stationGrid`) and did nothing.
+- The dedication modal now closes on Escape and is announced as a dialog.
+- The Classic trial pill was always visible: `.pill { display: inline-flex }` overrode its `hidden` attribute, and on
+  phones the header row then pushed the page to ~570 px wide. The header now wraps on narrow screens and modals sit
+  above the Classic mobile nav.
 - **Dropped/doubled kick at AmbiRadio DJ joins** (`server/app/mixer.py`): the grid-locked bass swap fired at
   each deck's idealised fitted-grid time, up to ~30 ms off the real kick in opposite directions, so the
   anti-flam ramp smeared both kicks and the join read as a 2-beat gap (0.968 s at 126 bpm). Kicks are now

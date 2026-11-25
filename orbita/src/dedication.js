@@ -186,9 +186,7 @@ export function openDedicationModal(app, currentStationId) {
 }
 
 export async function loadIncomingDedication(app, prefs, dial) {
-  const c = L();
-  const dedBtnTxt = document.querySelector('#dedicateTxt');
-  if (dedBtnTxt) dedBtnTxt.textContent = c.btn;
+  // the HUD share button label comes from i18n (`share`); the dedication is offered inside the share sheet
   const token = new URLSearchParams(location.search).get('d');
   if (!token) return null;
   const ded = await app.api.getDedication(token);

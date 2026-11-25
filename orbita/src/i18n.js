@@ -40,6 +40,8 @@ export function fmtLeft(sec) {
 
 const S = {
 pl: {
+  tagline: 'Ambitnie dla Ciebie', calm: 'Spokojny widok', calmOn: 'Spokojny widok: włączony. Scena stoi, bez błysków.', calmOff: 'Spokojny widok: wyłączony',
+  comment: 'Komentarz', commentHint: 'Dopisz komentarz. Prowadzący przeczyta go na antenie osobie, której wyślesz link.', share: 'Udostępnij', shareHint: 'Udostępnij stację z dedykacją', plusBtn: 'Plus', nowOn: 'Teraz gra', hostedBy: 'prowadzi',
   brand: 'AMBIRADIO', howto: 'Jak to działa', demo: 'Demo', live: 'Na żywo', holdSeek: 'Przytrzymaj = seek',
   enterMeta1: 'Ambitnie dla Ciebie', enterTitle: 'AmbiRadio', enterLead: 'Radio komponowane na żywo, osobno dla każdej stacji. Przeciągnij tarczę, żeby zmienić stację. Księżyce wokół głośnika to tematy wiadomości.',
   enterFree: 'Pierwsze 6 godzin to pełne AmbiRadio z Plus, bez konta: wiadomości, własne źródła, podcasty i pigułki.',
@@ -90,7 +92,7 @@ pl: {
   tuned: 'Nastrojono: {name}, {bpm} BPM',
   classicView: 'Widok klasyczny', groupsTitle: 'Grupy i podgrupy muzyczne', playGroup: 'Graj grupę', playingGroup: 'Gra grupa', autoRamowka: 'Auto-Ramówka 24/7', autoRamowkaHint: 'Stacja i prowadzący dopasowani do pory dnia, serwis co 20 minut',
   infoTitle: 'Jak to działa',
-  info: [['Przeciągnij', 'Obraca tarczę. Stacja na wskazówce gra, między stacjami słychać szum.'], ['Kółko, strzałki', 'Stacja po stacji, z wyczuwalnym zapadkiem.'], ['Przytrzymaj', 'Seek: tarcza przyspiesza, puść, żeby wylądować. Spacja działa tak samo.'], ['Księżyce', 'Tematy wiadomości. Klawisze 1–6 też je przełączają.'], ['Prowadzący', 'Gdy ktoś mówi, z kratki wyłaniają się sylwetki prowadzących, a na dole widać napisy.'], ['Ctrl+K lub /', 'Paleta poleceń.'], ['Ctrl+Z', 'Cofa ostatnią zmianę.']],
+  info: [['Przeciągnij', 'Obraca tarczę. Stacja na wskazówce gra, między stacjami słychać szum.'], ['Kółko, strzałki', 'Stacja po stacji, z wyczuwalnym zapadkiem.'], ['Przytrzymaj', 'Seek: tarcza przyspiesza, puść, żeby wylądować. Spacja działa tak samo.'], ['Księżyce', 'Tematy wiadomości. Klawisze 1–6 też je przełączają.'], ['Prowadzący', 'Gdy ktoś mówi, z kratki wyłaniają się sylwetki prowadzących, a na dole widać napisy.'], ['Ctrl+K lub /', 'Paleta poleceń.'], ['Ctrl+Z', 'Cofa ostatnią zmianę.'], ['P, S, C, +', 'Graj lub pauza, udostępnij z dedykacją, komentarz, Plus.'], ['M', 'Spokojny widok: nieruchoma scena bez błysków. Włącza się sam, gdy system prosi o ograniczenie ruchu.']],
   infoNote: 'Ustawienia, kolejka pigułek i przeczytane wiadomości są wspólne z klasycznym AmbiRadio. Efekt kratki i płynu to własna implementacja technik z eksperymentu AstroDither Roberta Borghesiego.',
   st_loading: 'Łączę z muzyką…', st_playing: 'Gra {name}', st_reconnect: 'Łączę ponownie z muzyką…', st_newsFail: 'Nie udało się załadować nagrań serwisu.', st_filler: 'To wszystkie nowe wiadomości na teraz. Zaraz coś od prowadzącego.', st_stream: 'Strumień nie ruszył. Spróbuj ponownie.',
   liveCaption: 'napisy', demoLive: 'W demo to nie działa. Na ambiradio.com działa po zalogowaniu.', plusOnly: 'Ta funkcja jest w Plus.', showcasePlay: 'Posłuchaj', mineOn: 'Temat „Moje źródła” włączony.',
@@ -98,8 +100,11 @@ pl: {
   tts_welcome: 'Cześć, tu {host}. Witaj w AmbiRadio, twoim radiu osobistym. Za chwilę pierwsze wiadomości, a potem stoicka pigułka.',
   tts_jingle: 'AmbiRadio. Gra to, co chcesz usłyszeć.', tts_5min: 'Zostało pięć minut pełnego dostępu. Załóż konto, a zostanę z tobą na dłużej.',
   tts_chatter: ['Jeśli dopiero zaczynasz dzień, to dobry moment na szklankę wody.', 'Ten numer mógłby grać do końca świata. Ja bym się nie obraził.', 'Mała rada od prowadzącego: jedno zadanie naraz. Reszta poczeka.'],
+
 },
 en: {
+  tagline: 'Ambitious, for you', calm: 'Calm view', calmOn: 'Calm view on: the scene holds still, no flashes.', calmOff: 'Calm view off',
+  comment: 'Comment', commentHint: 'Add a comment. The host reads it on air to the person you send the link to.', share: 'Share', shareHint: 'Share the station with a dedication', plusBtn: 'Plus', nowOn: 'Now playing', hostedBy: 'hosted by',
   brand: 'AMBIRADIO', howto: 'How it works', demo: 'Demo', live: 'Live', holdSeek: 'Hold = seek',
   enterMeta1: 'Ambitiously for you', enterTitle: 'AmbiRadio', enterLead: 'Radio composed live, separately for each station. Drag the dial to change station. The moons around the speaker are the news topics.',
   enterFree: 'Your first 6 hours are the full AmbiRadio with Plus, no account needed: news, your own sources, podcasts and pills.',
@@ -150,7 +155,7 @@ en: {
   tuned: 'Tuned: {name}, {bpm} BPM',
   classicView: 'Classic view', groupsTitle: 'Music groups & stations', playGroup: 'Play group', playingGroup: 'Playing group', autoRamowka: 'Auto-Schedule 24/7', autoRamowkaHint: 'Station and host matched to time of day, news every 20 min',
   infoTitle: 'How it works',
-  info: [['Drag', 'Turns the dial. The station under the needle plays; between stations you hear static.'], ['Wheel, arrows', 'Station by station, with a detent click.'], ['Hold', 'Seek: the dial speeds up, let go to land. Space works too.'], ['Moons', 'News topics. Keys 1–6 toggle them too.'], ['Hosts', 'When someone talks, the hosts’ silhouettes rise from the grid and captions appear below.'], ['Ctrl+K or /', 'Command palette.'], ['Ctrl+Z', 'Undo the last change.']],
+  info: [['Drag', 'Turns the dial. The station under the needle plays; between stations you hear static.'], ['Wheel, arrows', 'Station by station, with a detent click.'], ['Hold', 'Seek: the dial speeds up, let go to land. Space works too.'], ['Moons', 'News topics. Keys 1–6 toggle them too.'], ['Hosts', 'When someone talks, the hosts’ silhouettes rise from the grid and captions appear below.'], ['Ctrl+K or /', 'Command palette.'], ['Ctrl+Z', 'Undo the last change.'], ['P, S, C, +', 'Play or pause, share with a dedication, comment, Plus.'], ['M', 'Calm view: a still scene with no flashes. Turns on by itself when the system asks for reduced motion.']],
   infoNote: 'Settings, the pill queue and aired news are shared with classic AmbiRadio. The grid and fluid effects are an original implementation of techniques seen in Robert Borghesi’s AstroDither experiment.',
   st_loading: 'Connecting to music…', st_playing: 'Playing {name}', st_reconnect: 'Reconnecting to music…', st_newsFail: 'Could not load the news recordings.', st_filler: 'That’s all the new news for now. The host has something for you.', st_stream: 'The stream did not start. Try again.',
   liveCaption: 'captions', demoLive: 'This does not work in the demo. On ambiradio.com it works once you log in.', plusOnly: 'This is a Plus feature.', showcasePlay: 'Listen', mineOn: '“My sources” topic is on.',
@@ -158,8 +163,11 @@ en: {
   tts_welcome: 'Hi, this is {host}. Welcome to AmbiRadio, your personal radio. The first news is coming up, then a stoic pill.',
   tts_jingle: 'AmbiRadio. Playing what you want to hear.', tts_5min: 'Five minutes of full access left. Create an account and I’ll stay with you longer.',
   tts_chatter: ['If your day is just starting, this is a good moment for a glass of water.', 'This track could play until the end of the world. I wouldn’t mind.', 'A small tip from your host: one task at a time. The rest can wait.'],
+
 },
 ru: {
+  tagline: 'Амбициозно для тебя', calm: 'Спокойный вид', calmOn: 'Спокойный вид включён: сцена неподвижна, без вспышек.', calmOff: 'Спокойный вид выключен',
+  comment: 'Комментарий', commentHint: 'Добавь комментарий. Ведущий прочитает его в эфире тому, кому ты отправишь ссылку.', share: 'Поделиться', shareHint: 'Поделиться станцией с посвящением', plusBtn: 'Plus', nowOn: 'Сейчас играет', hostedBy: 'ведёт',
   brand: 'AMBIRADIO', howto: 'Как это работает', demo: 'Демо', live: 'В эфире', holdSeek: 'Удерживай = поиск',
   enterMeta1: 'Амбициозно для тебя', enterTitle: 'AmbiRadio', enterLead: 'Радио, которое сочиняется прямо сейчас, отдельно для каждой станции. Потяни шкалу, чтобы сменить станцию. Луны вокруг динамика это темы новостей.',
   enterFree: 'Первые 6 часов — полный AmbiRadio с Plus без аккаунта: новости, свои источники, подкасты и пилюли.',
@@ -210,7 +218,7 @@ ru: {
   tuned: 'Настроено: {name}, {bpm} BPM',
   classicView: 'Классический вид', groupsTitle: 'Музыкальные группы и станции', playGroup: 'Играть группу', playingGroup: 'Играет группа', autoRamowka: 'Авто-программа 24/7', autoRamowkaHint: 'Станция и ведущий по времени суток, новости каждые 20 мин',
   infoTitle: 'Как это работает',
-  info: [['Тяни', 'Вращает шкалу. Играет станция под стрелкой, между станциями слышен шум.'], ['Колесо, стрелки', 'Станция за станцией, с ощутимым щелчком.'], ['Удерживай', 'Поиск: шкала ускоряется, отпусти, чтобы остановиться. Пробел работает так же.'], ['Луны', 'Темы новостей. Клавиши 1–6 тоже их переключают.'], ['Ведущие', 'Когда кто-то говорит, из сетки появляются силуэты ведущих, а внизу — субтитры.'], ['Ctrl+K или /', 'Палитра команд.'], ['Ctrl+Z', 'Отменить последнее изменение.']],
+  info: [['Тяни', 'Вращает шкалу. Играет станция под стрелкой, между станциями слышен шум.'], ['Колесо, стрелки', 'Станция за станцией, с ощутимым щелчком.'], ['Удерживай', 'Поиск: шкала ускоряется, отпусти, чтобы остановиться. Пробел работает так же.'], ['Луны', 'Темы новостей. Клавиши 1–6 тоже их переключают.'], ['Ведущие', 'Когда кто-то говорит, из сетки появляются силуэты ведущих, а внизу — субтитры.'], ['Ctrl+K или /', 'Палитра команд.'], ['Ctrl+Z', 'Отменить последнее изменение.'], ['P, S, C, +', 'Играть или пауза, поделиться с посвящением, комментарий, Plus.'], ['M', 'Спокойный вид: неподвижная сцена без вспышек. Включается сам, если система просит уменьшить движение.']],
   infoNote: 'Настройки, очередь пилюль и прочитанные новости общие с классическим AmbiRadio. Эффекты сетки и жидкости — собственная реализация приёмов из эксперимента AstroDither Роберта Боргезе.',
   st_loading: 'Подключаю музыку…', st_playing: 'Играет {name}', st_reconnect: 'Переподключаю музыку…', st_newsFail: 'Не удалось загрузить записи новостей.', st_filler: 'Это все свежие новости на сейчас. Сейчас ведущий что-нибудь расскажет.', st_stream: 'Поток не запустился. Попробуй ещё раз.',
   liveCaption: 'субтитры', demoLive: 'В демо это не работает. На ambiradio.com работает после входа.', plusOnly: 'Эта функция есть в Plus.', showcasePlay: 'Слушать', mineOn: 'Тема «Мои источники» включена.',
@@ -218,6 +226,7 @@ ru: {
   tts_welcome: 'Привет, это {host}. Добро пожаловать в AmbiRadio, твоё личное радио. Сейчас первые новости, а потом стоическая пилюля.',
   tts_jingle: 'AmbiRadio. Играет то, что ты хочешь услышать.', tts_5min: 'Осталось пять минут полного доступа. Создай аккаунт, и я останусь с тобой подольше.',
   tts_chatter: ['Если твой день только начинается, самое время выпить стакан воды.', 'Этот трек мог бы играть до конца света. Я бы не возражал.', 'Маленький совет от ведущего: одна задача за раз. Остальное подождёт.'],
+
 },
 };
 
