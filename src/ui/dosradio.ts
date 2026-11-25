@@ -36,6 +36,7 @@ import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from '.
 import { initProgrammeLine } from './pill';
 import { wireClassicDedications } from './dedicationModal';
 import { wireClassicSocialStudio } from './socialCreatorStudio';
+import { classicShortcut, stepStation } from './keyboard';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -850,6 +851,22 @@ function switchView(view: ViewMode): void {
 
 viewClassicBtn.addEventListener('click', () => switchView('classic'));
 viewOrbitaBtn.addEventListener('click', () => switchView('orbita'));
+
+// --- Keyboard: Space = play/pause, ArrowLeft/ArrowRight = previous/next station ----
+const DIALOG_SELECTOR = '.modal.open, #dos-dedicate-overlay, .drplus-overlay, #dos-soc-overlay.open';
+document.addEventListener('keydown', (event) => {
+  const blocked = currentView !== 'classic' || Boolean(document.querySelector(DIALOG_SELECTOR));
+  const action = classicShortcut(event, blocked);
+  if (!action) return;
+  event.preventDefault();
+  if (action === 'toggle') { void togglePlay(); return; }
+  const visibleIds = Array.from(document.querySelectorAll<HTMLElement>('#stations .station')).map((b) => b.dataset.id ?? '');
+  const nextId = stepStation(visibleIds, prefs.station, action === 'next' ? 1 : -1);
+  if (!nextId) return;
+  const station = stationById(nextId);
+  setStatus(`Stacja: ${station.name}`);
+  void chooseStation(station);
+});
 
 window.addEventListener('message', (ev) => {
   const data = ev.data as {

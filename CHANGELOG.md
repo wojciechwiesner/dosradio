@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **AmbiRadio Classic redesign** (`index.html`, `src/ui/dosradio.css`, `src/ui/pill.css`): raw, typographic
+  look on obsidian with one signal-lime accent, Space Grotesk + JetBrains Mono, 8px grid, square edges.
+  Big 88px Play next to the display-size station name; radio actions and share/Plus actions as consistent
+  icon + label rows; stations as a group tab strip plus a dense ruled list with BPM; "Na antenie dziś" as a quiet
+  timeline; programme settings moved into a "Twoja ramówka" section. Every control is at least 44px, has a
+  visible focus ring, there is no layout shift while audio loads, it works at 360px, and motion stops under
+  `prefers-reduced-motion`. Header wordmark "AmbiRadio — Ambitnie dla Ciebie"; title/meta/OG rebranded.
+  Tokens and rationale: `docs/ambiradio/classic-design.md`, screenshots in `docs/ambiradio/shots/ambi-classic-redesign/`.
+- The Plus badge (`src/ui/billing.ts`) now sits in the player's action row (`#plusSlot`) instead of floating.
+  The Plus, dedication and share/studio modals use the same tokens.
+
+### Added
+- **Keyboard shortcuts in Classic** (`src/ui/keyboard.ts`): `Space` play/pause, `←`/`→` previous/next station;
+  ignored in form fields, open dialogs and Orbita. Tests: `tests/classicKeyboard.test.ts`.
+
+### Fixed
+- The Plus badge had no styles until the Plus modal was first opened.
+- The classic mobile bottom nav's "Orbita" and "Stacje" buttons targeted ids that do not exist
+  (`orbitaViewBtn`, `stationGrid`) and did nothing.
+- The dedication modal now closes on Escape and is announced as a dialog.
+
 ### Added
 - **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`
   (key >= 32 chars) grants a device such as the LUNA salon reception kiosk permanent access, sent as the

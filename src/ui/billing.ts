@@ -1,5 +1,5 @@
 /**
- * DOS Radio Plus billing UI: floating "Plus" badge opens a minimal plan modal,
+ * AmbiRadio Plus billing UI: floating "Plus" badge opens a minimal plan modal,
  * plan choice goes through POST /radio-api/billing/checkout and redirects to Stripe.
  * Self-contained by design (own styles, own fetches) — owned by the billing worker.
  */
@@ -17,6 +17,8 @@ interface BillingStatus {
 
 const CLOSE_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+const PLUS_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M12 4v16M4 12h16"/></svg>';
 const CHECK_SVG =
   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="m5 12 5 5 9-10"/></svg>';
 
@@ -36,44 +38,42 @@ const PLAN_FEATURES: Record<string, string[]> = {
 };
 
 const STYLE = `
-.drplus-badge{position:fixed;right:20px;bottom:20px;z-index:60;display:flex;align-items:center;gap:8px;
-  padding:9px 16px;border-radius:999px;border:1px solid var(--line-strong);cursor:pointer;
-  background:rgba(17,18,24,0.85);backdrop-filter:blur(8px);color:var(--text);font:600 13px/1 Inter,-apple-system,sans-serif;
-  letter-spacing:0.2px;transition:border-color 0.15s,transform 0.15s}
-.drplus-badge:hover{border-color:var(--accent);transform:translateY(-1px)}
-.drplus-badge.active{border-color:var(--ok);color:var(--ok)}
-.drplus-badge svg{width:14px;height:14px}
-.drplus-overlay{position:fixed;inset:0;z-index:70;display:grid;place-items:center;padding:20px;
-  background:rgba(5,6,9,0.72);backdrop-filter:blur(8px)}
-.drplus-dialog{width:min(560px,100%);background:var(--bg-2);border:1px solid var(--line-strong);
-  border-radius:18px;padding:26px;animation:drplus-in 0.18s ease-out}
+.drplus-badge{position:fixed;right:16px;bottom:16px;z-index:60;display:inline-flex;align-items:center;gap:8px;
+  min-height:44px;padding:0 16px 0 12px;border:1px solid var(--accent);border-radius:0;cursor:pointer;
+  background:var(--bg);color:var(--accent);font:700 14px/1 var(--font-sans,system-ui,sans-serif);
+  transition:background 0.12s,color 0.12s}
+.drplus-badge.inline{position:static;z-index:auto}
+.drplus-badge:hover{background:var(--accent);color:var(--on-accent)}
+.drplus-badge.active{background:var(--accent);color:var(--on-accent)}
+.drplus-badge svg{width:16px;height:16px}
+.drplus-overlay{position:fixed;inset:0;z-index:70;display:grid;place-items:center;padding:16px;background:rgba(5,5,6,0.82)}
+.drplus-dialog{width:min(600px,100%);max-height:calc(100vh - 32px);overflow-y:auto;background:var(--bg-2);
+  border:1px solid var(--line-strong);border-top:4px solid var(--accent);padding:32px;animation:drplus-in 0.16s ease-out}
 @keyframes drplus-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-.drplus-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:6px}
-.drplus-head h2{margin:0;font-size:22px;letter-spacing:-0.3px}
-.drplus-close{background:none;border:0;color:var(--dim);cursor:pointer;padding:6px;border-radius:8px}
-.drplus-close:hover{color:var(--text);background:var(--panel-hover)}
-.drplus-close svg{width:16px;height:16px;display:block}
-.drplus-status{margin:0 0 18px;color:var(--dim);font-size:13.5px;min-height:18px}
-.drplus-status .ok{color:var(--ok)}
-.drplus-status .warn{color:var(--accent-2)}
-.drplus-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-@media(max-width:540px){.drplus-cards{grid-template-columns:1fr}}
-.drplus-card{border:1px solid var(--line);border-radius:14px;padding:16px;background:var(--panel);
-  display:flex;flex-direction:column;gap:10px;text-align:left}
-.drplus-card:hover{border-color:var(--line-strong);background:var(--panel-hover)}
-.drplus-card b{font-size:15px}
-.drplus-price{font-size:24px;letter-spacing:-0.5px}
-.drplus-price small{font-size:13px;color:var(--dim);font-weight:400}
-.drplus-card ul{margin:0;padding:0;list-style:none;display:grid;gap:7px;flex:1}
-.drplus-card li{display:flex;gap:8px;align-items:flex-start;color:var(--dim);font-size:13px}
-.drplus-card li svg{width:13px;height:13px;color:var(--ok);margin-top:3px}
-.drplus-buy{margin-top:6px;padding:10px;border-radius:10px;border:1px solid var(--line-strong);
-  background:var(--bg);color:var(--text);font:600 13px Inter,sans-serif;cursor:pointer;transition:border-color 0.15s}
-.drplus-buy:hover{border-color:var(--accent)}
-.drplus-buy[disabled]{opacity:0.55;cursor:default}
-.drplus-note{margin:0 0 14px;font-size:13px;color:var(--dim)}
-.drplus-error{margin:14px 0 0;color:#ff9a9a;font-size:13px;min-height:16px}
-.drplus-foot{margin:16px 0 0;font-size:12px;color:var(--faint)}
+@media (prefers-reduced-motion: reduce){.drplus-dialog{animation:none}}
+.drplus-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:8px}
+.drplus-head h2{margin:0;font-size:32px;letter-spacing:-0.03em;line-height:1.1}
+.drplus-close{background:none;border:1px solid transparent;color:var(--dim);cursor:pointer;width:44px;height:44px;display:grid;place-items:center;flex:none}
+.drplus-close:hover{color:var(--text);border-color:var(--line-strong)}
+.drplus-close svg{width:18px;height:18px;display:block}
+.drplus-status{margin:0 0 24px;color:var(--dim);font-size:14px;min-height:1.5em}
+.drplus-status .ok,.drplus-status .warn{color:var(--accent)}
+.drplus-cards{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line)}
+@media(max-width:540px){.drplus-cards{grid-template-columns:1fr}.drplus-dialog{padding:24px}}
+.drplus-card{padding:24px;background:var(--bg-2);display:flex;flex-direction:column;gap:16px;text-align:left}
+.drplus-card b{font-size:20px;letter-spacing:-0.02em}
+.drplus-price{font:700 32px/1 var(--font-mono,monospace);letter-spacing:-0.04em}
+.drplus-price small{font-size:14px;color:var(--dim);font-weight:400;letter-spacing:0}
+.drplus-card ul{margin:0;padding:0;list-style:none;display:grid;gap:8px;flex:1}
+.drplus-card li{display:flex;gap:8px;align-items:flex-start;color:var(--dim);font-size:14px}
+.drplus-card li svg{width:14px;height:14px;color:var(--accent);margin-top:4px;flex:none}
+.drplus-buy{min-height:44px;padding:0 16px;border:1px solid var(--accent);border-radius:0;
+  background:var(--accent);color:var(--on-accent);font:700 14px var(--font-sans,sans-serif);cursor:pointer}
+.drplus-buy:hover{background:var(--text);border-color:var(--text)}
+.drplus-buy[disabled]{opacity:0.4;cursor:default}
+.drplus-note{margin:0 0 16px;font-size:14px;color:var(--dim)}
+.drplus-error{margin:16px 0 0;color:var(--danger,#ff8a7a);font-size:14px;min-height:1.5em}
+.drplus-foot{margin:16px 0 0;font:12px/1.5 var(--font-mono,monospace);color:var(--faint)}
 `;
 
 let overlay: HTMLElement | null = null;
@@ -212,11 +212,11 @@ function openModal(): void {
   dialog.className = 'drplus-dialog';
   dialog.setAttribute('role', 'dialog');
   dialog.setAttribute('aria-modal', 'true');
-  dialog.setAttribute('aria-label', 'DOS Radio Plus');
+  dialog.setAttribute('aria-label', 'AmbiRadio Plus');
   const head = document.createElement('div');
   head.className = 'drplus-head';
   const title = document.createElement('h2');
-  title.textContent = 'DOS Radio Plus';
+  title.textContent = 'AmbiRadio Plus';
   const close = document.createElement('button');
   close.className = 'drplus-close';
   close.type = 'button';
@@ -244,14 +244,18 @@ function openModal(): void {
 
 function mountBadge(): void {
   if (document.getElementById('drplus-badge')) return;
+  ensureStyles(); // the badge needs its styles before the modal is ever opened
   const badge = document.createElement('button');
   badge.id = 'drplus-badge';
   badge.className = 'drplus-badge';
   badge.type = 'button';
-  badge.innerHTML = CHECK_SVG; // static SVG constant
+  badge.innerHTML = PLUS_SVG; // static SVG constant
   badge.append(document.createTextNode('Plus'));
   badge.addEventListener('click', openModal);
-  document.body.append(badge);
+  // The classic page reserves a slot in its action row; anywhere else the badge floats bottom-right.
+  const slot = document.getElementById('plusSlot');
+  if (slot) badge.classList.add('inline');
+  (slot ?? document.body).append(badge);
   void loadStatus().then((status) => {
     if (status?.plus) badge.classList.add('active');
   });
