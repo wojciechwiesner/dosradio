@@ -32,7 +32,9 @@ export function intervalText(n) {
 }
 export const fmtClock = d => d.toLocaleTimeString(LOCALE[lang], { hour: '2-digit', minute: '2-digit' });
 export function fmtLeft(sec) {
-  sec = Math.max(0, Math.round(sec)); const m = Math.floor(sec / 60), s = sec % 60;
+  sec = Math.max(0, Math.round(sec));
+  if (sec >= 3600) { const h = Math.floor(sec / 3600), m = Math.ceil((sec % 3600) / 60); return m === 60 ? `${h + 1} h` : m ? `${h} h ${m} min` : `${h} h`; } // the 6 h trial: calm, no ticking seconds
+  const m = Math.floor(sec / 60), s = sec % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
@@ -40,9 +42,9 @@ const S = {
 pl: {
   brand: 'DOS RADIO', howto: 'Jak to działa', demo: 'Demo', live: 'Na żywo', holdSeek: 'Przytrzymaj = seek',
   enterMeta1: 'Pierwsze radio osobiste', enterTitle: 'DOS Radio', enterLead: 'Radio komponowane na żywo, osobno dla każdej stacji. Przeciągnij tarczę, żeby zmienić stację. Księżyce wokół głośnika to tematy wiadomości.',
-  enterFree: 'Pierwsza godzina za darmo, bez konta. W niej: wiadomości, stoicka pigułka i jeden twój podcast.',
+  enterFree: 'Pierwsze 6 godzin to pełne AmbiRadio z Plus, bez konta: wiadomości, własne źródła, podcasty i pigułki.',
   enterSound: 'Wejdź z dźwiękiem', enterMute: 'Bez dźwięku', enterDemo: 'Tryb demo: muzyka z przeglądarki, prowadzący jako napisy', enterLive: 'Połączone z DOS Radio',
-  trialLeft: 'Darmowa godzina', plusActive: 'Plus aktywny', freeEnded: 'Darmowa godzina minęła',
+  trialLeft: 'Pełny dostęp', changeVersion: 'zmień wersję', nudge30: 'Za 30 minut kończy się pełny dostęp. Załóż darmowe konto AmbiRadio, zachowasz swoje ustawienia i dostaniesz 30 dni Plus.', plusActive: 'Plus aktywny', freeEnded: 'Darmowa godzina minęła',
   onAir: 'Na antenie', offAir: 'Poza anteną', music: 'Muzyka', newsLive: 'Wiadomości na żywo', hostLive: 'Prowadzący na żywo', podcastLive: 'Podcast', pillLive: 'Pigułka', musicOnly: 'Tylko muzyka', jingle: 'DOS Radio',
   nextIn: 'Za {t}: {title}', nextSoon: 'Za chwilę: {title}', nextBreak: 'Następne wejście {time}', breakOff: 'wejścia wyłączone',
   schedule: 'Ramówka', schNews: 'Wiadomości', schHourly: 'Serwis godzinny i pogoda', schPill: 'Pigułka: {title}', schHost: 'Prowadzący między utworami', schEmpty: 'Włącz Graj, żeby zobaczyć ramówkę.',
@@ -80,7 +82,7 @@ pl: {
   register: 'Załóż konto i odbierz 30 dni Plus', haveAccount: 'Mam konto — zaloguj się', login: 'Zaloguj się', logout: 'Wyloguj', noAccount: 'Nie mam konta — załóż je',
   emailLbl: 'E-mail', pwLbl: 'Hasło (min. 8 znaków)', pwShort: 'Hasło musi mieć co najmniej 8 znaków.', checkMail: 'Sprawdź skrzynkę {e} (też spam). Kliknij link w mailu, żeby aktywować konto.', loggedIn: 'Gotowe. Słuchasz bez limitu.', demoAuth: 'W demo konto się nie zakłada. Na dosradio.theones.io ten formularz działa naprawdę.', loggedOut: 'Wylogowano.',
   continueFree: 'Słuchaj dalej za darmo', later: 'Może później',
-  nudge15: 'Zostało 15 minut darmowej godziny. Wygeneruj jeszcze swój podcast, jest za darmo.', nudge5: 'Zostało 5 minut. Załóż konto, żeby radio grało dalej, z 30 dniami Plus gratis.', afterPod: 'Chcesz taki podcast codziennie rano? To jest w Plus.',
+  nudge15: 'Zostało 15 minut pełnego dostępu. Wygeneruj jeszcze swój podcast, jest za darmo.', nudge5: 'Zostało 5 minut. Załóż konto, żeby radio grało dalej, z 30 dniami Plus gratis.', afterPod: 'Chcesz taki podcast codziennie rano? To jest w Plus.',
   demoSkip: 'Demo: pokaż koniec godziny',
   palettePh: 'Szukaj stacji albo polecenia…', palFoot: 'Strzałki wybór · Enter wykonaj · Esc zamknij', nothing: 'Nic nie pasuje',
   cmdTopicOn: 'Włącz temat: {t}', cmdTopicOff: 'Wyłącz temat: {t}', cmdRandom: 'Losowa stacja', cmdUndo: 'Cofnij ostatnią zmianę', cmdOpen: 'Otwórz klasyczne DOS Radio', cmdPodcast: 'Wygeneruj podcast', cmdLang: 'Język: {l}',
@@ -94,15 +96,15 @@ pl: {
   liveCaption: 'napisy', demoLive: 'W demo to nie działa. Na dosradio.theones.io działa po zalogowaniu.', plusOnly: 'Ta funkcja jest w Plus.', showcasePlay: 'Posłuchaj', mineOn: 'Temat „Moje źródła” włączony.',
   tts_intro: 'Jest {time}. DOS Radio, wiadomości.', tts_hourly: 'Jest {time}. Pełny serwis DOS Radio.', tts_weather: 'Pogoda: dziś pochmurno, około dwunastu stopni, wieczorem przejaśnienia.', tts_teaser: 'Za chwilę: {h}.',
   tts_welcome: 'Cześć, tu {host}. Witaj w DOS Radio, twoim radiu osobistym. Za chwilę pierwsze wiadomości, a potem stoicka pigułka.',
-  tts_jingle: 'DOS Radio. Gra to, co chcesz usłyszeć.', tts_5min: 'Zostało pięć minut darmowej godziny. Załóż konto, a zostanę z tobą na dłużej.',
+  tts_jingle: 'DOS Radio. Gra to, co chcesz usłyszeć.', tts_5min: 'Zostało pięć minut pełnego dostępu. Załóż konto, a zostanę z tobą na dłużej.',
   tts_chatter: ['Jeśli dopiero zaczynasz dzień, to dobry moment na szklankę wody.', 'Ten numer mógłby grać do końca świata. Ja bym się nie obraził.', 'Mała rada od prowadzącego: jedno zadanie naraz. Reszta poczeka.'],
 },
 en: {
   brand: 'DOS RADIO', howto: 'How it works', demo: 'Demo', live: 'Live', holdSeek: 'Hold = seek',
   enterMeta1: 'The first personal radio', enterTitle: 'DOS Radio', enterLead: 'Radio composed live, separately for each station. Drag the dial to change station. The moons around the speaker are the news topics.',
-  enterFree: 'Your first hour is free, no account needed. It includes news, a stoic pill and one podcast of your own.',
+  enterFree: 'Your first 6 hours are the full AmbiRadio with Plus, no account needed: news, your own sources, podcasts and pills.',
   enterSound: 'Enter with sound', enterMute: 'Without sound', enterDemo: 'Demo mode: music from your browser, hosts as captions', enterLive: 'Connected to DOS Radio',
-  trialLeft: 'Free hour', plusActive: 'Plus active', freeEnded: 'Your free hour is over',
+  trialLeft: 'Full access', changeVersion: 'change version', nudge30: 'Full access ends in 30 minutes. Create a free AmbiRadio account to keep your settings and get 30 days of Plus.', plusActive: 'Plus active', freeEnded: 'Your free hour is over',
   onAir: 'On air', offAir: 'Off air', music: 'Music', newsLive: 'News live', hostLive: 'Host live', podcastLive: 'Podcast', pillLive: 'Pill', musicOnly: 'Music only', jingle: 'DOS Radio',
   nextIn: 'In {t}: {title}', nextSoon: 'Coming up: {title}', nextBreak: 'Next break {time}', breakOff: 'breaks off',
   schedule: 'Schedule', schNews: 'News', schHourly: 'Hourly bulletin and weather', schPill: 'Pill: {title}', schHost: 'Host between tracks', schEmpty: 'Press Play to see the schedule.',
@@ -140,7 +142,7 @@ en: {
   register: 'Create account, get 30 days of Plus', haveAccount: 'I have an account — log in', login: 'Log in', logout: 'Log out', noAccount: 'No account yet — create one',
   emailLbl: 'Email', pwLbl: 'Password (min. 8 characters)', pwShort: 'The password needs at least 8 characters.', checkMail: 'Check {e} (and spam). Click the link in the email to activate your account.', loggedIn: 'Done. You’re listening without limits.', demoAuth: 'The demo does not create accounts. On dosradio.theones.io this form works for real.', loggedOut: 'Logged out.',
   continueFree: 'Keep listening for free', later: 'Maybe later',
-  nudge15: '15 minutes of your free hour left. Generate your podcast, it’s free.', nudge5: '5 minutes left. Create an account to keep the radio playing, with 30 days of Plus free.', afterPod: 'Want a podcast like this every morning? That’s Plus.',
+  nudge15: '15 minutes of full access left. Generate your podcast, it’s free.', nudge5: '5 minutes left. Create an account to keep the radio playing, with 30 days of Plus free.', afterPod: 'Want a podcast like this every morning? That’s Plus.',
   demoSkip: 'Demo: show the end of the hour',
   palettePh: 'Search stations or commands…', palFoot: 'Arrows select · Enter run · Esc close', nothing: 'No matches',
   cmdTopicOn: 'Turn on topic: {t}', cmdTopicOff: 'Turn off topic: {t}', cmdRandom: 'Random station', cmdUndo: 'Undo last change', cmdOpen: 'Open classic DOS Radio', cmdPodcast: 'Generate podcast', cmdLang: 'Language: {l}',
@@ -154,15 +156,15 @@ en: {
   liveCaption: 'captions', demoLive: 'This does not work in the demo. On dosradio.theones.io it works once you log in.', plusOnly: 'This is a Plus feature.', showcasePlay: 'Listen', mineOn: '“My sources” topic is on.',
   tts_intro: 'It’s {time}. DOS Radio news.', tts_hourly: 'It’s {time}. The full DOS Radio bulletin.', tts_weather: 'Weather: cloudy today, around twelve degrees, clearing in the evening.', tts_teaser: 'Coming up: {h}.',
   tts_welcome: 'Hi, this is {host}. Welcome to DOS Radio, your personal radio. The first news is coming up, then a stoic pill.',
-  tts_jingle: 'DOS Radio. Playing what you want to hear.', tts_5min: 'Five minutes of your free hour left. Create an account and I’ll stay with you longer.',
+  tts_jingle: 'DOS Radio. Playing what you want to hear.', tts_5min: 'Five minutes of full access left. Create an account and I’ll stay with you longer.',
   tts_chatter: ['If your day is just starting, this is a good moment for a glass of water.', 'This track could play until the end of the world. I wouldn’t mind.', 'A small tip from your host: one task at a time. The rest can wait.'],
 },
 ru: {
   brand: 'DOS RADIO', howto: 'Как это работает', demo: 'Демо', live: 'В эфире', holdSeek: 'Удерживай = поиск',
   enterMeta1: 'Первое личное радио', enterTitle: 'DOS Radio', enterLead: 'Радио, которое сочиняется прямо сейчас, отдельно для каждой станции. Потяни шкалу, чтобы сменить станцию. Луны вокруг динамика это темы новостей.',
-  enterFree: 'Первый час бесплатно и без аккаунта. В нём новости, стоическая пилюля и один твой подкаст.',
+  enterFree: 'Первые 6 часов — полный AmbiRadio с Plus без аккаунта: новости, свои источники, подкасты и пилюли.',
   enterSound: 'Войти со звуком', enterMute: 'Без звука', enterDemo: 'Демо-режим: музыка из браузера, ведущие в виде субтитров', enterLive: 'Подключено к DOS Radio',
-  trialLeft: 'Бесплатный час', plusActive: 'Plus активен', freeEnded: 'Бесплатный час закончился',
+  trialLeft: 'Полный доступ', changeVersion: 'сменить версию', nudge30: 'Полный доступ закончится через 30 минут. Создай бесплатный аккаунт AmbiRadio, сохрани настройки и получи 30 дней Plus.', plusActive: 'Plus активен', freeEnded: 'Бесплатный час закончился',
   onAir: 'В эфире', offAir: 'Не в эфире', music: 'Музыка', newsLive: 'Новости в эфире', hostLive: 'Ведущий в эфире', podcastLive: 'Подкаст', pillLive: 'Пилюля', musicOnly: 'Только музыка', jingle: 'DOS Radio',
   nextIn: 'Через {t}: {title}', nextSoon: 'Сейчас будет: {title}', nextBreak: 'Следующий выход {time}', breakOff: 'выходы выключены',
   schedule: 'Программа', schNews: 'Новости', schHourly: 'Часовой выпуск и погода', schPill: 'Пилюля: {title}', schHost: 'Ведущий между треками', schEmpty: 'Нажми «Играть», чтобы увидеть программу.',
@@ -200,7 +202,7 @@ ru: {
   register: 'Создать аккаунт и получить 30 дней Plus', haveAccount: 'Уже есть аккаунт — войти', login: 'Войти', logout: 'Выйти', noAccount: 'Нет аккаунта — создать',
   emailLbl: 'E-mail', pwLbl: 'Пароль (минимум 8 символов)', pwShort: 'Пароль должен быть не короче 8 символов.', checkMail: 'Проверь почту {e} (и спам). Нажми на ссылку в письме, чтобы активировать аккаунт.', loggedIn: 'Готово. Слушаешь без ограничений.', demoAuth: 'В демо аккаунт не создаётся. На dosradio.theones.io эта форма работает по-настоящему.', loggedOut: 'Ты вышел из аккаунта.',
   continueFree: 'Слушать дальше бесплатно', later: 'Может, позже',
-  nudge15: 'Осталось 15 минут бесплатного часа. Создай свой подкаст, это бесплатно.', nudge5: 'Осталось 5 минут. Создай аккаунт, чтобы радио играло дальше, и получи 30 дней Plus бесплатно.', afterPod: 'Хочешь такой подкаст каждое утро? Это есть в Plus.',
+  nudge15: 'Осталось 15 минут полного доступа. Создай свой подкаст, это бесплатно.', nudge5: 'Осталось 5 минут. Создай аккаунт, чтобы радио играло дальше, и получи 30 дней Plus бесплатно.', afterPod: 'Хочешь такой подкаст каждое утро? Это есть в Plus.',
   demoSkip: 'Демо: показать конец часа',
   palettePh: 'Найти станцию или команду…', palFoot: 'Стрелки выбор · Enter выполнить · Esc закрыть', nothing: 'Ничего не найдено',
   cmdTopicOn: 'Включить тему: {t}', cmdTopicOff: 'Выключить тему: {t}', cmdRandom: 'Случайная станция', cmdUndo: 'Отменить последнее изменение', cmdOpen: 'Открыть классическое DOS Radio', cmdPodcast: 'Создать подкаст', cmdLang: 'Язык: {l}',
@@ -214,7 +216,7 @@ ru: {
   liveCaption: 'субтитры', demoLive: 'В демо это не работает. На dosradio.theones.io работает после входа.', plusOnly: 'Эта функция есть в Plus.', showcasePlay: 'Слушать', mineOn: 'Тема «Мои источники» включена.',
   tts_intro: 'Сейчас {time}. Новости DOS Radio.', tts_hourly: 'Сейчас {time}. Полный выпуск DOS Radio.', tts_weather: 'Погода: сегодня облачно, около двенадцати градусов, к вечеру прояснения.', tts_teaser: 'Сейчас будет: {h}.',
   tts_welcome: 'Привет, это {host}. Добро пожаловать в DOS Radio, твоё личное радио. Сейчас первые новости, а потом стоическая пилюля.',
-  tts_jingle: 'DOS Radio. Играет то, что ты хочешь услышать.', tts_5min: 'Осталось пять минут бесплатного часа. Создай аккаунт, и я останусь с тобой подольше.',
+  tts_jingle: 'DOS Radio. Играет то, что ты хочешь услышать.', tts_5min: 'Осталось пять минут полного доступа. Создай аккаунт, и я останусь с тобой подольше.',
   tts_chatter: ['Если твой день только начинается, самое время выпить стакан воды.', 'Этот трек мог бы играть до конца света. Я бы не возражал.', 'Маленький совет от ведущего: одна задача за раз. Остальное подождёт.'],
 },
 };

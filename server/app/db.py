@@ -37,6 +37,11 @@ CREATE TABLE IF NOT EXISTS trials (
     key TEXT PRIMARY KEY,          -- 'ip:<hash>' or 'anon:<id>'
     started_at REAL NOT NULL
 );
+CREATE TABLE IF NOT EXISTS trial_owners (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,  -- Plus data of a trial listener is stored under -id
+    key TEXT NOT NULL UNIQUE,              -- the trial key ('anon:<id>' or 'ip:<hash>')
+    created_at REAL NOT NULL
+);
 CREATE TABLE IF NOT EXISTS user_pills (
     user_id INTEGER NOT NULL,
     video_id TEXT NOT NULL,
@@ -259,6 +264,33 @@ class Database:
         with self.connect() as conn:
             row = conn.execute(f"SELECT MIN(started_at) FROM trials WHERE key IN ({placeholders})", keys).fetchone()
             return float(row[0]) if row and row[0] is not None else None
+
+    def trial_owner_id(self, key: str, create: bool = True) -> int | None:
+        """Owner id for Plus data of an anonymous trial listener: always negative, so it never
+        collides with a real users.id. None when `create` is False and the key has no owner yet."""
+        with self.connect() as conn:
+            row = conn.execute("SELECT id FROM trial_owners WHERE key = ?", (key,)).fetchone()
+            if row is None:
+                if not create:
+                    return None
+                cursor = conn.execute("INSERT INTO trial_owners (key, created_at) VALUES (?, ?)", (key, time.time()))
+                return -int(cursor.lastrowid or 0)
+            return -int(row["id"])
+
+    def adopt_trial_data(self, owner_id: int, user_id: int) -> None:
+        """Move what a listener set up during the trial (sources, podcasts, pills) onto their new account."""
+        if owner_id >= 0 or user_id <= 0:
+            return
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE OR IGNORE news_preferences SET user_id = ? WHERE user_id = ? "
+                "AND NOT EXISTS (SELECT 1 FROM news_preferences WHERE user_id = ?)",
+                (user_id, owner_id, user_id),
+            )
+            conn.execute("UPDATE OR IGNORE user_podcasts SET user_id = ? WHERE user_id = ?", (user_id, owner_id))
+            conn.execute("UPDATE OR IGNORE user_pills SET user_id = ? WHERE user_id = ?", (user_id, owner_id))
+            for table in ("news_preferences", "user_podcasts", "user_pills"):
+                conn.execute(f"DELETE FROM {table} WHERE user_id = ?", (owner_id,))
 
     def start_trial(self, keys: list[str], started_at: float) -> None:
         with self.connect() as conn:

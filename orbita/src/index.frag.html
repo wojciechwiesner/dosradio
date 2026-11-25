@@ -69,6 +69,7 @@ a { color: inherit; }
 .brand { font-weight: 700; letter-spacing: .08em; }
 .hud-link { background: none; border: 0; padding: 0; font-weight: 700; text-transform: uppercase; }
 .hud-link:hover, .lang button:hover { color: var(--accent); }
+.hud-link.change-version { font-weight: 400; text-transform: none; text-decoration: underline; text-underline-offset: 3px; opacity: .75; }
 .lang { display: flex; border: 1px solid var(--line); }
 .lang button { background: none; border: 0; padding: 2px 6px; font-size: 10px; color: var(--ink-dim); }
 .lang button[aria-pressed="true"] { background: var(--ink); color: var(--bg); font-weight: 700; }
@@ -269,6 +270,9 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
   .hud-br .hold-txt, .hud-tr .freq-top, .hud-tl .howto-wrap { display: none; }
   .hud { gap: 5px; font-size: 10px; }
   #classicViewBtn { height: 24px; padding: 0 7px; font-size: 9px; }
+  /* the top HUD is full on phones: "zmień wersję" sits in the free space under the filter bar */
+  .hud-tl { z-index: 9; } /* lets the fixed link below sit above the thumb dial (8) */
+  #changeVersionBtn { position: fixed; top: calc(132px + env(safe-area-inset-top, 0px)); right: 16px; font-size: 10px; }
   .lang button { padding: 2px 4px; font-size: 9px; }
   .stats { grid-template-columns: 1fr 1fr; }
   .plans { grid-template-columns: 1fr; }
@@ -279,7 +283,7 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 <div id="stage"><canvas id="gl"></canvas><div id="labels"></div></div>
 
 <header class="hud hud-tl">
-  <span class="brand">DOS RADIO</span><span class="sep howto-wrap"></span><button id="infoBtn" class="hud-link howto-wrap" type="button" data-i18n="howto"></button>
+  <span class="brand">AMBIRADIO</span><span class="sep howto-wrap"></span><button id="infoBtn" class="hud-link howto-wrap" type="button" data-i18n="howto"></button><button id="changeVersionBtn" class="hud-link change-version" type="button" data-i18n="changeVersion"></button>
   <div class="lang" role="group" aria-label="Language"><button type="button" data-lang="pl">PL</button><button type="button" data-lang="en">EN</button><button type="button" data-lang="ru">RU</button></div>
 </header>
 <div class="hud hud-tr">

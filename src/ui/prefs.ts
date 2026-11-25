@@ -50,6 +50,8 @@ export interface OnboardingChoice {
   categories: NewsCategory[];
   interval: BreakInterval;
   dayTopic?: NewsCategory | null;
+  /** Station of the host picked in the start wizard; undefined keeps the current station. */
+  station?: string;
 }
 
 export type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
@@ -148,8 +150,13 @@ export function savePrefs(storage: StorageLike, prefs: Prefs): void {
 export function applyOnboardingChoice(prefs: Prefs, choice: OnboardingChoice): Prefs {
   const newsEnabled = choice.categories.length > 0;
   const categories = newsEnabled ? sanitizeCategories(choice.categories) : prefs.categories;
+  const station = choice.station ? stationById(choice.station).id : prefs.station;
+  const stationChanged = station !== prefs.station;
   return {
     ...prefs,
+    station,
+    blend: stationChanged ? null : prefs.blend,
+    playGroup: stationChanged ? null : prefs.playGroup,
     hostMode: choice.hostMode,
     categories,
     dayTopic: sanitizeDayTopic(newsEnabled ? choice.dayTopic : prefs.dayTopic, categories),

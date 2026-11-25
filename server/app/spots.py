@@ -142,7 +142,7 @@ class SpotService:
         return list(SPOTS_CATALOG)
 
     def pick_for_access(self, access: Access, station_id: str = "dos-groove") -> dict[str, Any]:
-        if access.registered and access.plus:
+        if access.plus:  # subscribers and the 6 h full-experience trial hear no spots
             return {"skip": True, "tier": "plus", "spot": None}
         tier = "free" if access.registered else "guest"
         pool = [s for s in SPOTS_CATALOG if s["tier"] == tier]

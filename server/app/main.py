@@ -430,16 +430,15 @@ async def personal_group(request: Request) -> dict:
     group = {"category": PERSONAL_CATEGORY, "label": "Moje źródła", "fetched_at": time.time(),
              "edition": None, "error": None, "stories": []}
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
-    current = access.resolve(request.cookies, ip)
-    user = db.find_user_by_email(current.email or "") if current.registered else None
-    if user is None or not current.plus:
-        group["error"] = "Własne źródła są w DOS Radio Plus."
+    owner_id = access.plus_owner_id(request.cookies, ip)  # account or running trial
+    if owner_id is None:
+        group["error"] = "Własne źródła są w AmbiRadio Plus."
         return group
-    prefs = db.get_news_preferences(int(user["id"])) or {}
+    prefs = db.get_news_preferences(owner_id) or {}
     if not prefs.get("rss_feeds") and not prefs.get("keywords"):
         group["error"] = "Dodaj kanał RSS w panelu Plus."
         return group
-    is_personal, stories = await personal.digest(int(user["id"]), prefs)
+    is_personal, stories = await personal.digest(owner_id, prefs)
     if not is_personal:
         group["error"] = "Twoje kanały teraz nie odpowiadają."
         return group
