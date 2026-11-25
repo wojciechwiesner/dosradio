@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **"Who is online" stats were wrong** (`server/app/auto_ramowka.py`, `src/ui/dosradio.ts`, `orbita/src/main.js`):
+  both AmbiRadio frontends sent `station`/`view`/`auto_ramowka`, the backend read `station_id`/`view_mode`/`ramowka`
+  and silently dropped the rest, so every listener showed as `dos-groove` / `classic`, and listeners behind one NAT
+  collapsed into one IP row. `POST /radio-api/presence` now maps the old names (old tabs keep working), then rejects
+  unknown fields (`extra="forbid"`); `client_id` (shared `dosradio.client_id.v1` key, now also sent by Orbita) is the
+  actor before cookies and IP. Session cookies are hashed before they reach the admin-visible table, and the
+  listener's email/user id come from the session, not from the page. Heartbeats pause while the tab is hidden and
+  send one beat when it becomes visible, and the first beat goes out when playback starts.
+  Tests: `server/tests/test_presence_shapes.py`.
+- **Shared dedication did not play for recipients whose free hour was over** (`src/ui/playbackGate.ts`,
+  `src/ui/dosradio.ts`, `server/app/auth.py`, `server/app/dedications.py`, `server/app/main.py`): Classic opened the
+  register modal before the pending greeting could play, and the music stream answered 402. Classic now plays the
+  greeting and the music under it, then shows the soft register prompt 60 s after the greeting ends.
+  `GET /radio-api/dedications/{token}` sets a signed `dr_ded` pass cookie (10 min from the first open of that link
+  from that address, never extended) that `require_access` accepts. Tests: `tests/playbackGate.test.ts`,
+  `server/tests/test_dedication_pass.py`; checked end to end in Chromium (greeting AudioBuffer starts, AudioContext
+  time advances, no auth modal).
+
+### Changed
+- **Play starts at once** (Classic and Orbita): the first Play no longer waits for the onboarding wizard. The
+  wizard opens next to the playing radio with default settings, and its answers apply live. A calm line under
+  the player says "Muzyka ruszy za kilka sekund — generuję pierwsze nuty. Prowadzący może już mówić." (Orbita:
+  PL/EN/RU) until the music bed is actually playing (`onMusicAudible` engine event). Both pages resume the
+  AudioContext synchronously in the click, before any network await, for iOS.
+- `@types/node` added to devDependencies: `tsconfig.json` references it, and `npm run build` failed on a clean install.
+
 ### Added
 - **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`
   (key >= 32 chars) grants a device such as the LUNA salon reception kiosk permanent access, sent as the

@@ -19,7 +19,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocket
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
-from .auth import AccessService, build_router, client_ip
+from .auth import DEDICATION_PASS_COOKIE, AccessService, build_router, client_ip
 from .config import load_settings
 from .db import Database
 from .gemini_client import build_gemini_client
@@ -159,6 +159,7 @@ app.include_router(
         speak=gemini.speak,
         audio_dir=static_audio_dir,
         db_path=settings.data_dir / "dosradio.db",
+        access=access,
         station_lookup=lambda sid: next(
             (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
             ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
@@ -228,6 +229,8 @@ def require_access(request: Request) -> None:
     if access.device_for_key(device_key):
         return
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
+    if access.dedication_pass_valid(request.cookies.get(DEDICATION_PASS_COOKIE)):
+        return
     if not access.resolve(request.cookies, ip).allowed:
         raise HTTPException(402, "Darmowa godzina minęła. Załóż konto i odbierz 30 dni Plus za darmo.")
 

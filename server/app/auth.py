@@ -23,6 +23,10 @@ WELCOME_PLUS_DAYS = 30
 
 SESSION_COOKIE = "dr_session"
 ANON_COOKIE = "dr_anon"
+# A recipient opening a shared dedication link may hear the greeting and the music under it even after
+# their own free hour is used up: a short, signed, non-renewable pass scoped to that link and address.
+DEDICATION_PASS_COOKIE = "dr_ded"
+DEDICATION_PASS_SECONDS = 10 * 60
 EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
@@ -86,6 +90,8 @@ class AccessService:
         self.on_register: Any = None
         # Shared devices (e.g. a salon reception PC) with permanent access: key -> device name.
         self.device_keys = device_keys or {}
+        # sha256(token|ip) -> first time the dedication link was opened from that address.
+        self._ded_grants: dict[str, float] = {}
 
     def device_for_key(self, key: str | None) -> str | None:
         """Name of the device owning `key`, compared in constant time; None when unknown."""
@@ -95,6 +101,38 @@ class AccessService:
             if hmac.compare_digest(known_key.encode(), key.encode()):
                 return device
         return None
+
+    def _ded_sig(self, payload: str) -> str:
+        return hmac.new(self.secret.encode(), f"ded|{payload}".encode(), hashlib.sha256).hexdigest()[:32]
+
+    def grant_dedication_pass(self, token: str, ip: str, now: float | None = None) -> tuple[str, int] | None:
+        """Cookie value and max-age for a dedication pass; None once this link's window from this address is over.
+
+        The window starts at the first open and is never extended, so re-opening the link cannot farm music.
+        """
+        now = now or time.time()
+        grants = self._ded_grants
+        if len(grants) > 5000:
+            for key in [k for k, t in grants.items() if now - t > 86400]:
+                del grants[key]
+        key = hashlib.sha256(f"{token}|{ip}".encode()).hexdigest()
+        first = grants.setdefault(key, now)
+        expires = int(first + DEDICATION_PASS_SECONDS)
+        if expires <= now:
+            return None
+        payload = f"{token}.{expires}"
+        return f"{payload}.{self._ded_sig(payload)}", expires - int(now)
+
+    def dedication_pass_valid(self, value: str | None, now: float | None = None) -> bool:
+        if not value or value.count(".") != 2:
+            return False
+        token, expires, sig = value.split(".")
+        if not hmac.compare_digest(sig, self._ded_sig(f"{token}.{expires}")):
+            return False
+        try:
+            return float(expires) > (now or time.time())
+        except ValueError:
+            return False
 
     def _trial_keys(self, ip: str, anon_id: str | None) -> list[str]:
         ip_key = "ip:" + hmac.new(self.secret.encode(), ip.encode(), hashlib.sha256).hexdigest()[:32]

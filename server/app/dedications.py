@@ -10,11 +10,11 @@ import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
-from .auth import client_ip
+from .auth import DEDICATION_PASS_COOKIE, AccessService, client_ip
 from .hosts import Host, host_for
 
 logger = logging.getLogger("dosradio.dedications")
@@ -204,6 +204,7 @@ def build_dedications_router(
     audio_dir: Path,
     db_path: Path,
     station_lookup: StationLookup,
+    access: AccessService | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/radio-api")
     store = DedicationStore(db_path)
@@ -282,12 +283,24 @@ def build_dedications_router(
         return created
 
     @router.get("/dedications/{token}")
-    async def get_dedication(token: str) -> dict[str, Any]:
+    async def get_dedication(token: str, request: Request, response: Response) -> dict[str, Any]:
         if not token.isalnum() or len(token) > 24:
             raise HTTPException(404, "Nie znaleziono dedykacji")
         row = store.get(token)
         if not row:
             raise HTTPException(404, "Nie znaleziono dedykacji")
+        if access is not None:
+            ip = client_ip(
+                {k.lower(): v for k, v in request.headers.items()},
+                request.client.host if request.client else None,
+            )
+            granted = access.grant_dedication_pass(token, ip)
+            if granted:
+                value, max_age = granted
+                response.set_cookie(
+                    DEDICATION_PASS_COOKIE, value, max_age=max_age,
+                    httponly=True, secure=True, samesite="lax", path="/",
+                )
         return row
 
     @router.get("/dedications/{token}/greeting.wav")

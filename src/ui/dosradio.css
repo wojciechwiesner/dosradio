@@ -85,6 +85,13 @@ a { color: inherit; }
 .volume input { width: 110px; accent-color: var(--accent); }
 .status { margin-top: 12px; min-height: 20px; font-size: 13px; color: var(--dim); position: relative; z-index: 1; }
 .error { color: #ff9a9a; }
+.start-notice { display: flex; align-items: flex-start; gap: 8px; margin-top: 8px; padding: 8px 12px; border-radius: 10px;
+  font-size: 13px; line-height: 1.45; color: var(--text, #e8eaf0); background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08); position: relative; z-index: 1; }
+.start-notice[hidden] { display: none; }
+.start-notice svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; opacity: 0.75; animation: startNoticePulse 1.8s ease-in-out infinite; }
+@keyframes startNoticePulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .start-notice svg { animation: none; } }
 
 /* on-air card */
 .onair h3 { margin: 6px 0 8px; font-size: 18px; line-height: 1.35; }
