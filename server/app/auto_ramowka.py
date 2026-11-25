@@ -1,6 +1,7 @@
 """Auto-Ramówka 24/7 broadcast planner, B2B zrobi.my spot manager, and FastAPI router."""
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from datetime import datetime
@@ -9,9 +10,9 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from .auth import client_ip
+from .auth import SESSION_COOKIE, client_ip, token_hash
 from .catalog import CatalogService, validate_slug
 from .db import Database
 from .telemetry import TelemetryService
@@ -515,13 +516,59 @@ class RamowkaService:
         }
 
 
+# Heartbeat field names older Classic/Orbita builds still send from open browser tabs.
+PRESENCE_LEGACY_ALIASES = {
+    "station": "station_id",
+    "view": "view_mode",
+    "auto_ramowka": "ramowka",
+    "group": "group_id",
+}
+
+
 class PresenceRequest(BaseModel):
-    actor_key: str | None = None
-    station_id: str = "dos-groove"
-    view_mode: str = "classic"
+    """Listener heartbeat. Unknown fields are rejected, so a renamed field can never again fall back silently."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    actor_key: str | None = Field(default=None, max_length=200)
+    client_id: str | None = Field(default=None, max_length=80)
+    station_id: str = Field(default="dos-groove", max_length=80)
+    group_id: str | None = Field(default=None, max_length=80)
+    view_mode: str = Field(default="classic", max_length=20)
     ramowka: bool = False
-    email: str | None = None
+    email: str | None = Field(default=None, max_length=200)
     user_id: int | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_legacy_names(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        out = dict(data)
+        for legacy, canonical in PRESENCE_LEGACY_ALIASES.items():
+            if legacy in out:
+                value = out.pop(legacy)
+                out.setdefault(canonical, value)
+        return out
+
+    @field_validator("view_mode")
+    @classmethod
+    def _known_view(cls, value: str) -> str:
+        return value if value in ("classic", "orbita") else "classic"
+
+
+def presence_actor_key(body: PresenceRequest, cookies: dict[str, str], ip: str) -> str:
+    """One row per browser: explicit key, then the persisted client id, then cookies, then IP as last resort."""
+    if body.actor_key:
+        return body.actor_key
+    if body.client_id:
+        return f"cid:{body.client_id}"
+    for name, prefix in (("dr_anon", "anon"), ("dr_session", "sess")):
+        value = cookies.get(name)
+        if value:
+            # Never store the raw session token in the admin-visible presence table.
+            return f"{prefix}:{hashlib.sha256(value.encode()).hexdigest()[:16]}"
+    return f"ip:{ip}"
 
 
 class ZrobimyLeadRequest(BaseModel):
@@ -570,20 +617,22 @@ def build_ramowka_router(
             {k.lower(): v for k, v in request.headers.items()},
             request.client.host if request.client else None,
         )
-        actor_key = (
-            body.actor_key
-            or request.cookies.get("dr_anon")
-            or request.cookies.get("dr_session")
-            or f"ip:{ip}"
-        )
+        actor_key = presence_actor_key(body, dict(request.cookies), ip)
         ua = request.headers.get("user-agent", "")
+        # Who is listening comes from the session cookie, never from what the page claims.
+        user_id, email = None, None
+        session = request.cookies.get(SESSION_COOKIE)
+        if session:
+            user = db.user_for_session(token_hash(session))
+            if user is not None:
+                user_id, email = int(user["id"]), user["email"]
         telemetry.touch_presence(
             actor_key=actor_key,
             station_id=body.station_id,
             view_mode=body.view_mode,
             ramowka=body.ramowka,
-            user_id=body.user_id,
-            email=body.email,
+            user_id=user_id,
+            email=email,
             user_agent=ua,
         )
         return {"ok": True}

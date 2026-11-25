@@ -7,7 +7,7 @@ import { createScene, STEP } from './scene.js';
 import { Sales } from './sales.js';
 import { radioPane, minePane, podsPane } from './panes.js';
 import { openDedicationModal, loadIncomingDedication } from './dedication.js';
-import { initOrbitaSocial } from './social.js';
+import { initOrbitaSocial, getClientId } from './social.js';
 import { stoicThoughts, stoicPill, stoicPillTitle, toParts, gmailSample } from './content.js';
 
 const $ = s => document.querySelector(s);
@@ -717,13 +717,17 @@ app.refreshMe = async () => {
   if (app.me?.plus) { loadDigest(); loadPills(); }
   return app.me;
 };
+function showStartNotice(on) { const n = $('#startNotice'); if (n) n.hidden = !on; }
 app.togglePlay = async force => {
   const e = app.engine, on = force === true ? true : !e.playing;
-  if (!on) { e.stop(); renderCard(); return; }
+  if (!on) { e.stop(); showStartNotice(false); renderCard(); return; }
+  // iOS: resume the context synchronously inside the click, before any await below.
+  try { app.core.init(); if (app.core.ctx.state !== 'running') app.core.ctx.resume().catch(() => {}); } catch { /* no Web Audio */ }
+  if (!e.playing) showStartNotice(true);
   try {
     let me = await app.refreshMe();
     const ded = app.pendingDedication || null;
-    if (!me.allowed && !ded) { app.sales.open('ended'); return; }
+    if (!me.allowed && !ded) { showStartNotice(false); app.sales.open('ended'); return; }
     if (!me.registered && !me.trial_started) { me = app.me = { ...me, ...(await app.api.startTrial()) }; }
     if (app.sales.active) await app.sales.queueShowcase();
     app.pendingDedication = null;
@@ -732,7 +736,7 @@ app.togglePlay = async force => {
       window.parent.postMessage({ type: 'dosradio:orbita-audio-started', station: prefs.station }, '*');
     }
     sendPresenceHeartbeat();
-  } catch (err) { app.toast(err.message || t('st_stream'), { error: true }); e.stop(); }
+  } catch (err) { showStartNotice(false); app.toast(err.message || t('st_stream'), { error: true }); e.stop(); }
   renderCard();
 };
 
@@ -791,16 +795,19 @@ window.addEventListener('message', ev => {
 });
 
 function sendPresenceHeartbeat() {
-  if (!app.engine?.playing || !app.api) return;
+  // Hidden tabs do not count; one beat is sent when the tab becomes visible again.
+  if (!app.engine?.playing || !app.api || document.hidden) return;
   const st = byId[prefs.station] || STATIONS[0];
   app.api.presence({
-    station: st.id,
-    group: prefs.activeGroup || st.group,
-    view: 'orbita',
-    auto_ramowka: !!prefs.autoRamowka,
+    client_id: getClientId(),
+    station_id: st.id,
+    group_id: prefs.activeGroup || st.group || null,
+    view_mode: 'orbita',
+    ramowka: !!prefs.autoRamowka,
   });
 }
 setInterval(sendPresenceHeartbeat, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sendPresenceHeartbeat(); });
 $('#playBtn').addEventListener('click', () => { app.ensureEntered(); app.togglePlay(); });
 $('#prevBtn').addEventListener('click', () => { app.ensureEntered(); dial.nudge(-1); });
 $('#nextBtn').addEventListener('click', () => { app.ensureEntered(); dial.nudge(1); });
@@ -834,7 +841,8 @@ $('#stoicAdd').addEventListener('click', () => { if (!prefs.categories.includes(
 /* =========================================================  engine events  */
 function engineEvents() {
   return {
-    onState: () => { renderCard(); renderOnAir(); },
+    onState: s => { if (s === 'paused' || s === 'idle') showStartNotice(false); renderCard(); renderOnAir(); },
+    onMusicAudible: () => showStartNotice(false),
     onStatus: (msg, err) => { app.announce(msg); if (err) app.toast(msg, { error: true }); },
     onQueue: () => { renderStoic(); },
     onUpcoming: s => { upcoming = s; },

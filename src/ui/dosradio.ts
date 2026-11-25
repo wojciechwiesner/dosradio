@@ -16,6 +16,7 @@ import {
 } from '../radio/stations';
 import { intervalLabel, normalizeInterval } from '../radio/radioClock';
 import { initBackgroundAudio } from '../audio/backgroundAudio';
+import { getSharedAudioContext } from '../audio/iosAudioUnlock';
 import {
   applyOnboardingChoice,
   isOnboarded,
@@ -40,6 +41,7 @@ import { initProgrammeLine } from './pill';
 import { wireClassicDedications } from './dedicationModal';
 import { wireClassicSocialStudio } from './socialCreatorStudio';
 import { classicShortcut, stepStation } from './keyboard';
+import { startPlaybackFlow } from './playbackGate';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -298,8 +300,11 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     playButton.setAttribute('aria-label', state === 'playing' ? 'Pauza' : 'Graj');
     newsButton.disabled = hostModeBtn.dataset.mode === 'music-only';
     if (state === 'loading') setStatus('Łączę z generatorem muzyki...');
+    if (state === 'playing') setTimeout(sendPresenceHeartbeat, 0); // count the listener now, not a minute later
+    if (state === 'idle' || state === 'paused') hideStartNotice();
   },
   onStatus: (text) => setStatus(text),
+  onMusicAudible: () => hideStartNotice(),
   onError: (text) => setStatus(text, true),
   onQueue: (queue, airingId) => renderQueue(queue, airingId),
   onUpcoming: (story) => upcoming.setStory(story),
@@ -411,12 +416,20 @@ function startTrialCountdown(): void {
 }
 
 async function togglePlay(): Promise<void> {
-  if (engine.isPlaying) { engine.stop(); setStatus('Pauza'); return; }
-  if (!isOnboarded(localStorage)) { showOnboarding(); return; }
+  if (engine.isPlaying) { engine.stop(); hideStartNotice(); setStatus('Pauza'); return; }
+  // iOS: resume synchronously inside the click; every await below would consume the gesture.
+  const ctx = getSharedAudioContext();
+  if (ctx.state !== 'running') void ctx.resume().catch(() => {});
+  // First play never waits for the wizard: the radio starts with default prefs and the
+  // wizard opens alongside; its answers are applied to the running radio.
+  if (!isOnboarded(localStorage)) {
+    markOnboarded(localStorage);
+    showOnboarding();
+  }
   await startPlayback();
 }
 
-/** First play and "Zmień, co chcesz słyszeć" both open the start wizard; "Graj" (or "Pomiń") starts the radio. */
+/** First play opens the wizard alongside the already-starting radio; "Zmień, co chcesz słyszeć" reopens it. Answers apply live, and "Graj" only starts playback if it hasn't started yet. */
 function showOnboarding(): void {
   openOnboarding(prefs, (choice: WizardChoice) => {
     const stationBefore = prefs.station;
@@ -427,6 +440,18 @@ function showOnboarding(): void {
     if (!engine.isPlaying) void startPlayback();
     else if (access?.plus) void flushWizardPlusSetup();
   }, Boolean(access?.plus));
+}
+
+const START_NOTICE_TEXT = 'Muzyka ruszy za kilka sekund — generuję pierwsze nuty. Prowadzący może już mówić.';
+function showStartNotice(): void {
+  const el = document.getElementById('startNotice');
+  if (!el) return;
+  el.querySelector('span')!.textContent = START_NOTICE_TEXT;
+  el.hidden = false;
+}
+function hideStartNotice(): void {
+  const el = document.getElementById('startNotice');
+  if (el) el.hidden = true;
 }
 
 function applyChoice(choice: OnboardingChoice): void {
@@ -444,14 +469,23 @@ function applyChoice(choice: OnboardingChoice): void {
 
 async function startPlayback(): Promise<void> {
   if (isPlusAudioPlaying()) stopPlusAudio(); // podcast/digest yields to the radio
+  if (!engine.isPlaying) showStartNotice();
   try {
-    let state = await refreshAccess();
-    if (!state.allowed) { openAuth('register', true); return; }
-    if (!state.registered && !state.trial_started) { state = await radioApi.startTrial(); access = state; renderAccess(); }
-    startTrialCountdown();
-    await engine.start();
-    $('onAirText').textContent = 'Muzyka';
+    const outcome = await startPlaybackFlow({
+      refreshAccess,
+      startTrial: () => radioApi.startTrial(),
+      setAccess: (state) => { access = state; renderAccess(); },
+      hasPendingDedication: () => engine.hasPendingDedication,
+      onceGreetingDone: (cb) => engine.onceGreetingDone(cb),
+      engineStart: () => engine.start(),
+      engineStop: () => { engine.stop(); hideStartNotice(); },
+      openRegisterPrompt: () => openAuth('register', true),
+      startTrialCountdown,
+    });
+    if (outcome === 'register') { hideStartNotice(); return; }
+    if (engine.isPlaying) $('onAirText').textContent = 'Muzyka';
   } catch (error) {
+    hideStartNotice();
     setStatus((error as Error).message, true);
     engine.stop();
   }
@@ -952,12 +986,13 @@ function getClientId(): string {
 }
 
 function sendPresenceHeartbeat(): void {
-  if (!engine.isPlaying || currentView !== 'classic') return;
+  // Hidden tabs do not count as listening rooms; visibilitychange sends one beat on return.
+  if (!engine.isPlaying || currentView !== 'classic' || document.hidden) return;
   void radioApi.presence({
     client_id: getClientId(),
-    station: prefs.station,
-    group: prefs.playGroup ?? null,
-    view: 'classic',
+    station_id: prefs.station,
+    group_id: prefs.playGroup ?? null,
+    view_mode: 'classic',
     ramowka: Boolean(prefs.autoRamowka),
   });
 }
@@ -968,6 +1003,9 @@ setInterval(() => {
     void syncRamowkaState();
   }
 }, 60_000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) sendPresenceHeartbeat();
+});
 
 document.querySelector('footer')?.append(changeVersionLink());
 

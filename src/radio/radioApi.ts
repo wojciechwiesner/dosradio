@@ -92,11 +92,12 @@ export interface RamowkaStateResponse {
   };
 }
 
+/** Canonical heartbeat body; the server still accepts the old `station`/`view`/`group` names from stale tabs. */
 export interface PresencePayload {
   client_id: string;
-  station: string;
-  group: string | null;
-  view: 'classic' | 'orbita';
+  station_id: string;
+  group_id: string | null;
+  view_mode: 'classic' | 'orbita';
   ramowka: boolean;
 }
 

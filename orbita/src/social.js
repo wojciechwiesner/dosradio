@@ -19,7 +19,8 @@ const ICONS = {
   friends: '<svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7.5" cy="6.8" r="2.8"/><path d="M2.5 16.5c0-2.6 2.2-4.6 5-4.6s5 2 5 4.6"/><circle cx="14.2" cy="7.5" r="2.1"/><path d="M14.2 12c2 .2 3.3 1.7 3.3 4.3"/></svg>',
 };
 
-function getClientId() {
+/** Shared with the Classic page (same localStorage key), so one browser is one listener in the stats. */
+export function getClientId() {
   try {
     let v = localStorage.getItem(CID_KEY);
     if (!v) { v = 'orb_' + Math.random().toString(36).slice(2, 11) + Date.now().toString(36).slice(-4); localStorage.setItem(CID_KEY, v); }

@@ -141,6 +141,12 @@ input:focus-visible, textarea:focus-visible, select:focus-visible { outline-offs
 .play svg { width: 40px; height: 40px; }
 .play.loading { animation: breathe 1.2s infinite; }
 @keyframes breathe { 50% { opacity: 0.55; } }
+.start-notice { display: flex; align-items: flex-start; gap: var(--s-1); margin-top: var(--s-1); padding: var(--s-1) var(--s-2);
+  font: var(--fs-14)/1.5 var(--font-mono); color: var(--text); background: var(--surface-2); border: 1px solid var(--line); }
+.start-notice[hidden] { display: none; }
+.start-notice svg { flex: 0 0 auto; width: 16px; height: 16px; margin-top: 2px; opacity: 0.75; animation: startNoticePulse 1.8s ease-in-out infinite; }
+@keyframes startNoticePulse { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .start-notice svg { animation: none; } }
 
 .bars { flex: 1; min-width: 0; height: 56px; display: flex; align-items: flex-end; gap: 3px; }
 .bars span { flex: 1; min-width: 2px; height: 6%; background: var(--text); opacity: 0.85; transition: height 0.12s ease-out; }

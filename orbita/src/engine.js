@@ -77,6 +77,7 @@ export class RadioEngine {
     const ok = await this.startMusic();
     if (!this.playing) return;
     this.events.onStatus(ok ? t('st_playing', { name: stationName(this.station) }) : t('st_reconnect'));
+    if (ok) this.events.onMusicAudible?.();
     this.events.onState('playing'); this.setMode('music');
     if (this.hostMode === 'with-host') {
       this.refreshNews(); this.newsTimer = setInterval(() => this.refreshNews(), NEWS_REFRESH);
@@ -127,7 +128,7 @@ export class RadioEngine {
   setInterval(n) { this.interval = n; if (this.playing && this.hostMode === 'with-host' && !this.speaking) { this.clearSchedule(); this.scheduleNextBreak(); } }
   async setCategories(c) { this.categories = c; if (this.playing && this.hostMode === 'with-host') await this.refreshNews(); }
   endTrial() { this.stop(); this.events.onTrialEnded(); }
-  recover() { if (!this.playing) return; this.events.onStatus(t('st_reconnect')); setTimeout(() => this.playing && this.startMusic(), 2000); }
+  recover() { if (!this.playing) return; this.events.onStatus(t('st_reconnect')); setTimeout(async () => { if (this.playing && (await this.startMusic())) this.events.onMusicAudible?.(); }, 2000); }
 
   /* ---------------- news ---------------- */
   async refreshNews() {
