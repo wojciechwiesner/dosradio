@@ -99,7 +99,9 @@ def build_dedication_script(
     if message:
         return (
             f"Cześć {to_name}! Tu {host_name} z AmbiRadio. "
-            f"Mam dla ciebie gorące pozdrowienia od {from_name}, który udostępnia specjalnie dla ciebie stację {station_name} "
+            # REGRESSION INVARIANT: the sender's name stays in the nominative ("{from_name} przesyła"),
+            # never after "od" — Polish names would need the genitive ("od Wojtka"), which we can't inflect.
+            f"{from_name} przesyła ci gorące pozdrowienia i udostępnia specjalnie dla ciebie stację {station_name} "
             f"z dedykacją: „{message}”. Rozgość się i podkręć głośność — to jest twoja chwila, zapraszam do słuchania!"
         )
     return (
