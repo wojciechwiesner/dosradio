@@ -264,7 +264,7 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
       b.type = 'button';
       b.className = 'sm-btn';
       b.style.cssText = 'margin:0 14px 10px;width:calc(100% - 28px)';
-      b.textContent = '+ Stwórz własne radio lub kanał YT';
+      b.textContent = '+ Stwórz własne radio';
       b.onclick = () => openModal('creator');
       pr.prepend(b);
     }
@@ -375,13 +375,13 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
     } else if (activeTab === 'creator') {
       bodyHtml = `
         <form id="createRadioForm" class="sm-f">
-          <strong>Własne radio na żywo / Kanał Twórcy YT</strong>
+          <strong>Własne radio na żywo</strong>
           <input class="sm-in" name="name" placeholder="Nazwa stacji (np. Cyber Kodowanie Live)" required>
-          <input class="sm-in" name="creator_name" placeholder="Twórca / Kanał YouTube" value="${esc(localStorage.getItem(NAME_KEY) || '')}">
+          <input class="sm-in" name="creator_name" placeholder="Twórca" value="${esc(localStorage.getItem(NAME_KEY) || '')}">
           <select class="sm-sel" name="mode"><option value="describe">Opisz klimat słowami</option><option value="modify">Zmodyfikuj wybraną stację</option></select>
           <select class="sm-sel" name="base_station_id">${stOpts}</select>
           <textarea class="sm-ta" name="description" rows="2" placeholder="Opisz brzmienie i klimat prowadzącego..."></textarea>
-          <textarea class="sm-ta" name="pills_raw" rows="2" placeholder="Pigułki Twórcy / Linki YT (1 w linii: https://... | opis)"></textarea>
+          <textarea class="sm-ta" name="pills_raw" rows="2" placeholder="Pigułki wiedzy: link do artykułu albo notatka (1 w linii: https://... | opis)"></textarea>
           <button class="sm-btn" type="submit">Utwórz stację i udostępnij</button>
         </form>
         <div style="margin-top:10px">${customRadios.slice(0, 6).map(r => `

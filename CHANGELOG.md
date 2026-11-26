@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **YouTube audio clipping is off** (`server/app/youtube_pill.py`, `pill_service.py`, `plus_api.py`,
+  `custom_radios.py`): `POST /radio-api/plus/pill`, `POST /radio-api/plus/pills/batch`, the pill status, the saved-pill
+  list and the cached media all answer 410 unless `DOSRADIO_YOUTUBE_CLIPS=1`, and `download_audio` refuses before
+  yt-dlp is ever called. Cached pills stay on disk, they are only unreachable. A custom-radio pill pointing at YouTube
+  is refused the same way; article links and notes, the text "pigułka wiedzy" drop and public RSS podcasts are
+  untouched. The Classic pill form, the Orbita pill pane, the Plus plan lists (PL/EN/RU) and the host promo no longer
+  offer or promise YouTube clips. Tests: `server/tests/test_youtube_disabled.py`.
+- **Checkout sells only a verified Stripe price** (`server/app/billing.py`): a plan is buyable only when its
+  `DOSRADIO_PLUS_PRICE_USD` / `DOSRADIO_PLUS_AI_PRICE_USD` price exists in Stripe and bills exactly the displayed
+  amount, currency and monthly interval. Anything else returns 503 and charges nothing; the yearly price stays
+  display-only. `/radio-api/billing/status` now says per plan whether checkout is actually available.
+- **Release integration** (`ow/ambi-release-grok`): wave 1 (rebrand, USD pricing, Classic redesign, entry wizard and
+  6 h trial), the beat-grid mixer fix, the Orbita SOTA scene, the presence/dedication fix and hosts-with-a-soul plus
+  listener comments merged into one branch. Shared files keep every side's work: the Classic redesign owns layout, the
+  rebrand owns brand strings and USD prices, the wizard owns the entry split and trial, and each later branch adds its
+  own pieces (start notice, comment button and feed, calm view, persona field) without reverting the earlier ones.
 - **Wave 1 integration** (`ow/ambi-integrate-w1`): rebrand + USD pricing, Classic redesign and entry split / start
   wizard / 6 h trial merged into one branch. The redesign owns layout and styles, the rebrand owns brand strings
   (ambiradio.com canonical/OG) and USD prices, the wizard owns the entry split, wizard and trial. Wizard and trial

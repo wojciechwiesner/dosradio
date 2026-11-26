@@ -34,7 +34,8 @@ def test_running_trial_gets_plus_features(client):
     assert saved.status_code == 200, saved.text
     assert client.get(PREFS_URL).json()["rss_feeds"] == [FEED]
     assert client.get("/radio-api/plus/podcasts").json() == {"podcasts": []}
-    assert client.get("/radio-api/plus/pills").json() == {"pills": []}
+    # YouTube pills are off for everyone, trial included: the route refuses instead of listing.
+    assert client.get("/radio-api/plus/pills").status_code == 410
 
 
 def test_trial_plus_ends_with_the_trial(client):

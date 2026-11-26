@@ -130,37 +130,32 @@ export function initPill(events: PillOptions): void {
   const form = document.createElement('form');
   form.className = 'pill-box';
   form.noValidate = true;
+  // YouTube clip controls are gone while DOSRADIO_YOUTUBE_CLIPS is off: the form only explains
+  // that we do not cut other people's audio. The saved-pill list stays empty on purpose.
   form.innerHTML = `
     <h3>${PILL_SVG}Pigułka z YouTube</h3>
-    <label class="plus-field" for="pillUrl">Link do odcinka albo kanału
-      <input type="url" id="pillUrl" maxlength="${MAX_URL_LENGTH}" placeholder="https://www.youtube.com/watch?v=..." />
-    </label>
-    <p class="pill-hint">Wybieramy najważniejsze 20% odcinka i puszczamy je jako krótkie bloki, każdy z jednozdaniowym wstępem prowadzącej. Kanał oznacza jego najnowszy odcinek (do 3 godzin).</p>
-    <button type="submit" class="btn" id="pillBtn">${PILL_SVG} Zrób pigułkę</button>
-    <details class="pill-batch">
-      <summary>Wklej wiele linków naraz</summary>
-      <label class="plus-field" for="pillBatchText">Linki do odcinków, każdy w nowej linii (maksymalnie ${MAX_BATCH_LINKS})
-        <textarea id="pillBatchText" rows="5" maxlength="40000" placeholder="https://youtu.be/...&#10;https://youtu.be/..."></textarea>
-      </label>
-      <button type="button" class="btn pill-batch-btn" id="pillBatchBtn">${PILL_SVG} Zrób pigułki</button>
-      <p class="pill-hint" id="pillBatchSummary" role="status"></p>
-    </details>
+    <p class="pill-hint">Pigułki z YouTube są wyłączone. Nie wycinamy i nie puszczamy cudzego dźwięku.</p>
     <div class="pill-progress" id="pillProgress" role="status"></div>
     <div class="pill-source" id="pillSource"></div>
-    <h4 class="pill-saved-head" hidden>Moje pigułki</h4>
     <ul class="pill-saved" id="pillSaved"></ul>`;
   panel.append(form);
-  urlInput = form.querySelector<HTMLInputElement>('#pillUrl')!;
-  button = form.querySelector<HTMLButtonElement>('#pillBtn')!;
   progress = form.querySelector<HTMLElement>('#pillProgress')!;
   source = form.querySelector<HTMLElement>('#pillSource')!;
   savedList = form.querySelector<HTMLElement>('#pillSaved')!;
-  form.addEventListener('submit', (event) => { event.preventDefault(); void handleSubmit(); });
-  const batchText = form.querySelector<HTMLTextAreaElement>('#pillBatchText')!;
-  const batchButton = form.querySelector<HTMLButtonElement>('#pillBatchBtn')!;
-  const batchSummary = form.querySelector<HTMLElement>('#pillBatchSummary')!;
-  batchButton.addEventListener('click', () => void handleBatch(batchText, batchButton, batchSummary));
-  void refreshSavedPills();
+  const url = form.querySelector<HTMLInputElement>('#pillUrl');
+  const submit = form.querySelector<HTMLButtonElement>('#pillBtn');
+  if (url && submit) {
+    urlInput = url;
+    button = submit;
+    form.addEventListener('submit', (event) => { event.preventDefault(); void handleSubmit(); });
+    void refreshSavedPills();
+  }
+  const batchText = form.querySelector<HTMLTextAreaElement>('#pillBatchText');
+  const batchButton = form.querySelector<HTMLButtonElement>('#pillBatchBtn');
+  const batchSummary = form.querySelector<HTMLElement>('#pillBatchSummary');
+  if (batchText && batchButton && batchSummary) {
+    batchButton.addEventListener('click', () => void handleBatch(batchText, batchButton, batchSummary));
+  }
 }
 
 /** One-line Polish summary of a batch, e.g. "Dodano 3, pominięto duplikaty: 1, błędy: 1 (...)". */

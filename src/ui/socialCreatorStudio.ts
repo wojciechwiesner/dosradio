@@ -297,9 +297,9 @@ export function wireClassicSocialStudio(
     } else if (tab === 'creator') {
       const form = el('form', 'dos-soc-grid');
       const inName = el('input', 'dos-soc-in'); inName.name = 'name'; inName.placeholder = 'Nazwa Twojego radia'; inName.required = true;
-      const inCreator = el('input', 'dos-soc-in'); inCreator.name = 'creator_name'; inCreator.placeholder = 'Twórca / Kanał YT';
+      const inCreator = el('input', 'dos-soc-in'); inCreator.name = 'creator_name'; inCreator.placeholder = 'Twórca';
       const inDesc = el('textarea', 'dos-soc-in'); inDesc.name = 'description'; inDesc.rows = 2; inDesc.placeholder = 'Opisz klimat lub modyfikację...';
-      const inPills = el('textarea', 'dos-soc-in'); inPills.name = 'pills_raw'; inPills.rows = 2; inPills.placeholder = 'Linki YT / pigułki (1 w linii)';
+      const inPills = el('textarea', 'dos-soc-in'); inPills.name = 'pills_raw'; inPills.rows = 2; inPills.placeholder = 'Pigułki wiedzy: link do artykułu albo notatka (1 w linii)';
       const sub = el('button', 'dos-soc-primary', 'Utwórz stację i udostępnij'); sub.type = 'submit';
       [inName, inCreator, stationSelect(), inDesc, inPills, sub].forEach((n) => form.appendChild(n));
       form.onsubmit = async (ev) => {

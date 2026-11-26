@@ -24,7 +24,7 @@ from .pill_service import PillService
 from .podcast_list import list_user_podcasts
 from .podcast import PodcastService
 from .podcast_quota import PodcastQuota
-from .youtube_pill import PillError, extract_video_id
+from .youtube_pill import YOUTUBE_CLIPS_DISABLED, PillError, extract_video_id, youtube_clips_enabled
 
 # Pills run one at a time and the service remembers 50 jobs / keeps 30 pills on disk:
 # a batch must stay well below both, or early jobs are forgotten before they run.
@@ -144,6 +144,11 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
         return FileResponse(path, media_type=media, headers={"cache-control": "private, max-age=86400"})
 
     # --- YouTube pill ---------------------------------------------------------------------
+    def require_youtube_clips() -> None:
+        """Clips are off unless DOSRADIO_YOUTUBE_CLIPS=1. Checked before any job or disk read."""
+        if not youtube_clips_enabled():
+            raise HTTPException(410, YOUTUBE_CLIPS_DISABLED)
+
     def pill_view(job: dict) -> dict:
         return {key: job[key] for key in ("id", "status", "title", "author", "source_url", "parts", "error")}
 
@@ -151,6 +156,7 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
     def my_pills(request: Request) -> dict:
         """Pills saved on the caller's account, newest first (only ones still on disk)."""
         user_id = require_plus(request)
+        require_youtube_clips()
         saved = (pills.load_manifest(video_id) for video_id in db.user_pill_ids(user_id))
         return {"pills": [{key: m[key] for key in ("id", "title", "author", "source_url", "parts")}
                           for m in saved if m]}
@@ -158,6 +164,7 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
     @router.post("/pill")
     async def create_pill(body: PillRequest, request: Request, background: BackgroundTasks) -> dict:
         user_id = require_plus(request)
+        require_youtube_clips()
         try:
             job = pills.submit(body.url)
         except PillError as error:
@@ -173,6 +180,7 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
     async def create_pills_batch(body: PillBatchRequest, request: Request, background: BackgroundTasks) -> dict:
         """Paste many links at once; each gets its own pill, duplicates are skipped."""
         user_id = require_plus(request)
+        require_youtube_clips()
         links = split_links(body.text)
         if not links:
             raise HTTPException(422, "Nie znalazłem żadnych linków. Wklej linki do YouTube, każdy osobno.")
@@ -201,6 +209,7 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
     @router.get("/pill/{pill_id}")
     def get_pill(pill_id: str, request: Request) -> dict:
         user_id = require_plus(request)
+        require_youtube_clips()
         job = pills.get(pill_id)
         if job is None:
             raise HTTPException(404, "Nie ma takiej pigułki.")
@@ -212,6 +221,7 @@ def build_plus_router(access: AccessService, db: Database, news: NewsService,
     @router.get("/pill/{video_id}/{file_name}")
     def pill_part(video_id: str, file_name: str, request: Request) -> FileResponse:
         require_plus(request)
+        require_youtube_clips()
         try:
             path = pills.part_path(video_id, file_name)
         except FileNotFoundError:

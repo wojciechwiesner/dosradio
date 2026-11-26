@@ -17,6 +17,7 @@ from .config import public_base_url
 from .db import Database
 from .moderation import moderate_many
 from .hosts import BORROWED_HOSTS
+from .youtube_pill import YOUTUBE_CLIPS_DISABLED, YOUTUBE_HOSTS, youtube_clips_enabled
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS custom_radios (
@@ -97,6 +98,21 @@ class PillItemInput(BaseModel):
     title: str = Field(default="", max_length=160)
     url: str = Field(default="", max_length=500)
     note: str = Field(default="", max_length=500)
+
+
+def _is_youtube_url(url: str) -> bool:
+    from urllib.parse import urlparse
+    host = (urlparse(url.strip()).hostname or "").lower()
+    return host in YOUTUBE_HOSTS or host == "youtube.com"
+
+
+def reject_youtube_pills(pills: list[PillItemInput]) -> None:
+    """A custom-radio pill that points at YouTube would be cut and rebroadcast. Notes and
+    article links are fine; only the YouTube URL is refused, and nothing is deleted."""
+    if youtube_clips_enabled():
+        return
+    if any(_is_youtube_url(pill.url) for pill in pills):
+        raise HTTPException(410, YOUTUBE_CLIPS_DISABLED)
 
 
 class CreateCustomRadioBody(BaseModel):
@@ -216,6 +232,7 @@ def build_custom_radios_router(service: CustomRadioService, access: AccessServic
         if len(cleaned["name"]) < 2:
             raise HTTPException(400, "Nazwa stacji musi mieć co najmniej 2 znaki, bez linków i numerów telefonu.")
         body = body.model_copy(update=cleaned)
+        reject_youtube_pills(body.pills)
         radio = service.create(owner, body)
         share_url = f"{public_base}/orbita.html?r={radio['slug']}"
         classic_url = f"{public_base}/?r={radio['slug']}"
@@ -232,6 +249,7 @@ def build_custom_radios_router(service: CustomRadioService, access: AccessServic
 
     @router.post("/{slug}/pills")
     async def append_radio_pill(slug: str, body: PillItemInput, request: Request) -> dict[str, Any]:
+        reject_youtube_pills([body])
         owner = resolve_actor_key(request, access, service.db)
         try:
             updated = service.add_pill(slug, owner, body)

@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import re
 import shutil
 import sys
@@ -23,6 +24,14 @@ from .bumpers import Runner, make_voiced_bumper
 log = logging.getLogger("dosradio.pill")
 
 YOUTUBE_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be"}
+
+# Cutting YouTube audio for rebroadcast is off unless a release explicitly opts in.
+# Only the exact value "1" enables it; anything else (unset, "0", "true") stays closed.
+YOUTUBE_CLIPS_DISABLED = "Pigułki z YouTube są wyłączone. Nie wycinamy i nie puszczamy cudzego dźwięku."
+
+
+def youtube_clips_enabled() -> bool:
+    return os.environ.get("DOSRADIO_YOUTUBE_CLIPS", "") == "1"
 CHANNEL_PATH_PREFIXES = ("/@", "/channel/", "/c/", "/user/")
 VIDEO_ID_RE = re.compile(r"^[A-Za-z0-9_-]{11}$")
 MAX_DURATION_S = 3 * 3600
@@ -261,6 +270,8 @@ async def select_segments(summarise: Summarise, title: str, cues: list[Cue], dur
 # --- step 5: audio -----------------------------------------------------------------------------------
 
 def download_audio(run: Runner, source_url: str, workdir: Path) -> Path:
+    if not youtube_clips_enabled():
+        raise PillError(YOUTUBE_CLIPS_DISABLED)
     run([YT_DLP, "-f", "bestaudio", "--no-playlist", "--no-warnings", "-o", str(workdir / "source.%(ext)s"), source_url],
         DOWNLOAD_TIMEOUT_S)
     found = [path for path in workdir.glob("source.*") if path.suffix != ".part"]

@@ -180,7 +180,7 @@ def test_custom_creator_youtuber_radio_and_pills(tmp_path: Path):
             "description": "Mroczny synthwave i cyberpunk do nocnego programowania",
             "host": "Kuba",
             "pills": [
-                {"title": "Odcinek #42", "url": "https://youtube.com/watch?v=abc12345", "note": "Architektura agentów w 10 minut"}
+                {"title": "Odcinek #42", "url": "https://example.com/odcinek-42", "note": "Architektura agentów w 10 minut"}
             ],
         },
     )

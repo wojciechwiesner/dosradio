@@ -74,22 +74,40 @@ class CheckoutRequest(BaseModel):
     b2b: bool = False  # B2B: monthly invoice instead of an immediate card charge
 
 
-def _line_item(plan_id: str) -> dict[str, Any]:
-    """Price ID from env when configured, otherwise an inline recurring price."""
+def _configured_price_id(plan_id: str) -> str:
     spec = PLANS[plan_id]
     for env_name in spec["price_envs"]:
         price_id = os.environ.get(env_name, "").strip()
         if price_id:
-            return {"price": price_id, "quantity": 1}
-    return {
-        "quantity": 1,
-        "price_data": {
-            "currency": CURRENCY,
-            "unit_amount": spec["amount_cents"],
-            "recurring": {"interval": "month"},
-            "product_data": {"name": spec["name"]},
-        },
-    }
+            return price_id
+    return ""
+
+
+def _verified_price(client: stripe.StripeClient, plan_id: str) -> str:
+    """The configured Stripe price, but only when it charges exactly the displayed amount.
+
+    A display price is never turned into a charge on its own: without a configured price id,
+    or when the price bills a different amount, currency or interval, checkout fails clearly.
+    The yearly figure is display-only and is never sold here.
+    """
+    spec = PLANS[plan_id]
+    price_id = _configured_price_id(plan_id)
+    if not price_id:
+        raise HTTPException(503, f"Płatności dla planu {spec['name']} nie są skonfigurowane. Nie ma ceny Stripe do sprzedaży.")
+    try:
+        price = client.v1.prices.retrieve(price_id)
+    except Exception as error:
+        log.error("Stripe price lookup failed for %s: %s", price_id, error)
+        raise HTTPException(502, "Nie udało się sprawdzić ceny w Stripe. Spróbuj ponownie za chwilę.") from error
+    amount = _field(price, "unit_amount")
+    currency = str(_field(price, "currency") or "").lower()
+    recurring = _field(price, "recurring") or {}
+    interval = str(_field(recurring, "interval") or "")
+    if amount != spec["amount_cents"] or currency != CURRENCY or interval != "month" or not _field(price, "active"):
+        log.error("Stripe price %s is %s %s/%s (active=%s), UI shows %s %s/month",
+                  price_id, amount, currency, interval or "once", _field(price, "active"), spec["amount_cents"], CURRENCY)
+        raise HTTPException(503, f"Cena Stripe dla planu {spec['name']} nie zgadza się z ceną na stronie. Płatność wstrzymana.")
+    return price_id
 
 
 def _site_url(request: Request) -> str:
@@ -117,7 +135,7 @@ def checkout(body: CheckoutRequest, request: Request) -> dict:
     client = _stripe_client()
     params: dict[str, Any] = {
         "mode": "subscription",
-        "line_items": [_line_item(body.plan)],
+        "line_items": [{"price": _verified_price(client, body.plan), "quantity": 1}],
         "success_url": _site_url(request) + "/?billing=success",
         "cancel_url": _site_url(request) + "/?billing=cancel",
         "customer_email": current.email,
@@ -208,7 +226,9 @@ def billing_status(request: Request) -> dict:
                 "name": spec["name"],
                 "currency": CURRENCY,
                 "amount_cents": spec["amount_cents"],
-                "yearly_cents": spec["yearly_cents"],
+                "yearly_cents": spec["yearly_cents"],  # display only: there is no yearly checkout
+                "yearly_checkout": False,
+                "checkout_available": bool(os.environ.get("STRIPE_SECRET_KEY", "").strip()) and bool(_configured_price_id(spec["id"])),
                 "interval": "month",
             }
             for spec in PLANS.values()

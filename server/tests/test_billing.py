@@ -69,7 +69,20 @@ def fake_stripe(monkeypatch):
         calls.append(params or kwargs)
         return SimpleNamespace(url="https://checkout.stripe.com/c/pay/cs_test_123")
 
-    fake_client = SimpleNamespace(v1=SimpleNamespace(checkout=SimpleNamespace(sessions=SimpleNamespace(create=create))))
+    # A configured price sells only what the page shows: 299 or 699 US cents, monthly, active.
+    PRICE_AMOUNTS = {"price_test_usd_299": 299, "price_test_usd_699": 699}
+
+    def retrieve(price_id, **kwargs):
+        amount = PRICE_AMOUNTS.get(price_id)
+        if amount is None:
+            raise RuntimeError(f"unknown price {price_id}")
+        return {"id": price_id, "unit_amount": amount, "currency": "usd", "active": True,
+                "recurring": {"interval": "month"}}
+
+    fake_client = SimpleNamespace(v1=SimpleNamespace(
+        checkout=SimpleNamespace(sessions=SimpleNamespace(create=create)),
+        prices=SimpleNamespace(retrieve=retrieve),
+    ))
     fake = SimpleNamespace(
         StripeClient=lambda key: fake_client,
         Webhook=real_stripe.Webhook,
@@ -131,22 +144,14 @@ def test_checkout_rejects_unknown_plan(client, db, monkeypatch, fake_stripe):
     assert response.status_code == 400
 
 
-def test_checkout_creates_session_inline_price(client, db, monkeypatch, fake_stripe):
+def test_checkout_refuses_without_configured_price(client, db, monkeypatch, fake_stripe):
+    """A displayed price is not a charge: with no Stripe price id, checkout fails and sells nothing."""
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
-    user_id = login_user(client, db)
+    login_user(client, db)
     response = client.post("/radio-api/billing/checkout", json={"plan": "plus_ai"})
-    assert response.status_code == 200
-    assert response.json() == {"url": "https://checkout.stripe.com/c/pay/cs_test_123", "plan": "plus_ai"}
-    params = fake_stripe[0]
-    assert params["mode"] == "subscription"
-    assert params["metadata"] == {"user_id": str(user_id), "plan": "plus_ai"}
-    price_data = params["line_items"][0]["price_data"]
-    assert price_data["unit_amount"] == 699
-    assert price_data["currency"] == "usd"
-    assert price_data["recurring"] == {"interval": "month"}
-    assert price_data["product_data"] == {"name": "AmbiRadio Plus AI"}
-    assert params["success_url"].endswith("/?billing=success")
-    assert "subscription_data" not in params
+    assert response.status_code == 503
+    assert "nie są skonfigurowane" in response.json()["detail"]
+    assert fake_stripe == []
 
 
 def test_checkout_uses_env_price_id_and_b2b_invoice(client, db, monkeypatch, fake_stripe):
@@ -175,11 +180,31 @@ def test_checkout_ignores_legacy_pln_price_id(client, db, monkeypatch, fake_stri
     monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
     monkeypatch.setenv("DOSRADIO_PLUS_PRICE_PLN", "price_test_pln_39")
     login_user(client, db)
-    assert client.post("/radio-api/billing/checkout", json={"plan": "plus"}).status_code == 200
-    item = fake_stripe[0]["line_items"][0]
-    assert "price" not in item
-    assert item["price_data"]["currency"] == "usd"
-    assert item["price_data"]["unit_amount"] == 299
+    response = client.post("/radio-api/billing/checkout", json={"plan": "plus"})
+    assert response.status_code == 503  # no USD price configured, and the PLN one is never a fallback
+    assert fake_stripe == []
+
+
+def test_checkout_refuses_price_that_does_not_match_display(client, db, monkeypatch, fake_stripe):
+    """A configured price that bills a different amount or currency is not sold."""
+    monkeypatch.setenv("STRIPE_SECRET_KEY", "sk_test_dummy")
+    monkeypatch.setenv("DOSRADIO_PLUS_PRICE_USD", "price_test_usd_299")
+    from app import billing
+    original_client = billing.stripe.StripeClient
+
+    def mismatched_client(key):
+        client_ = original_client(key)
+        client_.v1.prices.retrieve = lambda price_id, **kw: {
+            "id": price_id, "unit_amount": 3900, "currency": "pln", "active": True, "recurring": {"interval": "month"},
+        }
+        return client_
+
+    monkeypatch.setattr(billing.stripe, "StripeClient", mismatched_client)
+    login_user(client, db)
+    response = client.post("/radio-api/billing/checkout", json={"plan": "plus"})
+    assert response.status_code == 503
+    assert "nie zgadza się" in response.json()["detail"]
+    assert fake_stripe == []
 
 
 def test_webhook_missing_secret_503(client, db):
