@@ -143,6 +143,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Calm trial indicator and soft register prompt** (`src/ui/trialNotice.ts`): the Classic pill shows hours and
   minutes ("Pełny dostęp jeszcze 5 h 42 min", no ticking seconds); 30 minutes before the end a one-time,
   non-blocking card offers the existing registration. Orbita shows the same 6 h clock and a 30-minute toast.
+- **HeyGen Voice Turbo (OpenRouter) as the second TTS provider** (`server/app/tts_openrouter.py`,
+  `gemini_client.py`): speech chain is now Gemini -> OpenRouter `heygen/heygen-voice-1-turbo:free` -> Grok.
+  Same-gender voice table (`Kore` -> `nadine`, `Charon` -> `bram`, never `meredith`), PCM 44100 Hz wrapped
+  to WAV, text over 4800 chars split at sentence boundaries. Own breaker key, so a 429/404/retired model
+  cools down and falls through to Grok. Config: `DOSRADIO_OPENROUTER_TTS_KEY` (or `OPENROUTER_API_KEY`),
+  `DOSRADIO_OPENROUTER_TTS_MODEL` (the `:free` id retires 2026-11-30; paid id `heygen/heygen-voice-1-turbo`),
+  `DOSRADIO_OPENROUTER_TTS_URL`. Startup logs the TTS chain. Tests: `server/tests/test_tts_openrouter.py`;
+  proof script `server/scripts/heygen_tts_proof.py`.
 - **Device keys for shared devices** (`server/app/auth.py`, `config.py`, `main.py`): `DOSRADIO_DEVICE_KEYS=name:key`
   (key >= 32 chars) grants a device such as the LUNA salon reception kiosk permanent access, sent as the
   `x-dosradio-device` header or `?device=` query (for `<audio>`). Keyed GETs also get `Access-Control-Allow-Origin: *`
