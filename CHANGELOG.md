@@ -61,6 +61,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The Plus badge (`src/ui/billing.ts`) now sits in the player's action row (`#plusSlot`) instead of floating.
   The Plus, dedication and share/studio modals use the same tokens.
 ### Fixed
+- **A slow listener killed the live stream for everyone** (`server/app/stream.py`): when a listener's queue
+  overflowed, `_offer` pushed the end marker into the same full queue, raised `QueueFull` again inside
+  `_publish` and ended the station encoder. The overflowing queue is now emptied before the end marker, so
+  only that listener is dropped. Seen on production 5 times on 2026-11-26. Test: `test_stream_slow_listener.py`.
+- **Home page and link previews showed the domain instead of the brand** (`server/app/og_preview.py`): the
+  plain home page title is now `AmbiRadio — Ambitnie dla Ciebie`, shared items read "... audycja w radiu
+  AmbiRadio", and `canonical` follows `DOSRADIO_PUBLIC_BASE_URL` instead of pointing at the not yet
+  registered `ambiradio.com`. Test: `test_og_home_brand.py`.
 - **"Who is online" stats were wrong** (`server/app/auto_ramowka.py`, `src/ui/dosradio.ts`, `orbita/src/main.js`):
   both AmbiRadio frontends sent `station`/`view`/`auto_ramowka`, the backend read `station_id`/`view_mode`/`ramowka`
   and silently dropped the rest, so every listener showed as `dos-groove` / `classic`, and listeners behind one NAT

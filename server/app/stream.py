@@ -218,7 +218,11 @@ class StationStream:
         try:
             queue.put_nowait(chunk)
         except asyncio.QueueFull:
+            # REGRESSION INVARIANT: never raise here. The queue that overflowed is still full, so the
+            # end-of-stream marker needs room first; a raise would kill `_run` for every listener.
             self._subscribers.discard(queue)
+            while not queue.empty():
+                queue.get_nowait()
             queue.put_nowait(None)
 
     async def _run(self) -> None:
