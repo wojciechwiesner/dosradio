@@ -15,7 +15,7 @@ from fastapi.responses import HTMLResponse, Response
 from PIL import Image, ImageDraw, ImageFont
 
 from .comments import CommentService
-from .config import BRAND_TAGLINE, public_base_url, public_domain
+from .config import BRAND_NAME, BRAND_TAGLINE, public_base_url, public_domain
 from .custom_radios import CustomRadioService
 from .db import Database
 from .dedications import DedicationStore
@@ -197,7 +197,7 @@ def build_og_router(
 
         st_info = station_lookup(st_id) or {"name": st_id or "DOS Groove"}
         st_name = str(st_info.get("name") or "DOS Groove")
-        full_og_title = f"{title} — audycja w radiu {brand}"
+        full_og_title = f"{title} — audycja w radiu {BRAND_NAME}"
         full_og_desc = f"Zapraszamy do wysłuchania audycji pt. „{title}”, która opowiada o: {about[:160]} — przy muzyce {st_name}."
         return {
             "brand": brand,
@@ -242,13 +242,17 @@ def build_og_router(
         if not raw_html:
             raw_html = "<!doctype html><html lang='pl'><head><title>Radio</title></head><body></body></html>"
 
-        e_title = html.escape(meta["og_title"], quote=True)
+        e_title = html.escape(meta["og_title"] if q else BRAND_TAGLINE, quote=True)
         e_desc = html.escape(meta["og_desc"], quote=True)
         e_img = html.escape(img_url, quote=True)
         e_url = html.escape(page_url, quote=True)
 
         # Strip static title + og:* tags and inject dynamic OpenGraph + Twitter Card tags
         cleaned = re.sub(r"<title>.*?</title>", "", raw_html, count=1, flags=re.DOTALL)
+        # Canonical follows the configured public URL, so it never points at a domain that does not serve yet.
+        canonical = html.escape(public_base_url().rstrip("/") + "/", quote=True)
+        cleaned = re.sub(r'<link\s+rel="canonical"\s+href="[^"]*"\s*/?>',
+                         f'<link rel="canonical" href="{canonical}" />', cleaned, count=1)
         cleaned = re.sub(r'<meta\s+property="og:[^"]+"\s+content="[^"]*"\s*/?>\s*', "", cleaned)
         cleaned = re.sub(r'<meta\s+name="(?:description|twitter:[^"]+)"\s+content="[^"]*"\s*/?>\s*', "", cleaned)
 
