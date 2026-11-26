@@ -90,7 +90,7 @@ EXISTING_STATION_METADATA: dict[str, dict[str, Any]] = {
     # fokus-puls
     "dos-groove": {
         "group_id": "fokus-puls",
-        "name": "DOS Groove",
+        "name": "Ambi Groove",
         "tagline": "Minimal deep tech do pracy",
         "category": "fokus",
         "host": "Kuba",

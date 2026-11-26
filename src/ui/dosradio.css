@@ -180,6 +180,10 @@ input[type='range'] { accent-color: var(--accent); height: var(--tap); margin: 0
   font: 500 var(--fs-14) var(--font-mono); color: var(--accent); text-decoration: none; }
 .onair .src:hover { text-decoration: underline; }
 .onair .src[hidden] { display: none; }
+.onair-now { margin: var(--s-4) 0 0; padding: 0; border-top: 1px solid var(--line); }
+.onair-now > div { display: flex; justify-content: space-between; gap: var(--s-2); padding: var(--s-1) 0; border-bottom: 1px solid var(--line); }
+.onair-now dt { color: var(--faint); font: 500 var(--fs-12)/1.6 var(--font-mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.onair-now dd { margin: 0; color: var(--text); font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---------- sections ---------- */
 .section { margin-top: var(--s-8); }

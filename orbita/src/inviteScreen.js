@@ -48,7 +48,7 @@ export function buildInvitePreviewHtml(inv) {
   ensureInviteStyles();
   const title = inv.title || 'Audycja specjalna';
   const about = inv.about || 'wyjątkowy temat przygotowany przez prowadzących AmbiRadio';
-  const stName = inv.station_name || inv.stationName || 'DOS Groove';
+  const stName = inv.station_name || inv.stationName || 'Ambi Groove';
   const stGenre = inv.station_genre || inv.stationGenre || 'elektronika i klubowy groove';
   return `
     <div class="qs-invite-card">
@@ -84,7 +84,7 @@ export function openAuditionInvite({ invite, ready = true, statusText = '', ctaL
   const draw = () => {
     const inv = state.invite || {};
     const fromBadge = inv.from_name ? `ZAPROSZENIE OD: ${inv.from_name}` : 'ZAPROSZENIE DO RADIA NA ŻYWO';
-    const stName = inv.station_name || 'DOS Groove';
+    const stName = inv.station_name || 'Ambi Groove';
     const stGenre = inv.station_genre || 'klubowa elektronika i groove';
     ov.innerHTML = `
       <div class="ai-card" role="dialog" aria-modal="true" aria-label="Zaproszenie do odsłuchu audycji">

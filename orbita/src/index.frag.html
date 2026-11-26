@@ -47,15 +47,15 @@ a { color: inherit; }
 #stage.dragging { cursor: grabbing; }
 #gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 #labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.sat-label { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 6px; white-space: nowrap; text-transform: uppercase; font-size: 10px; color: var(--ink-dim); background: none; border: 0; will-change: transform, opacity; }
+.sat-label { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 6px; white-space: nowrap; text-transform: uppercase; font-size: 10px; color: var(--ink); background: rgba(7,6,10,.74); border: 1px solid rgba(236,232,244,.1); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); will-change: transform, opacity; }
 .sat-label b { font-weight: 500; color: var(--ink); font-size: 11px; }
-.sat-label small { font-size: 9px; opacity: .7; }
+.sat-label small { font-size: 10px; color: var(--ink-dim); }
 .sat-label.tuned b { color: var(--accent); }
 .sat-label.in-group b { color: var(--ink); text-shadow: 0 0 8px var(--accent); }
 .sat-label.blend b { text-decoration: underline; text-underline-offset: 3px; }
-.moon-label { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; border: 1px solid var(--line); background: rgba(7,6,10,.55); color: var(--ink-dim); padding: 3px 7px; font-size: 10px; text-transform: uppercase; white-space: nowrap; will-change: transform; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.moon-label { position: absolute; left: 0; top: 0; pointer-events: auto; cursor: pointer; border: 1px solid var(--line); background: rgba(7,6,10,.8); color: var(--ink); padding: 3px 7px; font-size: 10px; text-transform: uppercase; white-space: nowrap; will-change: transform; backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .moon-label[aria-pressed="true"] { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); }
-.host-label { position: absolute; left: 0; top: 0; display: flex; gap: 6px; align-items: center; padding: 3px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; background: rgba(7,6,10,.6); border: 1px solid var(--line); will-change: transform, opacity; transition: border-color .2s; }
+.host-label { position: absolute; left: 0; top: 0; display: flex; gap: 6px; align-items: center; padding: 3px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: .1em; background: rgba(7,6,10,.8); border: 1px solid var(--line); will-change: transform, opacity; transition: border-color .2s; }
 .host-label i { width: 6px; height: 6px; background: var(--ink-dim); }
 .host-label.talking { border-color: var(--accent); }
 .host-label.talking i { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
@@ -107,7 +107,11 @@ body[data-quality="low"] .moon-label:not([aria-pressed="true"]), body[data-quali
 .ramowka-cta { font-size: 10px; color: var(--ink-dim); text-decoration: none; display: inline-flex; gap: 4px; align-items: center; }
 .ramowka-cta b { color: var(--accent); font-weight: 700; }
 .ramowka-cta:hover { color: var(--ink); }
-.grp-tree { display: grid; gap: 6px; }
+.grp-tree { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.grp-acc, .grp-stations { min-width: 0; }
+.grp-sum .btn { flex: none; }
+.grp-st > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.grp-st small { flex: none; }
 .grp-acc { border: 1px solid var(--line); background: rgba(236,232,244,.02); }
 .grp-acc.active { border-color: var(--accent); }
 .grp-sum { list-style: none; cursor: pointer; padding: 7px 9px; display: flex; align-items: center; justify-content: space-between; gap: 6px; }
@@ -194,8 +198,8 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 .tabs button { height: 40px; background: none; border: 0; border-bottom: 2px solid transparent; text-transform: uppercase; font-size: 10px; letter-spacing: .1em; color: var(--ink-dim); display: flex; align-items: center; justify-content: center; gap: 6px; }
 .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 700; }
 .tabs .pip { min-width: 16px; height: 16px; padding: 0 3px; box-sizing: border-box; background: var(--accent); color: var(--accent-ink); font-size: 9px; display: inline-grid; place-items: center; font-weight: 700; }
-.panes { overflow-y: auto; overscroll-behavior: contain; flex: 1; scrollbar-width: thin; scrollbar-color: rgba(236,232,244,.2) transparent; }
-.group { padding: 14px 16px; display: grid; gap: 10px; border-bottom: 1px solid var(--line); }
+.panes { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; flex: 1; scrollbar-width: thin; scrollbar-color: rgba(236,232,244,.2) transparent; }
+.group { padding: 14px 16px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; border-bottom: 1px solid var(--line); }
 .group h2 { margin: 0; font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
 .hint { color: var(--ink-dim); font-size: 10px; font-weight: 400; letter-spacing: .02em; text-transform: none; margin: 0; line-height: 1.45; }
 .lead { margin: 0; color: var(--ink-dim); font-size: 11px; line-height: 1.55; }
@@ -249,9 +253,9 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 .deck-head .grip { width: 40px; height: 4px; background: var(--line); }
 
 /* overlays */
-#enter { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 24px var(--gr) 24px var(--gl); background: radial-gradient(ellipse at 50% 60%, rgba(7,6,10,.5), rgba(7,6,10,.94) 70%); transition: opacity .6s, visibility .6s; }
+#enter { position: fixed; inset: 0; z-index: 20; display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; align-items: center; overflow-y: auto; padding: 24px var(--gr) 24px var(--gl); background: radial-gradient(ellipse at 50% 60%, rgba(7,6,10,.5), rgba(7,6,10,.94) 70%); transition: opacity .6s, visibility .6s; }
 #enter.gone { opacity: 0; visibility: hidden; }
-.enter-inner { max-width: 540px; display: grid; gap: 16px; }
+.enter-inner { width: min(540px, 100%); display: grid; gap: 16px; }
 .enter-inner h1 { margin: 0; font-family: var(--font-display); font-size: clamp(44px, 9vw, 88px); line-height: .95; letter-spacing: -.03em; }
 .enter-inner h1 span { color: var(--accent); }
 .enter-inner p { margin: 0; color: var(--ink-dim); font-size: 13px; line-height: 1.6; max-width: 48ch; }
@@ -430,7 +434,7 @@ body.calm *, body.calm *::before, body.calm *::after { animation: none !importan
 
 <div id="enter">
   <div class="enter-inner">
-    <div class="enter-meta"><span>AmbiRadio — <span data-i18n="tagline"></span></span><span data-i18n="enterMeta1"></span><span id="enterMode"></span></div>
+    <div class="enter-meta"><span>AmbiRadio — <span data-i18n="tagline"></span></span><span id="enterMode"></span></div>
     <h1><span data-i18n="enterTitle"></span><span>.</span></h1>
     <p data-i18n="enterLead"></p>
     <p class="free" data-i18n="enterFree"></p>

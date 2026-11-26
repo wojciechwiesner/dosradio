@@ -123,7 +123,7 @@ def test_dedications_use_moderation(tmp_path):
     async def speak(text: str, voice: str, style: str = "") -> bytes:
         return b"RIFF" + b"\x00" * 60
 
-    client = _client(build_dedications_router(speak, tmp_path, tmp_path / "d.db", lambda sid: {"id": sid, "name": "DOS Groove"}))
+    client = _client(build_dedications_router(speak, tmp_path, tmp_path / "d.db", lambda sid: {"id": sid, "name": "Ambi Groove"}))
     bad = client.post("/radio-api/dedications", json={"station_id": "dos-groove", "to_name": "Ola", "from_name": "Wojtek", "message": "ty kurwo"})
     assert bad.status_code == 400 and "AmbiRadio" in bad.json()["detail"]
     ok = client.post("/radio-api/dedications", json={"station_id": "dos-groove", "to_name": "Ola", "from_name": "Wojtek", "message": "Zadzwoń 600 100 200 miłego dnia"})
