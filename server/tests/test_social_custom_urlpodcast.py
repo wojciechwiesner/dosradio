@@ -255,9 +255,9 @@ def test_url_podcast_outreach_link_generates_and_serves_public_parts(tmp_path: P
     assert wav_res.status_code == 200
     assert len(wav_res.content) > 40
 
-    # Verify Dynamic OpenGraph HTML + 1200x630 PNG Miniature with title & "audycja w radiu ambiradio.com"
+    # Verify Dynamic OpenGraph HTML + 1200x630 PNG Miniature with title & "audycja w radiu AmbiRadio"
     og_html = client.get(f"/radio-api/og/share-html?p={tok}").text
-    assert "audycja w radiu ambiradio.com" in og_html
+    assert "audycja w radiu AmbiRadio" in og_html
     assert "AmbiRadio — Ambitnie dla Ciebie" in og_html
     assert poll["invite"]["title"] in og_html
     assert f"/radio-api/og/card.png?p={tok}" in og_html
