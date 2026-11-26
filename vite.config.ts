@@ -17,11 +17,11 @@ export default defineConfig({
     port: 5202,
     proxy: {
       '/radio-api': {
-        target: 'http://127.0.0.1:3015',
+        target: process.env.DOSRADIO_API_TARGET || 'http://127.0.0.1:3015',
         changeOrigin: false,
       },
       '/radio-ws': {
-        target: 'ws://127.0.0.1:3015',
+        target: (process.env.DOSRADIO_API_TARGET || 'http://127.0.0.1:3015').replace('http', 'ws'),
         ws: true,
         changeOrigin: false,
       },
