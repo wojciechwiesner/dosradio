@@ -26,14 +26,14 @@ class Host:
 HOSTS: dict[str, Host] = {
     "dos-groove": Host(
         "Kuba", "Orus", "a calm, focused, quietly confident male host who respects the listener's concentration",
-        "DOS Groove",
+        "Ambi Groove",
         "Cześć, tu Kuba. Ty robisz swoje, ja pilnuję rytmu. Spokojny groove, zero pośpiechu. Zaczynamy.",
-        "DOS Groove. Kuba jest z tobą.",
+        "Ambi Groove. Kuba jest z tobą.",
         jingles=(
-            "Tu AmbiRadio, DOS Groove. Kuba przy konsolecie.",
-            "DOS Groove w AmbiRadio. Rytm pod kontrolą.",
+            "Tu AmbiRadio, Ambi Groove. Kuba przy konsolecie.",
+            "Ambi Groove w AmbiRadio. Rytm pod kontrolą.",
             "Słuchasz AmbiRadio. Spokojnie, groove trwa.",
-            "AmbiRadio, DOS Groove. Kuba jest z tobą.",
+            "AmbiRadio, Ambi Groove. Kuba jest z tobą.",
         ),
         chatter=(
             "Skupienie to supermoc. Nie musisz go szukać, wystarczy zostać w rytmie.",

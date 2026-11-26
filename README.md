@@ -17,7 +17,7 @@ Muzyka nie pochodzi z żadnej bazy gotowych plików ani serwisów streamingowych
 ## Kluczowe możliwości
 
 - **14 stacji z charakterem i prowadzącymi**:
-  - *DOS Groove* (Kuba) — minimal deep tech do pracy (122 BPM)
+  - *Ambi Groove* (Kuba) — minimal deep tech do pracy (122 BPM)
   - *Lo-fi Nauka* (Ola) — ciepłe bity z winyla i miękkie pianino (82 BPM)
   - *Microhouse* (Rafał) — organiczny rumuński minimal i detal (124 BPM)
   - *Głęboki Ambient* (Ida) — bez perkusji, medytacyjna przestrzeń (60 BPM)

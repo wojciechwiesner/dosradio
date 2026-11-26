@@ -59,7 +59,7 @@ export const MUSIC_GROUPS = [
 ];
 
 const RAW = [
-  ['dos-groove','Kuba','DOS Groove',122,.45,.45,'fokus','fokus-puls'],
+  ['dos-groove','Kuba','Ambi Groove',122,.45,.45,'fokus','fokus-puls'],
   ['lofi-nauka','Ola','Lo-fi Nauka',82,.4,.35,'fokus','fokus-puls'],
   ['micro-house','Rafał','Microhouse',124,.5,.4,'fokus','fokus-puls'],
   ['deep-tech','Kuba','Deep Tech',124,.5,.35,'fokus','fokus-puls'],

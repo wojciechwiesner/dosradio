@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the DOS Radio API with secrets from .env (never committed). Used by PM2 on borg.tools.
+# Start the AmbiRadio API with secrets from .env (never committed). Used by PM2 on borg.tools.
 set -euo pipefail
 cd "$(dirname "$0")"
 set -a

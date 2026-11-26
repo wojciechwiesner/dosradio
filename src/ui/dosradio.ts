@@ -87,6 +87,8 @@ function updateNowPlayingHeader(): void {
     $('nowStation').textContent = blended ? `${current.name} + ${blended.name}` : current.name;
     $('nowTagline').textContent = current.host ? `${current.tagline} (prowadzi: ${current.host})` : current.tagline;
   }
+  $('onairStation').textContent = blended ? `${current.name} + ${blended.name}` : current.name;
+  $('onairHost').textContent = current.host || 'AmbiRadio';
 }
 
 function renderGroupFilters(): void {
@@ -334,8 +336,8 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
   },
   onNextBreak: (at) => {
     upcoming.setNextBreak(at);
-    const el = $('nextBreak');
-    if (el) el.textContent = at ? at.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '—';
+    const time = at ? at.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' }) : '—';
+    for (const id of ['nextBreak', 'onairNext']) { const el = $(id); if (el) el.textContent = time; }
   },
   onTrialEnded: () => { void refreshAccess(); openAuth('register', true); },
   onHostState: (speaking, role) => {
@@ -681,6 +683,7 @@ function renderHostMode(mode: HostMode): void {
   newsButton.hidden = isMusicOnly;
   if (isMusicOnly) {
     $('nextBreak').textContent = 'wyłączone';
+    $('onairNext').textContent = 'wyłączone';
   }
 }
 
@@ -739,6 +742,7 @@ async function handleMoodSubmit(description: string): Promise<void> {
     const custom = await radioApi.mood(clean);
     $('nowStation').textContent = custom.name;
     $('nowTagline').textContent = custom.tagline;
+    $('onairStation').textContent = custom.name;
     await engine.setStation(custom);
     bgAudio.updateMetadata(custom.name, 'AmbiRadio', 'Twój nastrój');
     setStatus(`Gra nastrój: ${custom.name} · ${custom.tagline}`);

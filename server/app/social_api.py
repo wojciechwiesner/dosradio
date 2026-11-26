@@ -93,7 +93,7 @@ def build_social_router(
         return "Znajomy"
 
     def _make_dedication(station_id: str, to_name: str, from_name: str, msg: str, actor_key: str) -> dict[str, Any]:
-        st = station_lookup(station_id) or {"id": "dos-groove", "name": "DOS Groove"}
+        st = station_lookup(station_id) or {"id": "dos-groove", "name": "Ambi Groove"}
         sid = str(st["id"])
         sname = str(st.get("name") or sid)
         host = host_for(sid)
@@ -111,8 +111,8 @@ def build_social_router(
 
     def _enrich_drop(drop: dict[str, Any]) -> dict[str, Any]:
         out = dict(drop)
-        st_info = station_lookup(str(out.get("station_id") or "dos-groove")) or {"id": "dos-groove", "name": "DOS Groove"}
-        st_name = str(st_info.get("name") or out.get("station_id") or "DOS Groove")
+        st_info = station_lookup(str(out.get("station_id") or "dos-groove")) or {"id": "dos-groove", "name": "Ambi Groove"}
+        st_name = str(st_info.get("name") or out.get("station_id") or "Ambi Groove")
         st_genre = str(st_info.get("genre") or st_info.get("subtitle") or st_info.get("vibe") or "klubowa elektronika i groove")
         if out.get("dedication_token"):
             ded = ded_store.get(out["dedication_token"])

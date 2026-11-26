@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- **Launch polish before ads**: the share card (`/radio-api/og/card.png`, per-station and dedication cards) is
+  rendered by the new `server/app/og_card.py` as AmbiRadio, with the tagline "Ambitnie dla Ciebie", the domain from
+  `public_domain()`, short Polish copy and one CTA ("Posłuchaj na żywo"), still 1200x630. The old display name
+  "DOS Groove" is now "Ambi Groove" in UI, stations, hosts, catalog and docs (the station id `dos-groove` and all URLs
+  are unchanged). Orbita: the right panel no longer clips the "Graj" buttons at 1440x900, small orbit/moon/host labels
+  sit on a readable backdrop, the intro overlay no longer clips at 390px and no longer repeats the tagline;
+  reduced-motion is kept. Classic: the empty right panel shows now playing, host and next up, and the trial pill reads
+  "Darmowy dostęp 6 h" with an explanation on hover. Tests: `server/tests/test_og_card.py`.
 - **YouTube audio clipping is off** (`server/app/youtube_pill.py`, `pill_service.py`, `plus_api.py`,
   `custom_radios.py`): `POST /radio-api/plus/pill`, `POST /radio-api/plus/pills/batch`, the pill status, the saved-pill
   list and the cached media all answer 410 unless `DOSRADIO_YOUTUBE_CLIPS=1`, and `download_audio` refuses before

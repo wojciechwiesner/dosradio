@@ -28,7 +28,7 @@ def _client(monkeypatch, tmp_path: Path, base_url: str | None) -> TestClient:
         db=db,
         podcasts=PodcastService(None, tmp_path / "podcasts", ArchiveRegistry(tmp_path / "archive")),  # type: ignore[arg-type]
         custom_radios=CustomRadioService(db),
-        station_lookup=lambda sid: {"id": sid, "name": "DOS Groove"},
+        station_lookup=lambda sid: {"id": sid, "name": "Ambi Groove"},
         html_candidates=[INDEX],
     ))
     return TestClient(app)
@@ -53,4 +53,4 @@ def test_canonical_defaults_to_ambiradio(monkeypatch, tmp_path):
 
 def test_shared_item_keeps_its_own_title(monkeypatch, tmp_path):
     page = _client(monkeypatch, tmp_path, "https://dosradio.theones.io").get("/radio-api/og/share-html?station=dos-groove").text
-    assert "<title>Stacja DOS Groove — audycja w radiu AmbiRadio</title>" in page
+    assert "<title>Stacja Ambi Groove — audycja w radiu AmbiRadio</title>" in page

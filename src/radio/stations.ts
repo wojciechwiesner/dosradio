@@ -1,6 +1,6 @@
 /**
  * AmbiRadio music stations across moods and time-of-day host voices.
- * "DOS Groove" is the original prompt, preserved verbatim.
+ * "Ambi Groove" is the original prompt, preserved verbatim.
  */
 
 import { EXTRA_MUSIC_GROUPS, EXTRA_STATIONS } from './extraStations';
@@ -91,7 +91,7 @@ export const STATIONS: Station[] = [
   {
     id: 'dos-groove',
     host: 'Kuba',
-    name: 'DOS Groove',
+    name: 'Ambi Groove',
     tagline: 'Minimal deep tech do pracy',
     prompt: 'minimal deep tech groove, soft dub chords, steady four-on-the-floor kick, focused work music, instrumental',
     bpm: 122,

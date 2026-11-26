@@ -462,7 +462,7 @@ class RamowkaService:
                 "hour": current_hour,
                 "station_id": "dos-groove",
                 "configured_station_id": "dos-groove",
-                "station_name": "DOS Groove",
+                "station_name": "Ambi Groove",
                 "group_id": "fokus-puls",
                 "slot_label": "Fokus",
             }

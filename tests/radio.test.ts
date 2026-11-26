@@ -13,7 +13,7 @@ describe('AmbiRadio Stations', () => {
 
   it('resolves preset station correctly', () => {
     const groove = stationById('dos-groove');
-    expect(groove.name).toBe('DOS Groove');
+    expect(groove.name).toBe('Ambi Groove');
     expect(isPresetStation(groove)).toBe(true);
     expect(hostStationId(groove)).toBe('dos-groove');
   });

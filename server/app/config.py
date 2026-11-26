@@ -15,7 +15,8 @@ from pathlib import Path
 log = logging.getLogger("dosradio.config")
 
 BRAND_NAME = "AmbiRadio"
-BRAND_TAGLINE = "AmbiRadio — Ambitnie dla Ciebie"
+BRAND_TAGLINE_SHORT = "Ambitnie dla Ciebie"
+BRAND_TAGLINE = f"{BRAND_NAME} — {BRAND_TAGLINE_SHORT}"
 DEFAULT_PUBLIC_BASE_URL = "https://ambiradio.com"
 # Hosts that serve the same app; the legacy domain keeps working after the rebrand.
 PUBLIC_HOSTS = ("ambiradio.com", "www.ambiradio.com", "dosradio.theones.io")
