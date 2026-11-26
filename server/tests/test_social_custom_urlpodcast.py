@@ -180,7 +180,7 @@ def test_custom_creator_youtuber_radio_and_pills(tmp_path: Path):
             "description": "Mroczny synthwave i cyberpunk do nocnego programowania",
             "host": "Kuba",
             "pills": [
-                {"title": "Odcinek #42", "url": "https://youtube.com/watch?v=abc12345", "note": "Architektura agentów w 10 minut"}
+                {"title": "Odcinek #42", "url": "https://example.com/odcinek-42", "note": "Architektura agentów w 10 minut"}
             ],
         },
     )
@@ -246,7 +246,7 @@ def test_url_podcast_outreach_link_generates_and_serves_public_parts(tmp_path: P
     assert "automatyzacji" in poll["invite"]["about"] or poll["invite"]["about"]
     assert poll["invite"]["station_name"] == "Dos Groove"
 
-    # Verify Guest gets a DOS Radio ciekawostka/spot + playable WAV
+    # Verify Guest gets a AmbiRadio ciekawostka/spot + playable WAV
     spot_res = client.get("/radio-api/social/spot?station=dos-groove").json()
     assert spot_res["skip"] is False
     assert spot_res["tier"] == "guest"
@@ -255,9 +255,10 @@ def test_url_podcast_outreach_link_generates_and_serves_public_parts(tmp_path: P
     assert wav_res.status_code == 200
     assert len(wav_res.content) > 40
 
-    # Verify Dynamic OpenGraph HTML + 1200x630 PNG Miniature with title & "audycja w radiu heloradio.com"
+    # Verify Dynamic OpenGraph HTML + 1200x630 PNG Miniature with title & "audycja w radiu ambiradio.com"
     og_html = client.get(f"/radio-api/og/share-html?p={tok}").text
-    assert "audycja w radiu heloradio.com" in og_html
+    assert "audycja w radiu ambiradio.com" in og_html
+    assert "AmbiRadio — Ambitnie dla Ciebie" in og_html
     assert poll["invite"]["title"] in og_html
     assert f"/radio-api/og/card.png?p={tok}" in og_html
     og_png = client.get(f"/radio-api/og/card.png?p={tok}")

@@ -10,12 +10,13 @@ import time
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
-from .auth import client_ip
+from .auth import DEDICATION_PASS_COOKIE, AccessService, client_ip
 from .hosts import Host, host_for
+from .moderation import moderate_many
 
 logger = logging.getLogger("dosradio.dedications")
 
@@ -74,35 +75,35 @@ def build_dedication_script(
     if code == "en":
         if message:
             return (
-                f"Hey {to_name}! This is {host_name} on DOS Radio. "
+                f"Hey {to_name}! This is {host_name} on AmbiRadio. "
                 f"{from_name} sends warm greetings and shares the station {station_name} especially for you, "
                 f"with a message: \"{message}\". Make yourself comfortable — this music is playing live for you right now. Enjoy the listen!"
             )
         return (
-            f"Hey {to_name}! This is {host_name} on DOS Radio. "
+            f"Hey {to_name}! This is {host_name} on AmbiRadio. "
             f"{from_name} sends warm greetings and invites you to listen to {station_name} together. "
             "Make yourself comfortable — the music is playing live for you right now!"
         )
     if code == "ru":
         if message:
             return (
-                f"Привет, {to_name}! Это {host_name} на DOS Radio. "
+                f"Привет, {to_name}! Это {host_name} на AmbiRadio. "
                 f"{from_name} передаёт тебе тёплый привет и делится станцией {station_name} со словами: «{message}». "
                 "Устраивайся поудобнее — эта музыка звучит специально для тебя. Приятного прослушивания!"
             )
         return (
-            f"Привет, {to_name}! Это {host_name} на DOS Radio. "
+            f"Привет, {to_name}! Это {host_name} на AmbiRadio. "
             f"{from_name} передаёт тебе тёплый привет и приглашает послушать станцию {station_name}. "
             "Устраивайся поудобнее — музыка уже играет для тебя!"
         )
     if message:
         return (
-            f"Cześć {to_name}! Tu {host_name} z DOS Radio. "
+            f"Cześć {to_name}! Tu {host_name} z AmbiRadio. "
             f"Mam dla ciebie gorące pozdrowienia od {from_name}, który udostępnia specjalnie dla ciebie stację {station_name} "
             f"z dedykacją: „{message}”. Rozgość się i podkręć głośność — to jest twoja chwila, zapraszam do słuchania!"
         )
     return (
-        f"Cześć {to_name}! Tu {host_name} z DOS Radio. "
+        f"Cześć {to_name}! Tu {host_name} z AmbiRadio. "
         f"{from_name} przesyła ci gorące pozdrowienia i udostępnia specjalnie dla ciebie stację {station_name}. "
         "Rozgość się i zostań z nami — muzyka gra już specjalnie dla ciebie!"
     )
@@ -204,6 +205,7 @@ def build_dedications_router(
     audio_dir: Path,
     db_path: Path,
     station_lookup: StationLookup,
+    access: AccessService | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/radio-api")
     store = DedicationStore(db_path)
@@ -247,6 +249,14 @@ def build_dedications_router(
         ip_hash = hashlib.sha256(f"ded:{ip}".encode("utf-8")).hexdigest()[:16]
         if store.count_recent_by_ip(ip_hash) >= MAX_PER_HOUR_PER_IP:
             raise HTTPException(429, "Zbyt wiele dedykacji w ciągu godziny. Spróbuj za chwilę.")
+        cleaned, rejected = moderate_many(
+            {"to_name": body.to_name, "from_name": body.from_name, "message": body.message}, max_len=200,
+        )
+        if rejected is not None:
+            raise HTTPException(400, rejected.message)
+        if not cleaned["to_name"] or not cleaned["from_name"]:
+            raise HTTPException(400, "Podaj imiona bez linków i numerów telefonu.")
+        body = body.model_copy(update=cleaned)
         lang = body.lang if body.lang in LANGS else "pl"
         host = host_for(st["id"])
         station_name = str(st.get("name") or st["id"])
@@ -282,12 +292,24 @@ def build_dedications_router(
         return created
 
     @router.get("/dedications/{token}")
-    async def get_dedication(token: str) -> dict[str, Any]:
+    async def get_dedication(token: str, request: Request, response: Response) -> dict[str, Any]:
         if not token.isalnum() or len(token) > 24:
             raise HTTPException(404, "Nie znaleziono dedykacji")
         row = store.get(token)
         if not row:
             raise HTTPException(404, "Nie znaleziono dedykacji")
+        if access is not None:
+            ip = client_ip(
+                {k.lower(): v for k, v in request.headers.items()},
+                request.client.host if request.client else None,
+            )
+            granted = access.grant_dedication_pass(token, ip)
+            if granted:
+                value, max_age = granted
+                response.set_cookie(
+                    DEDICATION_PASS_COOKIE, value, max_age=max_age,
+                    httponly=True, secure=True, samesite="lax", path="/",
+                )
         return row
 
     @router.get("/dedications/{token}/greeting.wav")

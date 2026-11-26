@@ -1,5 +1,5 @@
 /**
- * Thin client for the DOS Radio API (same origin). The Gemini key lives only on the server.
+ * Thin client for the AmbiRadio API (same origin). The Gemini key lives only on the server.
  */
 import type { CategoryNews, NewsCategory } from './newsQueue';
 import type { AiredRemote } from './airedStore';
@@ -11,7 +11,10 @@ export interface AccessState {
   email: string | null;
   trial_started: boolean;
   trial_remaining: number;
+  /** Plus features on (subscription or the running 6 h trial). */
   plus: boolean;
+  /** Plus comes from the anonymous trial; older servers omit it. */
+  trial_plus?: boolean;
 }
 
 export interface NewsPreferences {
@@ -69,6 +72,32 @@ export interface HostClips {
   chatter: string[];
 }
 
+/** A listener comment as the API returns it (already moderated on the server). */
+export interface ListenerComment {
+  id: string;
+  station_id: string;
+  host_name: string;
+  nick: string;
+  text: string;
+  status: 'pending' | 'quiet' | 'aired' | 'skipped';
+  on_air: boolean;
+  created_at: number;
+  aired_at: number | null;
+  share_url: string;
+  classic_share_url: string;
+  clip_url?: string;
+  message?: string;
+}
+
+/** Next live host moment: a persona link or a listener comment read on air. */
+export interface HostBreak {
+  id: string;
+  kind: 'comment' | 'link';
+  text: string;
+  url: string;
+  comment: ListenerComment | null;
+}
+
 export interface RamowkaStateResponse {
   slot?: Partial<AutoRamowkaSlot> & {
     id?: string;
@@ -89,11 +118,12 @@ export interface RamowkaStateResponse {
   };
 }
 
+/** Canonical heartbeat body; the server still accepts the old `station`/`view`/`group` names from stale tabs. */
 export interface PresencePayload {
   client_id: string;
-  station: string;
-  group: string | null;
-  view: 'classic' | 'orbita';
+  station_id: string;
+  group_id: string | null;
+  view_mode: 'classic' | 'orbita';
   ramowka: boolean;
 }
 
@@ -169,12 +199,15 @@ export const radioApi = {
     request<{ categories: CategoryNews[] }>(`/radio-api/news?cats=${categories.join(',')}`),
   mood: (description: string) =>
     postJson<{ id: string; name: string; tagline: string; prompt: string; bpm: number; density: number; brightness: number }>('/radio-api/mood', { mood: description }),
-  // --- DOS Radio Plus ---
+  // --- AmbiRadio Plus ---
   newsPreferences: () => request<NewsPreferences>('/radio-api/plus/news-preferences'),
   saveNewsPreferences: (keywords: string[], rssFeeds: string[]) =>
     putJson<NewsPreferences>('/radio-api/plus/news-preferences', { keywords, rss_feeds: rssFeeds }),
   newsDigest: () => request<NewsDigest>('/radio-api/plus/news-digest'),
-  podcast: (topic?: string) => postJson<PodcastManifest>('/radio-api/plus/podcast', topic ? { topic } : {}),
+  podcast: (topic?: string, sourceUrl?: string) => postJson<PodcastManifest>('/radio-api/plus/podcast', {
+    ...(topic ? { topic } : {}),
+    ...(sourceUrl ? { source_url: sourceUrl } : {}),
+  }),
   myPodcasts: async () => (await request<{ podcasts: PodcastListItem[] }>('/radio-api/plus/podcasts')).podcasts,
   /** Host jingles and chatter for a station; null when the endpoint is missing or fails. */
   hostClips: async (stationId: string): Promise<HostClips | null> => {
@@ -183,6 +216,17 @@ export const radioApi = {
       if (!response.ok) return null;
       const body = (await response.json()) as Partial<HostClips>;
       return { jingles: body.jingles ?? [], chatter: body.chatter ?? [] };
+    } catch {
+      return null;
+    }
+  },
+  /** Live host link or comment readout for the next break; null means "use the static clips". */
+  hostBreak: async (stationId: string): Promise<HostBreak | null> => {
+    try {
+      const response = await fetch(`/radio-api/host-break/${encodeURIComponent(stationId)}`, { credentials: 'same-origin' });
+      if (!response.ok) return null;
+      const body = (await response.json()) as { break?: HostBreak | null };
+      return body.break && typeof body.break.url === 'string' ? body.break : null;
     } catch {
       return null;
     }

@@ -3,9 +3,9 @@ from __future__ import annotations
 LANGS = {"pl", "en", "ru"}
 
 NUDGE_5MIN: dict[str, str] = {
-    "pl": "Zostało pięć minut darmowej godziny. Załóż konto, a zostanę z tobą na dłużej.",
-    "en": "Five minutes of your free hour left. Create an account and I’ll stay with you longer.",
-    "ru": "Осталось пять минут бесплатного часа. Создай аккаунт, и я останусь с тобой подольше.",
+    "pl": "Zostało pięć minut pełnego dostępu. Załóż konto, a zostanę z tobą na dłużej.",
+    "en": "Five minutes of full access left. Create an account and I’ll stay with you longer.",
+    "ru": "Осталось пять минут полного доступа. Создай аккаунт, и я останусь с тобой подольше.",
 }
 
 PODCAST_TITLES: dict[str, str] = {
@@ -29,20 +29,20 @@ def intro_lines(host_name: str, lang: str) -> list[str]:
     code = norm_lang(lang)
     if code == "en":
         return [
-            f"Hi, I'm {host_name}. This is DOS Radio: the music is composed live, separately for each station.",
+            f"Hi, I'm {host_name}. This is AmbiRadio: the music is composed live, separately for each station.",
             "Drag the dial to change station. The moons around the speaker are news topics, pick the ones you want.",
             "Type any topic and we will record a podcast about it. Your own sources and mail go on air before the rest of the world.",
             "The first hour is free, and after that all you need to do is register. This is truly your radio — your music, your rules, your style.",
         ]
     if code == "ru":
         return [
-            f"Привет, это {host_name}. Это DOS Radio: музыка рождается вживую, отдельно для каждой станции.",
+            f"Привет, это {host_name}. Это AmbiRadio: музыка рождается вживую, отдельно для каждой станции.",
             "Потяни шкалу, чтобы сменить станцию. Луны вокруг динамика это темы новостей, выбери нужные.",
             "Напиши любую тему, и мы запишем о ней подкаст. Твои источники и письма выходят в эфир раньше остального мира.",
             "Первый час бесплатно, а потом достаточно просто зарегистрироваться. Это по-настоящему твоё радио — твоя музыка, твои правила, твой стиль.",
         ]
     return [
-        f"Cześć, tu {host_name}. To DOS Radio: muzyka powstaje na żywo, osobno dla każdej stacji.",
+        f"Cześć, tu {host_name}. To AmbiRadio: muzyka powstaje na żywo, osobno dla każdej stacji.",
         "Przeciągnij tarczę, żeby zmienić stację. Księżyce wokół głośnika to tematy wiadomości, wybierz te, które chcesz.",
         "Wpisz dowolny temat, a nagramy o nim podcast. Twoje źródła i maile idą na antenę przed resztą świata.",
         "Pierwsza godzina jest za darmo, a później wystarczy, że się zarejestrujesz. To jest prawdziwe twoje radio — twoja muzyka, twoje zasady, twój styl.",
@@ -53,7 +53,7 @@ def podcast_script(a: str, b: str, lang: str) -> list[tuple[str, ...]]:
     code = norm_lang(lang)
     if code == "en":
         return [
-            ("A", f"Welcome to DOS Radio. I'm {a}, and {b} is in the studio with me. Three minutes about why this radio isn't playlists."),
+            ("A", f"Welcome to AmbiRadio. I'm {a}, and {b} is in the studio with me. Three minutes about why this radio isn't playlists."),
             ("B", "Because a playlist ends, repeats, and sooner or later pulls your hand back to the screen. Here the music is composed live. Every bar for the first time, matched to the station you picked."),
             ("A", "Drag the dial: twenty-five stations, from deep ambient at sixty beats, through lo-fi for study and stoic minimalism, up to Berlin techno at a hundred thirty-eight."),
             ("B", "Every station has its own host and its own voice. If you only want the music, one button turns the hosts off completely."),
@@ -70,7 +70,7 @@ def podcast_script(a: str, b: str, lang: str) -> list[tuple[str, ...]]:
         ]
     if code == "ru":
         return [
-            ("A", f"Добро пожаловать на DOS Radio. Я {a}, со мной в студии {b}. Три минуты о том, почему это радио не плейлисты."),
+            ("A", f"Добро пожаловать на AmbiRadio. Я {a}, со мной в студии {b}. Три минуты о том, почему это радио не плейлисты."),
             ("B", "Плейлист кончается, повторяется и тянет руку обратно к экрану. Здесь музыка рождается вживую, каждый такт впервые, под выбранную станцию."),
             ("A", "Потяни шкалу: двадцать пять станций, от глубокого эмбиента до берлинского техно. У каждой свой ведущий, а одной кнопкой можно оставить только музыку."),
             ("music",),
@@ -80,7 +80,7 @@ def podcast_script(a: str, b: str, lang: str) -> list[tuple[str, ...]]:
             ("A", "Попробуй прямо сейчас: покрути шкалу, переключи луну, закажи свой бесплатный подкаст. Оставайся с нами."),
         ]
     return [
-        ("A", f"Witaj w DOS Radio. Tu {a}, a ze mną w studiu {b}. Przez trzy minuty pokażemy ci, dlaczego to radio nie gra z playlisty."),
+        ("A", f"Witaj w AmbiRadio. Tu {a}, a ze mną w studiu {b}. Przez trzy minuty pokażemy ci, dlaczego to radio nie gra z playlisty."),
         ("B", "Bo playlista się kończy, powtarza i prędzej czy później odrywa ręce do ekranu. Tutaj muzyka powstaje na żywo, w tej chwili, dopasowana do stacji, którą wybierzesz."),
         ("A", "Przeciągnij tarczę: dwadzieścia pięć stacji, od głębokiego ambientu sześćdziesiąt uderzeń na minutę, przez lo-fi do nauki i stoicki minimalizm, aż po berlińskie techno sto trzydzieści osiem."),
         ("B", "Każda stacja ma własnego prowadzącego i własny charakter. A jeśli chcesz samej muzyki, jednym przyciskiem wyłączasz głos całkowicie."),

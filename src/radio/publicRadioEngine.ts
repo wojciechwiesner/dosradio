@@ -1,5 +1,5 @@
 /**
- * DOS Radio engine for dosradio.theones.io.
+ * AmbiRadio engine for the public web player.
  *
  * Features:
  * - 14 stations with named hosts (Kuba, Ola, Rafał, Ida, Zosia, Lena, Tadek, Max, Igor, Wiktor, Helena, Marta, Szymon, Marek).
@@ -58,6 +58,8 @@ export interface PublicRadioEvents {
   onHostModeChange?: (mode: HostMode) => void;
   onHostState?: (speaking: boolean, role: 'host' | 'news' | 'jingle' | null) => void;
   onStationChange?: (station: Station, groupId: MusicGroupId | null) => void;
+  /** The music bed actually started (stream element playing or chunk streamer running). */
+  onMusicAudible?: () => void;
 }
 
 const GROUP_ROTATE_MS = 6 * 60_000;
@@ -108,6 +110,23 @@ export class PublicRadioEngine {
 
   setPendingDedication(ded: { audio_url: string; script: string; host_name?: string; to_name?: string; from_name?: string } | null): void {
     this.pendingDedication = ded;
+  }
+
+  get hasPendingDedication(): boolean {
+    return this.pendingDedication !== null;
+  }
+
+  private greetingDoneListeners: Array<(durationS: number) => void> = [];
+
+  /** One-shot: called when the next dedication greeting finished (or failed: 0 s). */
+  onceGreetingDone(cb: (durationS: number) => void): void {
+    this.greetingDoneListeners.push(cb);
+  }
+
+  private emitGreetingDone(durationS: number): void {
+    const listeners = this.greetingDoneListeners;
+    this.greetingDoneListeners = [];
+    listeners.forEach((cb) => cb(durationS));
   }
 
   /** Duck the live radio bed under external spoken segments (e.g. Plus podcast) without stopping the station. */
@@ -258,6 +277,7 @@ export class PublicRadioEngine {
       void this.triggerDeadAirRecovery();
     } else {
       this.events.onStatus(this.statusLabel());
+      this.events.onMusicAudible?.();
     }
     this.events.onState('playing');
     this.syncGroupRotationTimer();
@@ -701,6 +721,7 @@ export class PublicRadioEngine {
     const sid = hostStationId(this.station);
     const ded = this.pendingDedication;
     this.pendingDedication = null;
+    let greetingS = 0;
     try {
       const voiceUrl = ded?.audio_url || `/radio-api/welcome/${sid}.wav`;
       const bufPromise = this.decode(voiceUrl);
@@ -718,10 +739,12 @@ export class PublicRadioEngine {
       }
       await new Promise((r) => setTimeout(r, 320));
       if (!this.playing || gen !== this.welcomeGeneration) return;
+      greetingS = buf.duration;
       await this.playVoice(buf);
     } catch {
       // Ignored if greeting is missing
     } finally {
+      if (ded) this.emitGreetingDone(greetingS);
       if (gen === this.welcomeGeneration) {
         this.speaking = false;
         this.events.onHostState?.(false, null);
@@ -751,6 +774,7 @@ export class PublicRadioEngine {
         this.helper?.stop();
         if (await this.startMusic()) {
           this.events.onStatus(`Gra ${this.station.name}`);
+          this.events.onMusicAudible?.();
           return;
         }
         this.events.onStatus('Łączę ponownie z muzyką...');
@@ -837,6 +861,11 @@ export class PublicRadioEngine {
     this.lastBreakEndedAt = null;
   }
 
+  /** A listener comment was just sent: let the host check for it at the next quiet moment. */
+  requestHostBreakSoon(delayMs = 40_000): void {
+    if (this.playing && this.hostMode === 'with-host') this.clipPlayer.soon(delayMs);
+  }
+
   /** Random jingle/chatter between songs: ducks the music like a news break. */
   private async airHostClip(url: string): Promise<void> {
     const buffer = await this.decode(url);
@@ -877,8 +906,9 @@ export class PublicRadioEngine {
   /** Nothing new to report today: say so briefly and let the host chat instead of repeating a story. */
   private async airFiller(): Promise<void> {
     this.events.onStatus('To już wszystkie nowe wiadomości na dziś. Zaraz coś od prowadzącego.');
-    const clips = await radioApi.hostClips(hostStationId(this.station));
-    const url = clips?.chatter[Math.floor(Math.random() * (clips?.chatter.length ?? 0))];
+    const live = await this.clipPlayer.freshLiveUrl(hostStationId(this.station));
+    const clips = live ? null : await radioApi.hostClips(hostStationId(this.station));
+    const url = live ?? clips?.chatter[Math.floor(Math.random() * (clips?.chatter.length ?? 0))];
     if (url) await this.airHostClip(url).catch(() => {});
   }
 

@@ -1,4 +1,4 @@
-"""Tests for DOS Radio 100-hour archive, cap enforcement and 70/30 stream selection."""
+"""Tests for AmbiRadio 100-hour archive, cap enforcement and 70/30 stream selection."""
 from __future__ import annotations
 
 import pytest

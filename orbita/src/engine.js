@@ -1,4 +1,4 @@
-/* Radio engine: port of the dosradio.theones.io player (break scheduler, programme planner, pill queue,
+/* Radio engine: port of the classic AmbiRadio player (break scheduler, programme planner, pill queue,
    host clips, ducking) plus podcasts, the opening intro and on-screen hosts/captions. */
 import { t, getLang, fmtClock, topicLabel, stationName } from './i18n.js';
 import { AiredStore, PillQueue, coHostFor } from './data.js';
@@ -77,6 +77,7 @@ export class RadioEngine {
     const ok = await this.startMusic();
     if (!this.playing) return;
     this.events.onStatus(ok ? t('st_playing', { name: stationName(this.station) }) : t('st_reconnect'));
+    if (ok) this.events.onMusicAudible?.();
     this.events.onState('playing'); this.setMode('music');
     if (this.hostMode === 'with-host') {
       this.refreshNews(); this.newsTimer = setInterval(() => this.refreshNews(), NEWS_REFRESH);
@@ -127,7 +128,7 @@ export class RadioEngine {
   setInterval(n) { this.interval = n; if (this.playing && this.hostMode === 'with-host' && !this.speaking) { this.clearSchedule(); this.scheduleNextBreak(); } }
   async setCategories(c) { this.categories = c; if (this.playing && this.hostMode === 'with-host') await this.refreshNews(); }
   endTrial() { this.stop(); this.events.onTrialEnded(); }
-  recover() { if (!this.playing) return; this.events.onStatus(t('st_reconnect')); setTimeout(() => this.playing && this.startMusic(), 2000); }
+  recover() { if (!this.playing) return; this.events.onStatus(t('st_reconnect')); setTimeout(async () => { if (this.playing && (await this.startMusic())) this.events.onMusicAudible?.(); }, 2000); }
 
   /* ---------------- news ---------------- */
   async refreshNews() {
@@ -233,8 +234,23 @@ export class RadioEngine {
     await this.airBreak(new Date(), true);
     if (this.playing && this.hostMode === 'with-host') { this.clearSchedule(); this.scheduleNextBreak(); }
   }
+  /* live break from the server (listener comment on air or persona link), once per listener */
+  async freshLiveBreak() {
+    if (!this.api.live || !this.api.hostBreak) return null;
+    const b = await this.api.hostBreak(this.station.id);
+    this.heardBreaks = this.heardBreaks || new Set();
+    if (!b || this.heardBreaks.has(b.id)) return null;
+    this.heardBreaks.add(b.id);
+    return { kind: 'voice', who: 'A', url: b.url, caption: b.comment ? `${b.comment.nick}: ${b.comment.text}` : b.text };
+  }
+  /* a listener just sent a comment: check for a live break sooner than the usual gap */
+  requestHostBreakSoon(ms = 40000) {
+    if (this.playing && this.hostMode === 'with-host' && !this.podcastActive) this.scheduleClip(ms);
+  }
   async airFiller() {
     this.events.onStatus(t('st_filler'));
+    const live = await this.freshLiveBreak();
+    if (live) { await this.hostMoment(live, 'host'); return; }
     const clips = this.api.live ? await this.api.hostClips(this.station.id) : null;
     const chatter = clips?.chatter || [];
     if (chatter.length) {
@@ -346,14 +362,15 @@ export class RadioEngine {
       }
     }
   }
-  scheduleClip() {
+  scheduleClip(soonMs = 0) {
     clearTimeout(this.clipTimer);
-    const wait = (6 + Math.random() * 6) * MIN;
+    const wait = soonMs || (6 + Math.random() * 6) * MIN;
     this.clipTimer = setTimeout(async () => {
       if (this.playing && this.hostMode === 'with-host' && !this.speaking && !this.podcastActive) {
-        const clips = this.api.live ? await this.api.hostClips(this.station.id) : null;
+        const live = await this.freshLiveBreak();
+        const clips = !live && this.api.live ? await this.api.hostClips(this.station.id) : null;
         const urls = clips ? [...clips.jingles, ...clips.chatter] : [];
-        const part = urls.length ? { kind: 'voice', url: urls[(Math.random() * urls.length) | 0], caption: t('tts_jingle') }
+        const part = live ? live : urls.length ? { kind: 'voice', url: urls[(Math.random() * urls.length) | 0], caption: t('tts_jingle') }
           : { kind: 'tts', who: 'A', text: Math.random() < 0.4 ? t('tts_jingle') : t('tts_chatter')[(Math.random() * 3) | 0] };
         await this.hostMoment(part, 'host');
       }
@@ -454,7 +471,7 @@ export class RadioEngine {
       if (myEpoch !== this.voiceEpoch || !this.podcastActive || !this.playing) return;
       const sp = data.spot;
       this.events.onPodcastHud?.({
-        phase: sp.kind === 'ciekawostka' ? 'CIEKAWOSTKA DOS RADIO' : 'SPOT DOS RADIO',
+        phase: sp.kind === 'ciekawostka' ? 'CIEKAWOSTKA AMBIRADIO' : 'SPOT AMBIRADIO',
         title: sp.title,
         subtitle: sp.text,
         ctaLabel: sp.cta_label || 'Sprawdź Plus',

@@ -1,4 +1,4 @@
-/* Backend access. LiveApi talks to dosradio.theones.io (same origin). DemoApi mirrors the shapes with local content. */
+/* Backend access. LiveApi talks to the AmbiRadio backend (same origin). DemoApi mirrors the shapes with local content. */
 import { getLang } from './i18n.js';
 import { demoNews, gmailSample, demoPodcast, toParts } from './content.js';
 import { byId } from './data.js';
@@ -38,6 +38,11 @@ export class LiveApi {
   pillStatus(id) { return req(`/radio-api/plus/pill/${encodeURIComponent(id)}`); }
   async hostClips(stationId) { try { const j = await req(`/radio-api/host-clips/${encodeURIComponent(stationId)}`); return { jingles: j.jingles ?? [], chatter: j.chatter ?? [] }; } catch { return null; } }
   billing() { return req('/radio-api/billing/status').catch(() => null); }
+  /* listener comments on air + live host breaks (persona links, comment readouts) */
+  async hostBreak(stationId) { try { const j = await req(`/radio-api/host-break/${encodeURIComponent(stationId)}`); return j && j.break && typeof j.break.url === 'string' ? j.break : null; } catch { return null; } }
+  postComment(body) { return post('/radio-api/comments', body); }
+  comments(stationId) { return req(`/radio-api/comments?${q({ station_id: stationId, limit: 3 })}`).then(j => j.comments || []).catch(() => []); }
+  comment(id) { return req(`/radio-api/comments/${encodeURIComponent(id)}`).catch(() => null); }
   checkout(plan) { return post('/radio-api/billing/checkout', { plan }); }
   /* proposed endpoints (see BACKEND.md); the UI falls back gracefully when they are missing */
   showcase() { return req(`/radio-api/showcase?${q({ lang: getLang() })}`).catch(() => null); }
@@ -92,7 +97,11 @@ export class DemoApi {
   async pillsBatch() { const e = new Error('demo'); e.demo = true; throw e; }
   async pillStatus() { return { status: 'error' }; }
   async hostClips() { return null; }
-  async billing() { return { registered: false, plus: false, checkout_available: false, plans: [{ id: 'plus', amount_pln: 39 }, { id: 'plus_ai', amount_pln: 59 }], demo: true }; }
+  async hostBreak() { return null; }
+  async postComment(body) { return { id: 'kdemo' + Math.random().toString(36).slice(2, 8), ...body, nick: body.nick || 'Ktoś ze słuchaczy', host_name: 'Kuba', status: 'pending', on_air: false, share_url: '', classic_share_url: '', demo: true }; }
+  async comments() { return []; }
+  async comment() { return null; }
+  async billing() { return { registered: false, plus: false, checkout_available: false, plans: [{ id: 'plus', currency: 'usd', amount_cents: 299, yearly_cents: 2990 }, { id: 'plus_ai', currency: 'usd', amount_cents: 699, yearly_cents: 6990 }], demo: true }; }
   async checkout() { const e = new Error('demo'); e.demo = true; throw e; }
   async showcase() { return null; }
   orbitaIntroUrl() { return null; }

@@ -4,7 +4,7 @@ import { defaultPrefs, parsePrefs, nextGenreChoice } from '../src/ui/prefs';
 import { interleaveStories, pickNextStory, type QueuedStory } from '../src/radio/newsQueue';
 import { nextBreakAt, msUntilNextBreak, spokenTimePl } from '../src/radio/radioClock';
 
-describe('DOS Radio Stations', () => {
+describe('AmbiRadio Stations', () => {
   it('loads 42 stations with unique IDs and hosts', () => {
     expect(STATIONS.length).toBe(42);
     const ids = new Set(STATIONS.map((s) => s.id));

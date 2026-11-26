@@ -1,5 +1,5 @@
 /**
- * Pure time helpers for DOS Radio: spoken Polish time and the break schedule.
+ * Pure time helpers for AmbiRadio: spoken Polish time and the break schedule.
  * No DOM, no audio: fully unit-testable.
  */
 

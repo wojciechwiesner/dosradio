@@ -149,6 +149,8 @@ class FakeTools:
 
 @pytest.fixture()
 def pill_env(plus_client, monkeypatch):
+    # These tests exercise the pipeline itself; the release default is clips off.
+    monkeypatch.setenv("DOSRADIO_YOUTUBE_CLIPS", "1")
     from app.main import gemini, podcasts
     spoken: list[str] = []
 

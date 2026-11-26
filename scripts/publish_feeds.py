@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Publish calendar and AP feeds for the DOS Radio personal digest.
+"""Publish calendar and AP feeds for the AmbiRadio personal digest.
 
 Runs on the Mac mini, where Himalaya (Gmail IMAP) and ap_improve live. Writes
 three RSS files under an unguessable token directory and rsyncs them to the

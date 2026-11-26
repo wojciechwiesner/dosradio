@@ -1,5 +1,5 @@
 /**
- * DOS Radio music stations across moods and time-of-day host voices.
+ * AmbiRadio music stations across moods and time-of-day host voices.
  * "DOS Groove" is the original prompt, preserved verbatim.
  */
 
@@ -87,7 +87,7 @@ export const MUSIC_GROUPS: MusicGroup[] = [
 export const NEGATIVE_PROMPT = 'vocals, singing, harsh noise, screeching leads, distortion';
 
 export const STATIONS: Station[] = [
-  // --- Klasyki DOS Radio ---
+  // --- Klasyki AmbiRadio ---
   {
     id: 'dos-groove',
     host: 'Kuba',
@@ -632,7 +632,7 @@ export interface AutoRamowkaSlot {
 
 const AUTO_RAMOWKA_SPOTS: Array<{ id: string; title: string }> = [
   { id: 'zrobimy-ai', title: 'zrobi.my — Automatyzacja AI i agenci głosowi dla firm' },
-  { id: 'dosradio-ramowka', title: 'DOS Radio — Auto-Ramówka 24/7 i własne pasma muzyczne' },
+  { id: 'dosradio-ramowka', title: 'AmbiRadio — Auto-Ramówka 24/7 i własne pasma muzyczne' },
   { id: 'zrobimy-wdrozenia', title: 'zrobi.my — Dedykowane wdrożenia AI w 14 dni' },
 ];
 
@@ -669,7 +669,7 @@ export function computeAutoRamowkaSlot(now: Date = new Date()): AutoRamowkaSlot 
       spotId: spot.id,
       spotTitle: spot.title,
       ctaLabel: 'Zamów wdrożenie AI · zrobi.my',
-      ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka',
+      ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka',
     };
   }
   if (hour >= 9 && hour < 13) {
@@ -685,7 +685,7 @@ export function computeAutoRamowkaSlot(now: Date = new Date()): AutoRamowkaSlot 
       spotId: spot.id,
       spotTitle: spot.title,
       ctaLabel: 'Zamów wdrożenie AI · zrobi.my',
-      ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka',
+      ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka',
     };
   }
   if (hour >= 13 && hour < 17) {
@@ -701,7 +701,7 @@ export function computeAutoRamowkaSlot(now: Date = new Date()): AutoRamowkaSlot 
       spotId: spot.id,
       spotTitle: spot.title,
       ctaLabel: 'Zamów wdrożenie AI · zrobi.my',
-      ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka',
+      ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka',
     };
   }
   if (hour >= 17 && hour < 20) {
@@ -717,7 +717,7 @@ export function computeAutoRamowkaSlot(now: Date = new Date()): AutoRamowkaSlot 
       spotId: spot.id,
       spotTitle: spot.title,
       ctaLabel: 'Zamów wdrożenie AI · zrobi.my',
-      ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka',
+      ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka',
     };
   }
   if (hour >= 20 && hour < 24) {
@@ -733,7 +733,7 @@ export function computeAutoRamowkaSlot(now: Date = new Date()): AutoRamowkaSlot 
       spotId: spot.id,
       spotTitle: spot.title,
       ctaLabel: 'Zamów wdrożenie AI · zrobi.my',
-      ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka',
+      ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka',
     };
   }
   const st = stationById('warm-jazz');
@@ -748,7 +748,7 @@ export function computeAutoRamowkaSlot(now: Date = new Date()): AutoRamowkaSlot 
     spotId: spot.id,
     spotTitle: spot.title,
     ctaLabel: 'Zamów wdrożenie AI · zrobi.my',
-    ctaUrl: 'https://zrobi.my?utm_source=dosradio&utm_medium=ramowka',
+    ctaUrl: 'https://zrobi.my?utm_source=ambiradio&utm_medium=ramowka',
   };
 }
 

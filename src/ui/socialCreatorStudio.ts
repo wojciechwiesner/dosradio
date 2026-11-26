@@ -40,6 +40,15 @@ const BADGE_SVGS: Record<string, string> = {
   copy: '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M10 13a5 5 0 0 0 7.5.5l2.8-2.8a5 5 0 0 0-7.1-7.1L11.7 5"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2.8 2.8a5 5 0 0 0 7.1 7.1L12.3 19"/></svg>',
 };
 
+/** Line icons for the action row chips (same 24px grid and 2px stroke as the rest of the classic UI). */
+const CHIP_SVGS: Record<string, string> = {
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></svg>',
+  friends: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="9" cy="8" r="4"/><path d="M2 21v-1a6 6 0 0 1 12 0v1"/><path d="M16 4a4 4 0 0 1 0 8M22 21v-1a6 6 0 0 0-4-5.7"/></svg>',
+  radio: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="8" width="18" height="13"/><path d="m7 8 10-5"/><circle cx="15" cy="14.5" r="2.5"/><path d="M7 13h3M7 16h3"/></svg>',
+  web: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
+  star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>',
+};
+
 function getClientId(): string {
   try {
     let v = localStorage.getItem(CID_KEY);
@@ -81,29 +90,39 @@ export function wireClassicSocialStudio(
     const style = el('style');
     style.id = 'dos-social-studio-css';
     style.textContent = `
-      .dos-soc-bar{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 14px;align-items:center}
-      .dos-soc-chip{background:#151822;border:1px solid rgba(255,255,255,.14);color:#f3f4f6;border-radius:999px;padding:8px 13px;min-height:38px;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
-      .dos-soc-chip:hover{border-color:#ff6b3d;color:#fff}
-      .dos-soc-chip.fav-on{border-color:#fbbf24;color:#fbbf24}
-      .dos-pwa-btn{background:rgba(255,107,61,.16);border:1px solid rgba(255,107,61,.6);color:#fff;border-radius:999px;padding:7px 12px;font-size:12px;font-weight:600;cursor:pointer}
-      #dos-soc-overlay{position:fixed;inset:0;z-index:9998;background:rgba(7,9,14,.8);backdrop-filter:blur(12px);display:none;align-items:center;justify-content:center;padding:14px}
+      .dos-soc-bar{display:flex;flex-wrap:wrap;gap:8px;margin:16px 0;align-items:center}
+      .dos-soc-chip{background:transparent;border:1px solid var(--line-strong);color:var(--text);border-radius:0;padding:0 16px 0 12px;min-height:44px;font:500 14px/1.2 var(--font-sans);cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-align:left}
+      .dos-soc-chip svg{width:18px;height:18px;flex:none}
+      .dos-soc-chip:hover{border-color:var(--text);background:var(--bg-3)}
+      .dos-soc-chip.fav-on{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+      .dos-soc-chip.fav-on svg{fill:currentColor}
+      .dos-pwa-btn{background:transparent;border:1px solid var(--line-strong);color:var(--text);border-radius:0;min-height:44px;padding:0 12px;font:500 14px var(--font-sans);cursor:pointer}
+      .dos-pwa-btn:hover{border-color:var(--text)}
+      .dos-pwa-btn[hidden]{display:none}
+      #dos-soc-overlay{position:fixed;inset:0;z-index:9998;background:rgba(5,5,6,.82);display:none;align-items:center;justify-content:center;padding:16px}
       #dos-soc-overlay.open{display:flex}
-      .dos-soc-modal{width:min(520px,100%);max-height:86vh;overflow-y:auto;background:#11131c;border:1px solid rgba(255,255,255,.15);border-radius:18px;padding:18px;color:#f3f4f6}
-      .dos-soc-tabs{display:flex;gap:6px;margin:10px 0 14px;overflow-x:auto}
-      .dos-soc-tab{background:rgba(255,255,255,.06);border:1px solid transparent;color:#cbd5e1;border-radius:999px;padding:8px 12px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
-      .dos-soc-tab.on{background:rgba(255,107,61,.2);border-color:#ff6b3d;color:#fff}
+      .dos-soc-modal{width:min(520px,100%);max-height:86vh;overflow-y:auto;background:var(--bg-2);border:1px solid var(--line-strong);border-top:4px solid var(--accent);padding:24px;color:var(--text)}
+      .dos-soc-modal strong{font-size:20px;letter-spacing:-.02em}
+      .dos-soc-tabs{display:flex;gap:0;margin:16px 0;overflow-x:auto;border-bottom:1px solid var(--line)}
+      .dos-soc-tab{background:transparent;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--dim);padding:0 16px;min-height:44px;font:500 14px var(--font-sans);cursor:pointer;white-space:nowrap}
+      .dos-soc-tab:hover{color:var(--text)}
+      .dos-soc-tab.on{border-bottom-color:var(--accent);color:var(--text)}
       .dos-soc-grid{display:grid;gap:8px;margin-top:8px}
-      .dos-soc-in{width:100%;box-sizing:border-box;background:#181b28;border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:10px;padding:10px 11px;font-size:13px}
-      .dos-soc-primary{background:#ff6b3d;color:#0b0c10;border:0;border-radius:10px;padding:11px 14px;font-weight:700;font-size:13px;cursor:pointer;min-height:42px}
-      .dos-app-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
-      .dos-app-tile{background:#171a26;border:1px solid rgba(255,255,255,.12);color:#f3f4f6;border-radius:13px;padding:10px 6px;min-height:70px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-decoration:none;font-size:11.5px;font-weight:600;cursor:pointer}
-      .dos-app-ico{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;color:#fff}
-      .dos-soc-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 10px;background:#171a26;border-radius:10px;margin-bottom:6px;font-size:13px}
+      .dos-soc-in{width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--line-strong);color:var(--text);border-radius:0;min-height:44px;padding:10px 12px;font:16px var(--font-sans)}
+      .dos-soc-in:focus{outline:none;border-color:var(--accent)}
+      .dos-soc-primary{background:var(--accent);color:var(--on-accent);border:0;border-radius:0;padding:0 16px;font:700 14px var(--font-sans);cursor:pointer;min-height:44px}
+      .dos-soc-primary:hover{background:var(--text)}
+      .dos-app-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:8px;background:var(--line);border:1px solid var(--line)}
+      .dos-app-tile{background:var(--bg-2);border:0;color:var(--text);border-radius:0;padding:8px;min-height:80px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-decoration:none;font:500 12px var(--font-sans);cursor:pointer}
+      .dos-app-tile:hover{background:var(--bg-3)}
+      .dos-app-ico{width:40px;height:40px;display:flex;align-items:center;justify-content:center;color:#fff}
+      .dos-soc-row{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
       @media(max-width:760px){
-        body{padding-bottom:68px}
-        #classicMobNav{position:fixed;left:0;right:0;bottom:0;height:calc(56px + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px);background:rgba(12,14,20,.96);border-top:1px solid rgba(255,255,255,.12);z-index:900;display:grid;grid-template-columns:repeat(5,1fr)}
+        body{padding-bottom:72px}
+        #classicMobNav{position:fixed;left:0;right:0;bottom:0;height:calc(56px + env(safe-area-inset-bottom,0px));padding-bottom:env(safe-area-inset-bottom,0px);background:var(--bg);border-top:1px solid var(--line-strong);z-index:900;display:grid;grid-template-columns:repeat(5,1fr)}
         #orbitaShell:not([hidden]) ~ #classicMobNav{display:none!important}
-        .cmn-btn{border:0;background:transparent;color:#cbd5e1;font-size:10px;font-weight:600;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;min-height:48px;cursor:pointer}
+        .cmn-btn{border:0;background:transparent;color:var(--dim);font:500 12px/1.2 var(--font-sans);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;min-height:56px;cursor:pointer}
+        .cmn-btn:hover,.cmn-btn:active{color:var(--accent)}
       }
       @media(min-width:761px){#classicMobNav{display:none}}
     `;
@@ -124,7 +143,7 @@ export function wireClassicSocialStudio(
       if (ch?.outcome === 'accepted') window.__pwaPrompt = null;
       return;
     }
-    window.alert('Aby zainstalować DOS Radio na ekranie głównym: otwórz menu przeglądarki lub przycisk Udostępnij i wybierz „Dodaj do ekranu początkowego / Zainstaluj aplikację”.');
+    window.alert('Aby zainstalować AmbiRadio na ekranie głównym: otwórz menu przeglądarki lub przycisk Udostępnij i wybierz „Dodaj do ekranu początkowego / Zainstaluj aplikację”.');
   };
   topActions?.prepend(pwaBtn);
 
@@ -133,18 +152,27 @@ export function wireClassicSocialStudio(
 
   const hostAnchor = document.getElementById('dedicateBtn')?.parentElement || document.getElementById('status')?.parentElement;
   const bar = el('div', 'dos-soc-bar');
-  const btnShareQuick = el('button', 'dos-soc-chip', 'Udostępnij przez...');
-  const btnFriends = el('button', 'dos-soc-chip', 'Znajomi');
-  const btnCreator = el('button', 'dos-soc-chip', 'Własne Radio');
-  const btnOutreach = el('button', 'dos-soc-chip', 'Podcast z WWW');
-  const btnFav = el('button', 'dos-soc-chip', 'Ulubiona');
-  [btnShareQuick, btnFriends, btnCreator, btnOutreach, btnFav].forEach((b) => { b.type = 'button'; bar.appendChild(b); });
+  const iconChip = (icon: string, label: string) => {
+    const chip = el('button', 'dos-soc-chip');
+    chip.type = 'button';
+    chip.innerHTML = CHIP_SVGS[icon]; // static SVG constant
+    chip.append(el('span', 'dos-soc-label', label));
+    return chip;
+  };
+  const btnShareQuick = iconChip('share', 'Udostępnij');
+  const btnFriends = iconChip('friends', 'Znajomi');
+  const btnCreator = iconChip('radio', 'Własne radio');
+  const btnOutreach = iconChip('web', 'Podcast z WWW');
+  const btnFav = iconChip('star', 'Do ulubionych');
+  const favLabel = btnFav.querySelector('.dos-soc-label')!;
+  [btnShareQuick, btnFriends, btnCreator, btnOutreach, btnFav].forEach((b) => bar.appendChild(b));
   hostAnchor?.appendChild(bar);
 
   const syncFav = () => {
     const on = favs.has(engine.currentStation.id);
     btnFav.classList.toggle('fav-on', on);
-    btnFav.textContent = on ? 'W ulubionych' : 'Dodaj do ulubionych';
+    btnFav.setAttribute('aria-pressed', String(on));
+    favLabel.textContent = on ? 'W ulubionych' : 'Do ulubionych';
   };
   btnFav.onclick = () => {
     const sid = engine.currentStation.id;
@@ -157,7 +185,7 @@ export function wireClassicSocialStudio(
   overlay.id = 'dos-soc-overlay';
   document.body.appendChild(overlay);
 
-  const renderAppBadgeGrid = (target: HTMLElement, url: string, text: string, title = 'DOS Radio') => {
+  const renderAppBadgeGrid = (target: HTMLElement, url: string, text: string, title = 'AmbiRadio') => {
     target.replaceChildren();
     const hdr = el('div', '', 'Udostępnij przez...');
     hdr.style.cssText = 'font-weight:700;font-size:13px;margin-top:12px';
@@ -200,7 +228,7 @@ export function wireClassicSocialStudio(
     const cl = el('button', 'dos-soc-chip', 'Zamknij'); cl.type = 'button'; cl.onclick = () => overlay.classList.remove('open');
     top.appendChild(cl); modal.appendChild(top);
     const badgeMount = el('div');
-    renderAppBadgeGrid(badgeMount, `${location.origin}/?station=${encodeURIComponent(engine.currentStation.id)}`, `Posłuchaj stacji ${engine.currentStation.name} w DOS Radio:`);
+    renderAppBadgeGrid(badgeMount, `${location.origin}/?station=${encodeURIComponent(engine.currentStation.id)}`, `Posłuchaj stacji ${engine.currentStation.name} w AmbiRadio:`);
     modal.appendChild(badgeMount);
     overlay.appendChild(modal);
   };
@@ -246,7 +274,7 @@ export function wireClassicSocialStudio(
           const msg = window.prompt(`Pozdrowienie / pigułka dla ${f.name}:`, 'Dobrego odsłuchu!') || '';
           if (!msg) return;
           const res = await sapi('/social/drops', { method: 'POST', body: JSON.stringify({ to_friend_id: f.id, to_name: f.name, kind: 'greeting', station_id: engine.currentStation.id, message: msg }) });
-          renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Wrzutka na antenę DOS Radio dla ${f.name}:`);
+          renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Wrzutka na antenę AmbiRadio dla ${f.name}:`);
         };
         row.appendChild(dropBtn); body.appendChild(row);
       }
@@ -263,15 +291,15 @@ export function wireClassicSocialStudio(
         const fd = Object.fromEntries(new FormData(form).entries());
         if (fd.from_name) localStorage.setItem(NAME_KEY, String(fd.from_name));
         const res = await sapi('/social/friends', { method: 'POST', body: JSON.stringify({ ...fd, with_greeting: true }) });
-        renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Cześć ${String(fd.name)}! Pozdrowienie na antenie DOS Radio:`);
+        renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Cześć ${String(fd.name)}! Pozdrowienie na antenie AmbiRadio:`);
       };
       body.appendChild(form);
     } else if (tab === 'creator') {
       const form = el('form', 'dos-soc-grid');
       const inName = el('input', 'dos-soc-in'); inName.name = 'name'; inName.placeholder = 'Nazwa Twojego radia'; inName.required = true;
-      const inCreator = el('input', 'dos-soc-in'); inCreator.name = 'creator_name'; inCreator.placeholder = 'Twórca / Kanał YT';
+      const inCreator = el('input', 'dos-soc-in'); inCreator.name = 'creator_name'; inCreator.placeholder = 'Twórca';
       const inDesc = el('textarea', 'dos-soc-in'); inDesc.name = 'description'; inDesc.rows = 2; inDesc.placeholder = 'Opisz klimat lub modyfikację...';
-      const inPills = el('textarea', 'dos-soc-in'); inPills.name = 'pills_raw'; inPills.rows = 2; inPills.placeholder = 'Linki YT / pigułki (1 w linii)';
+      const inPills = el('textarea', 'dos-soc-in'); inPills.name = 'pills_raw'; inPills.rows = 2; inPills.placeholder = 'Pigułki wiedzy: link do artykułu albo notatka (1 w linii)';
       const sub = el('button', 'dos-soc-primary', 'Utwórz stację i udostępnij'); sub.type = 'submit';
       [inName, inCreator, stationSelect(), inDesc, inPills, sub].forEach((n) => form.appendChild(n));
       form.onsubmit = async (ev) => {
@@ -279,7 +307,7 @@ export function wireClassicSocialStudio(
         const fd = Object.fromEntries(new FormData(form).entries());
         const pills = String(fd.pills_raw || '').split('\n').map((l) => l.trim()).filter(Boolean).map((u) => ({ url: u, title: u, note: '' }));
         const res = await sapi('/custom-radios', { method: 'POST', body: JSON.stringify({ ...fd, base_station_id: fd.station_id, pills }) });
-        renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Posłuchaj mojej stacji ${String(fd.name)} w DOS Radio:`);
+        renderAppBadgeGrid(shareBox, String(res.share_url || ''), `Posłuchaj mojej stacji ${String(fd.name)} w AmbiRadio:`);
       };
       body.appendChild(form);
     } else {
@@ -313,8 +341,8 @@ export function wireClassicSocialStudio(
   /* ---- Classic Mobile Bottom Nav ---- */
   const cNav = el('nav'); cNav.id = 'classicMobNav';
   const navItems: Array<[string, () => void]> = [
-    ['Orbita 2.5D', () => document.getElementById('orbitaViewBtn')?.click()],
-    ['Stacje', () => document.getElementById('stationGrid')?.scrollIntoView({ behavior: 'smooth' })],
+    ['Orbita', () => document.getElementById('viewOrbitaBtn')?.click()],
+    ['Stacje', () => document.getElementById('stationsSection')?.scrollIntoView({ behavior: 'smooth' })],
     ['Moje', () => document.querySelector('.settings')?.scrollIntoView({ behavior: 'smooth' })],
     ['Podcast', () => document.getElementById('plusPanel')?.scrollIntoView({ behavior: 'smooth' })],
     ['Znajomi', () => void openStudio('friends')],

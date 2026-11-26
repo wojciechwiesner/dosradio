@@ -7,19 +7,19 @@ const L = obj => obj[getLang()] || obj.pl;
 /* ---------- Opening: the host explains the radio (always first) ---------- */
 export const introScript = (host) => L({
   pl: [
-    `Cześć, tu ${host}. To DOS Radio: muzyka powstaje na żywo, osobno dla każdej stacji.`,
+    `Cześć, tu ${host}. To AmbiRadio: muzyka powstaje na żywo, osobno dla każdej stacji.`,
     'Przeciągnij tarczę, żeby zmienić stację. Księżyce wokół głośnika to tematy wiadomości, wybierz te, które chcesz.',
     'Wpisz dowolny temat, a nagramy o nim podcast. Twoje źródła i maile idą na antenę przed resztą świata.',
     'Pierwsza godzina jest za darmo, a później wystarczy, że się zarejestrujesz. To jest prawdziwe twoje radio — twoja muzyka, twoje zasady, twój styl.',
   ],
   en: [
-    `Hi, I'm ${host}. This is DOS Radio: the music is composed live, separately for each station.`,
+    `Hi, I'm ${host}. This is AmbiRadio: the music is composed live, separately for each station.`,
     'Drag the dial to change station. The moons around the speaker are news topics, pick the ones you want.',
     'Type any topic and we will record a podcast about it. Your own sources and mail go on air before the rest of the world.',
     'The first hour is free, and after that all you need to do is register. This is truly your radio — your music, your rules, your style.',
   ],
   ru: [
-    `Привет, это ${host}. Это DOS Radio: музыка рождается вживую, отдельно для каждой станции.`,
+    `Привет, это ${host}. Это AmbiRadio: музыка рождается вживую, отдельно для каждой станции.`,
     'Потяни шкалу, чтобы сменить станцию. Луны вокруг динамика это темы новостей, выбери нужные.',
     'Напиши любую тему, и мы запишем о ней подкаст. Твои источники и письма выходят в эфир раньше остального мира.',
     'Первый час бесплатно, а потом достаточно просто зарегистрироваться. Это по-настоящему твоё радио — твоя музыка, твои правила, твой стиль.',
@@ -40,10 +40,10 @@ export const defaultPodcast = (a, b) => L({
     ['B', 'Czyli zamiast otwierać pocztę o siódmej rano, słuchasz jej przy kawie. Brzmi jak drobiazg, a oszczędza głowę na cały dzień.'],
     ['music'],
     ['A', 'Trzecia rzecz to twoje życie. Radio ma pamiętać, co już słyszałeś, żeby się nie powtarzać, i podsuwać to, co ma sens o tej porze dnia.'],
-    ['B', 'Do tego podcasty takie jak ten. Podajesz dowolny temat, a my we dwoje rozmawiamy o nim kilka minut. Długi wywiad z YouTube zamieniamy w pigułkę z samym konkretem.'],
+    ['B', 'Do tego podcasty takie jak ten. Podajesz dowolny temat, a my we dwoje rozmawiamy o nim kilka minut i zostawiamy sam konkret.'],
     ['A', 'I codziennie odrobina stoików. Krótka myśl, która pomaga oddzielić to, na co masz wpływ, od reszty.'],
     ['B', 'Masz teraz godzinę, żeby to wszystko sprawdzić. Wygeneruj swój pierwszy podcast, jest za darmo. Pokręć tarczą. Kliknij księżyc z tematem.'],
-    ['A', 'Twoja muzyka. Twoje tematy. Twoje życie. To było DOS Radio.'], ['B', 'Do usłyszenia.'],
+    ['A', 'Twoja muzyka. Twoje tematy. Twoje życie. To było AmbiRadio.'], ['B', 'Do usłyszenia.'],
   ],
   en: [
     ['A', `Good morning, I'm ${a}.`], ['B', `And I'm ${b}. This is our first episode together, and we start with the most important thing: why this radio is yours.`],
@@ -56,10 +56,10 @@ export const defaultPodcast = (a, b) => L({
     ['B', 'So instead of opening email at seven in the morning, you listen to it over coffee. Sounds small, but it saves your head for the whole day.'],
     ['music'],
     ['A', 'The third thing is your life. The radio remembers what you have already heard, so it does not repeat itself, and suggests what makes sense at this time of day.'],
-    ['B', 'Plus podcasts like this one. Give us any topic and the two of us talk about it for a few minutes. A long YouTube interview becomes a pill with just the essentials.'],
+    ['B', 'Plus podcasts like this one. Give us any topic and the two of us talk about it for a few minutes, keeping just the essentials.'],
     ['A', 'And a little Stoicism every day. A short thought that helps you separate what you control from everything else.'],
     ['B', 'You now have an hour to try it all. Generate your first podcast, it is free. Turn the dial. Click a topic moon.'],
-    ['A', 'Your music. Your topics. Your life. This was DOS Radio.'], ['B', 'Talk soon.'],
+    ['A', 'Your music. Your topics. Your life. This was AmbiRadio.'], ['B', 'Talk soon.'],
   ],
   ru: [
     ['A', `Доброе утро, это ${a}.`], ['B', `А я ${b}. Это наш первый общий выпуск, и начнём с главного: почему это радио твоё.`],
@@ -72,10 +72,10 @@ export const defaultPodcast = (a, b) => L({
     ['B', 'То есть вместо того, чтобы открывать почту в семь утра, ты слушаешь её за кофе. Мелочь, а голова свободна на весь день.'],
     ['music'],
     ['A', 'Третье — твоя жизнь. Радио помнит, что ты уже слышал, чтобы не повторяться, и предлагает то, что уместно в это время дня.'],
-    ['B', 'Плюс подкасты вроде этого. Назови любую тему, и мы вдвоём поговорим о ней несколько минут. Длинное интервью с YouTube превращаем в пилюлю с одной сутью.'],
+    ['B', 'Плюс подкасты вроде этого. Назови любую тему, и мы вдвоём поговорим о ней несколько минут и оставим одну суть.'],
     ['A', 'И каждый день немного стоицизма. Короткая мысль, которая помогает отделить то, что в твоей власти, от всего остального.'],
     ['B', 'У тебя есть час, чтобы всё это попробовать. Создай свой первый подкаст, это бесплатно. Покрути шкалу. Нажми на луну с темой.'],
-    ['A', 'Твоя музыка. Твои темы. Твоя жизнь. Это было DOS Radio.'], ['B', 'До встречи.'],
+    ['A', 'Твоя музыка. Твои темы. Твоя жизнь. Это было AmbiRadio.'], ['B', 'До встречи.'],
   ],
 });
 
@@ -163,9 +163,9 @@ export const gmailSample = () => L({
 export function demoPodcast(topic, a, b) {
   const T = topic.trim();
   return L({
-    pl: [['A', `Dzień dobry, tu ${a} i ${b}. Dziś na życzenie słuchacza: ${T}.`], ['B', `Zanim zaczniemy: to wersja demonstracyjna. W pełnym radiu ten odcinek pisze AI na podstawie świeżych źródeł.`], ['A', `Dobrze, to pytanie pierwsze. Dlaczego temat „${T}” w ogóle jest ważny?`], ['B', 'Bo dotyczy codziennych decyzji. Jeśli rozumiesz go trochę lepiej, oszczędzasz czas i nerwy.'], ['music'], ['A', 'Gdybyś miał zapamiętać jedną rzecz, co by to było?'], ['B', 'Zacznij od małego kroku, który zrobisz jeszcze dziś. Plan na rok może poczekać.'], ['A', 'A stoicy dodaliby: skup się na tym, co zależy od ciebie.'], ['B', `To był wasz podcast o tym, co nazwaliście: ${T}. Do usłyszenia w DOS Radio.`]],
-    en: [['A', `Good morning, it's ${a} and ${b}. Today, at a listener's request: ${T}.`], ['B', 'Before we start: this is the demo version. On the full radio, AI writes this episode from fresh sources.'], ['A', `Right, first question. Why does “${T}” matter at all?`], ['B', 'Because it touches everyday decisions. Understand it a little better and you save time and nerves.'], ['music'], ['A', 'If you had to remember one thing, what would it be?'], ['B', 'Start with one small step you can take today. The plan for the year can wait.'], ['A', 'And the Stoics would add: focus on what is up to you.'], ['B', `That was your podcast on ${T}. Talk soon on DOS Radio.`]],
-    ru: [['A', `Доброе утро, это ${a} и ${b}. Сегодня по просьбе слушателя: ${T}.`], ['B', 'Сразу скажем: это демо-версия. В полном радио этот выпуск пишет ИИ по свежим источникам.'], ['A', `Итак, первый вопрос. Почему тема «${T}» вообще важна?`], ['B', 'Потому что она касается ежедневных решений. Поймёшь её чуть лучше — сэкономишь время и нервы.'], ['music'], ['A', 'Если бы нужно было запомнить одно, что бы это было?'], ['B', 'Начни с маленького шага, который сделаешь уже сегодня. План на год подождёт.'], ['A', 'А стоики добавили бы: сосредоточься на том, что зависит от тебя.'], ['B', `Это был ваш подкаст на тему: ${T}. До встречи на DOS Radio.`]],
+    pl: [['A', `Dzień dobry, tu ${a} i ${b}. Dziś na życzenie słuchacza: ${T}.`], ['B', `Zanim zaczniemy: to wersja demonstracyjna. W pełnym radiu ten odcinek pisze AI na podstawie świeżych źródeł.`], ['A', `Dobrze, to pytanie pierwsze. Dlaczego temat „${T}” w ogóle jest ważny?`], ['B', 'Bo dotyczy codziennych decyzji. Jeśli rozumiesz go trochę lepiej, oszczędzasz czas i nerwy.'], ['music'], ['A', 'Gdybyś miał zapamiętać jedną rzecz, co by to było?'], ['B', 'Zacznij od małego kroku, który zrobisz jeszcze dziś. Plan na rok może poczekać.'], ['A', 'A stoicy dodaliby: skup się na tym, co zależy od ciebie.'], ['B', `To był wasz podcast o tym, co nazwaliście: ${T}. Do usłyszenia w AmbiRadio.`]],
+    en: [['A', `Good morning, it's ${a} and ${b}. Today, at a listener's request: ${T}.`], ['B', 'Before we start: this is the demo version. On the full radio, AI writes this episode from fresh sources.'], ['A', `Right, first question. Why does “${T}” matter at all?`], ['B', 'Because it touches everyday decisions. Understand it a little better and you save time and nerves.'], ['music'], ['A', 'If you had to remember one thing, what would it be?'], ['B', 'Start with one small step you can take today. The plan for the year can wait.'], ['A', 'And the Stoics would add: focus on what is up to you.'], ['B', `That was your podcast on ${T}. Talk soon on AmbiRadio.`]],
+    ru: [['A', `Доброе утро, это ${a} и ${b}. Сегодня по просьбе слушателя: ${T}.`], ['B', 'Сразу скажем: это демо-версия. В полном радио этот выпуск пишет ИИ по свежим источникам.'], ['A', `Итак, первый вопрос. Почему тема «${T}» вообще важна?`], ['B', 'Потому что она касается ежедневных решений. Поймёшь её чуть лучше — сэкономишь время и нервы.'], ['music'], ['A', 'Если бы нужно было запомнить одно, что бы это было?'], ['B', 'Начни с маленького шага, который сделаешь уже сегодня. План на год подождёт.'], ['A', 'А стоики добавили бы: сосредоточься на том, что зависит от тебя.'], ['B', `Это был ваш подкаст на тему: ${T}. До встречи на AmbiRadio.`]],
   });
 }
 

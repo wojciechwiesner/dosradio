@@ -1,13 +1,148 @@
 # Changelog
 
-All notable changes to DOS Radio are documented in this file.
+All notable changes to AmbiRadio (formerly DOS Radio) are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+- **YouTube audio clipping is off** (`server/app/youtube_pill.py`, `pill_service.py`, `plus_api.py`,
+  `custom_radios.py`): `POST /radio-api/plus/pill`, `POST /radio-api/plus/pills/batch`, the pill status, the saved-pill
+  list and the cached media all answer 410 unless `DOSRADIO_YOUTUBE_CLIPS=1`, and `download_audio` refuses before
+  yt-dlp is ever called. Cached pills stay on disk, they are only unreachable. A custom-radio pill pointing at YouTube
+  is refused the same way; article links and notes, the text "pigułka wiedzy" drop and public RSS podcasts are
+  untouched. The Classic pill form, the Orbita pill pane, the Plus plan lists (PL/EN/RU) and the host promo no longer
+  offer or promise YouTube clips. Tests: `server/tests/test_youtube_disabled.py`.
+- **Checkout sells only a verified Stripe price** (`server/app/billing.py`): a plan is buyable only when its
+  `DOSRADIO_PLUS_PRICE_USD` / `DOSRADIO_PLUS_AI_PRICE_USD` price exists in Stripe and bills exactly the displayed
+  amount, currency and monthly interval. Anything else returns 503 and charges nothing; the yearly price stays
+  display-only. `/radio-api/billing/status` now says per plan whether checkout is actually available.
+- **Release integration** (`ow/ambi-release-grok`): wave 1 (rebrand, USD pricing, Classic redesign, entry wizard and
+  6 h trial), the beat-grid mixer fix, the Orbita SOTA scene, the presence/dedication fix and hosts-with-a-soul plus
+  listener comments merged into one branch. Shared files keep every side's work: the Classic redesign owns layout, the
+  rebrand owns brand strings and USD prices, the wizard owns the entry split and trial, and each later branch adds its
+  own pieces (start notice, comment button and feed, calm view, persona field) without reverting the earlier ones.
+- **Wave 1 integration** (`ow/ambi-integrate-w1`): rebrand + USD pricing, Classic redesign and entry split / start
+  wizard / 6 h trial merged into one branch. The redesign owns layout and styles, the rebrand owns brand strings
+  (ambiradio.com canonical/OG) and USD prices, the wizard owns the entry split, wizard and trial. Wizard and trial
+  styles now use the Classic tokens (square edges, one lime accent instead of the old orange), the trial pill reads
+  "Pełny dostęp 5 h 42 min" so the header stays on one row at 1440 px, the Plus modal sits above the mobile bottom
+  nav, and the leftover "darmowa godzina" texts in Orbita (PL/EN/RU) and the 5-minute nudge now say "pełny dostęp".
+  Screenshots: `docs/ambiradio/shots/integ-w1/`.
+- **Rebrand to AmbiRadio — "AmbiRadio — Ambitnie dla Ciebie"**: every user-facing "DOS Radio" string is now
+  "AmbiRadio" across `index.html` (title, description, canonical, OG/Twitter tags pointing at https://ambiradio.com),
+  `public/manifest.webmanifest`, `public/admin.html`, `src/**`, Orbita (`orbita/src/*`, PL/EN/RU i18n, rebuilt
+  `public/orbita.html`), and the backend (host jingles and TTS lines, podcasts, spots, Auto-Ramówka, dedications,
+  e-mail, Telegram, share texts, OG share cards). The tagline shows in the header, footer, page title, OG site name,
+  Orbita enter screen and the verification e-mail. Service worker cache bumped to `dosradio-shell-v5`.
+  Kept on purpose for backwards compatibility: localStorage keys (`dosradio.*`), API paths, `x-dosradio-*` headers,
+  postMessage types, env var names, logger names, file and DB names.
+- **Public base URL is configurable** (`server/app/config.py`): `DOSRADIO_PUBLIC_BASE_URL` (default
+  `https://ambiradio.com`; the older `DOSRADIO_PUBLIC_URL` still works) feeds share links, custom-radio links, the
+  verification e-mail, Telegram alerts and bot user agents. OG share pages keep using the request's own host, so
+  ambiradio.com and dosradio.theones.io both work. The OG brand domain defaults to ambiradio.com (was heloradio.com).
+- **Pricing in USD** (`server/app/billing.py`): AmbiRadio Plus $2.99/month and AmbiRadio Plus AI $6.99/month
+  (`currency: "usd"`, amounts in cents). Stripe price ids come from `DOSRADIO_PLUS_PRICE_USD` and
+  `DOSRADIO_PLUS_AI_PRICE_USD`; `DOSRADIO_PLUS_PRICE_PLN` is no longer read, so a PLN price can't be charged while
+  the UI shows dollars. `/radio-api/billing/status` now returns `currency`, `amount_cents` and `yearly_cents`
+  instead of `amount_pln`. The billing modal (`src/ui/billing.ts`, new `src/ui/pricing.ts`) and the Orbita Plus pane
+  show "$2.99 / mies." and "$6.99 / mies." plus "$29.90 / rok" and "$69.90 / rok" (yearly is display-only; there is
+  no yearly checkout yet).
+- **AmbiRadio Classic redesign** (`index.html`, `src/ui/dosradio.css`, `src/ui/pill.css`): raw, typographic
+  look on obsidian with one signal-lime accent, Space Grotesk + JetBrains Mono, 8px grid, square edges.
+  Big 88px Play next to the display-size station name; radio actions and share/Plus actions as consistent
+  icon + label rows; stations as a group tab strip plus a dense ruled list with BPM; "Na antenie dziś" as a quiet
+  timeline; programme settings moved into a "Twoja ramówka" section. Every control is at least 44px, has a
+  visible focus ring, there is no layout shift while audio loads, it works at 360px, and motion stops under
+  `prefers-reduced-motion`. Header wordmark "AmbiRadio — Ambitnie dla Ciebie"; title/meta/OG rebranded.
+  Tokens and rationale: `docs/ambiradio/classic-design.md`, screenshots in `docs/ambiradio/shots/ambi-classic-redesign/`.
+- The Plus badge (`src/ui/billing.ts`) now sits in the player's action row (`#plusSlot`) instead of floating.
+  The Plus, dedication and share/studio modals use the same tokens.
+### Fixed
+- **"Who is online" stats were wrong** (`server/app/auto_ramowka.py`, `src/ui/dosradio.ts`, `orbita/src/main.js`):
+  both AmbiRadio frontends sent `station`/`view`/`auto_ramowka`, the backend read `station_id`/`view_mode`/`ramowka`
+  and silently dropped the rest, so every listener showed as `dos-groove` / `classic`, and listeners behind one NAT
+  collapsed into one IP row. `POST /radio-api/presence` now maps the old names (old tabs keep working), then rejects
+  unknown fields (`extra="forbid"`); `client_id` (shared `dosradio.client_id.v1` key, now also sent by Orbita) is the
+  actor before cookies and IP. Session cookies are hashed before they reach the admin-visible table, and the
+  listener's email/user id come from the session, not from the page. Heartbeats pause while the tab is hidden and
+  send one beat when it becomes visible, and the first beat goes out when playback starts.
+  Tests: `server/tests/test_presence_shapes.py`.
+- **Shared dedication did not play for recipients whose free hour was over** (`src/ui/playbackGate.ts`,
+  `src/ui/dosradio.ts`, `server/app/auth.py`, `server/app/dedications.py`, `server/app/main.py`): Classic opened the
+  register modal before the pending greeting could play, and the music stream answered 402. Classic now plays the
+  greeting and the music under it, then shows the soft register prompt 60 s after the greeting ends.
+  `GET /radio-api/dedications/{token}` sets a signed `dr_ded` pass cookie (10 min from the first open of that link
+  from that address, never extended) that `require_access` accepts. Tests: `tests/playbackGate.test.ts`,
+  `server/tests/test_dedication_pass.py`; checked end to end in Chromium (greeting AudioBuffer starts, AudioContext
+  time advances, no auth modal).
+
+### Changed
+- **Play starts at once** (Classic and Orbita): the first Play no longer waits for the onboarding wizard. The
+  wizard opens next to the playing radio with default settings, and its answers apply live. A calm line under
+  the player says "Muzyka ruszy za kilka sekund — generuję pierwsze nuty. Prowadzący może już mówić." (Orbita:
+  PL/EN/RU) until the music bed is actually playing (`onMusicAudible` engine event). Both pages resume the
+  AudioContext synchronously in the click, before any network await, for iOS.
+- `@types/node` added to devDependencies: `tsconfig.json` references it, and `npm run build` failed on a clean install.
+
 ### Added
+- **Hosts with a soul + listener comments on air (AmbiRadio)** (`server/app/host_personas.py`, `hosts.py`,
+  `comments.py`, `moderation.py`, `og_preview.py`, `main.py`, `src/ui/commentBox.ts`, `src/radio/hostClipPlayer.ts`,
+  `orbita/src/comments.js`, `orbita/src/engine.js`, `index.html`): every host has a Polish persona (backstory,
+  worldview, humour, catchphrases, pet topics, musical loves/hates, how they address listeners, a day thread) and a
+  server-side day memory (last 10 notable things said/heard). Live links between songs are written by the LLM from
+  persona + memory + time of day + the news topic in the programme, once per station per 20 min slot; static chatter
+  is the offline fallback. `POST /radio-api/comments` (max 280 chars, nick optional, per-actor and per-IP rate limit)
+  moderates and scores comments (heuristic + optional cached LLM score); the best fresh comment is read in the next
+  break with the nick ("Ania z Krakowa pisze: ...") and answered in the host's voice. Cost guard: max
+  `AMBI_COMMENTS_PER_HOUR` (4) readouts per station per hour, `AMBI_HOST_LLM_PER_HOUR` (120) LLM calls, one voiced
+  file per break shared by every listener. The sender sees "Twój komentarz poszedł na antenę" with the clip and a
+  share link (`?k=`, OpenGraph card). Classic: "Komentarz na antenę" button + live feed with "na antenie" badge;
+  Orbita: comment icon in the station card + feed. Docs: `docs/ambiradio/hosts-and-comments.md`.
+  Tests: `server/tests/test_comments.py`, `server/tests/test_moderation.py`, `tests/hostBreak.test.ts`.
+- **Shared moderation** (`server/app/moderation.py`): Polish + English abuse list (catches `k u r w a`, `ku.rwa`,
+  leetspeak, repeated letters), link/e-mail/phone/handle stripping, length cap, optional cached LLM second opinion.
+  Used by comments, dedications and custom radio names; rejections return a friendly Polish message.
+
+### Changed
+- Host jingles, dedication greetings and borrowed-host greetings say "AmbiRadio" instead of "DOS Radio". Host clip,
+  greeting and jingle cache files now carry a hash of the line, so edited lines are voiced again.
+- **Orbita SOTA upgrade** (`orbita/src/scene.js`, `reactive.js`, `main.js`, `index.frag.html`): the scene reacts to
+  the real Web Audio analyser through a bass/mid/high band follower (auto-gain, attack/release, slew cap so nothing
+  flashes); adaptive quality tiers with device pixel ratio capped at 2 and a frame-time governor (drops bloom, streaks,
+  fluid rate and backdrop blur on slow GPUs); the render loop stops while the tab is hidden; per-category colour grade
+  in the final pass; slower, speed-capped camera and much lighter chromatic aberration. Calm view (`prefers-reduced-motion`
+  or key M, stored in `dosradio.orbita.calm.v1`): still camera, no streaks, pulses or fluid, 30 fps. Readable captions
+  (proportional face, solid backdrop, max 3 lines), a now-playing line, and the Classic core actions in the card:
+  play, station, share with dedication (S), comment (C), Plus (+). Merged on top of the rebrand: the tagline
+  "Ambitnie dla Ciebie" (PL/EN/RU) and the calm-view strings join the 6 h "pełny dostęp" trial wording and the USD
+  prices, and the "zmień wersję" link stays in the HUD. Perf script `scripts/orbita-perf.mjs`; numbers in
+  `docs/ambiradio/orbita-upgrade.md`. Tests: `tests/orbitaReactive.test.ts`, `tests/orbitaCalmScene.test.ts`.
+- **Keyboard shortcuts in Classic** (`src/ui/keyboard.ts`): `Space` play/pause, `←`/`→` previous/next station;
+  ignored in form fields, open dialogs and Orbita. Tests: `tests/classicKeyboard.test.ts`.
+- **AmbiRadio entry split** (`src/ui/entrySplit.ts`, `entrySplit.css`): on the first visit the root page shows a
+  full-viewport choice, Classic (raw, functional) on the left and Orbita (immersive) on the right, each with a static
+  poster and a one-line description. Hover (or a first tap on touch screens) expands a half, a click chooses. The
+  choice lives in `localStorage` `dosradio.ui.version`; Orbita navigates to `/orbita.html` (also on later visits),
+  Classic stays. Verification, billing and `?view=` links always land in Classic. Mobile stacks the halves.
+  Both versions have a small "zmień wersję" link (`/?wersja=wybierz`).
+- **Start wizard** (`src/ui/onboarding.ts`, `src/ui/wizardContent.ts`) replaces the one-screen onboarding: three
+  skippable steps, (1) news topics as chips and how often, (2) podcasts: paste a link (turned into a podcast through
+  `POST /radio-api/plus/podcast`, new `source_url` in `radioApi.podcast`) or pick real Polish podcasts in Tech/AI,
+  Biznes, Sport, Kultura and Nauka (10 public RSS feeds, each checked with curl: HTTP 200, valid RSS, `language pl`),
+  whose feeds join "Moje źródła" through the news-preferences API, (3) a host personality (Kuba, Zosia, Marek or
+  music only), which tunes to that host's station. Plus setup is parked until the trial turns Plus on.
+- **6 h trial = full Plus** (`server/app/auth.py`, `db.py`, `plus_api.py`, `main.py`, `spots.py`):
+  `DOSRADIO_TRIAL_SECONDS` defaults to 21600. While the trial runs `/radio-api/me` reports `plus: true` and the new
+  `trial_plus: true`; every `/radio-api/plus` route, "Moje źródła" and spot-free listening work for the anonymous
+  listener. Their data is stored under a negative owner id (`trial_owners` table) and moves to the account on
+  `/radio-api/register`. Free-Plus limits (1 podcast per day) still apply. Tests: `server/tests/test_trial_plus.py`,
+  `tests/entryWizard.test.ts`.
+- **Calm trial indicator and soft register prompt** (`src/ui/trialNotice.ts`): the Classic pill shows hours and
+  minutes ("Pełny dostęp jeszcze 5 h 42 min", no ticking seconds); 30 minutes before the end a one-time,
+  non-blocking card offers the existing registration. Orbita shows the same 6 h clock and a 30-minute toast.
 - **HeyGen Voice Turbo (OpenRouter) as the second TTS provider** (`server/app/tts_openrouter.py`,
   `gemini_client.py`): speech chain is now Gemini -> OpenRouter `heygen/heygen-voice-1-turbo:free` -> Grok.
   Same-gender voice table (`Kore` -> `nadine`, `Charon` -> `bram`, never `meredith`), PCM 44100 Hz wrapped
@@ -22,6 +157,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so a `file://` kiosk can read news JSON. Tests: `server/tests/test_device_keys.py`.
 
 ### Fixed
+- Mobile header (`src/ui/dosradio.css`): the top action buttons wrap instead of pushing the page 140 px wider
+  than a 390 px screen; the tagline now shows on mobile too. The Orbita plan card keeps "/ mies." on one line.
+- The Plus badge had no styles until the Plus modal was first opened.
+- The classic mobile bottom nav's "Orbita" and "Stacje" buttons targeted ids that do not exist
+  (`orbitaViewBtn`, `stationGrid`) and did nothing.
+- The dedication modal now closes on Escape and is announced as a dialog.
+- The Classic trial pill was always visible: `.pill { display: inline-flex }` overrode its `hidden` attribute, and on
+  phones the header row then pushed the page to ~570 px wide. The header now wraps on narrow screens and modals sit
+  above the Classic mobile nav.
+- **Dropped/doubled kick at AmbiRadio DJ joins** (`server/app/mixer.py`): the grid-locked bass swap fired at
+  each deck's idealised fitted-grid time, up to ~30 ms off the real kick in opposite directions, so the
+  anti-flam ramp smeared both kicks and the join read as a 2-beat gap (0.968 s at 126 bpm). Kicks are now
+  paired by grid ordinal on each deck and the swap lands on the measured kick at that ordinal (head matched
+  in the untrimmed frame). 5-segment chain: kick interval max 0.968 -> 0.505 s, stddev 35.8 -> 12.1 ms.
+  Restores `tests/test_stream_chain.py`; regression test in `tests/test_mixer.py`.
 - **DJ transitions drifted off the beat** (`server/app/beat_grid.py`, `server/app/mixer.py`): the tempo lock
   took its stretch ratio from ONE detected kick pair and paired kicks by their order, so one missed or
   mistimed kick (common on rumble techno) skewed half the blend by tens of ms, sometimes half a beat. Each

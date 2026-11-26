@@ -241,7 +241,7 @@ class StationRecorder:
 
     async def record_loop(self) -> None:
         self.running = True
-        log.info("Starting DOS Radio recorder loop with %d stations", len(self._active_specs()))
+        log.info("Starting AmbiRadio recorder loop with %d stations", len(self._active_specs()))
         while self.running:
             specs = self._active_specs()
             station_id = self.pick_station_to_record()

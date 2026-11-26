@@ -1,4 +1,5 @@
-/** dosradio.theones.io page: stations, news topics, trial countdown, registration. */
+/** AmbiRadio Classic page: entry split, stations, news topics, start wizard, 6 h trial, registration. */
+import { changeVersionLink, initEntry } from './entrySplit';
 import { PublicRadioEngine, type HostMode } from '../radio/publicRadioEngine';
 import { airedRemote, radioApi, type AccessState } from '../radio/radioApi';
 import { availableCategories, categoryLabel, sanitizeCategories, type NewsCategory, type QueuedStory } from '../radio/newsQueue';
@@ -15,6 +16,7 @@ import {
 } from '../radio/stations';
 import { intervalLabel, normalizeInterval } from '../radio/radioClock';
 import { initBackgroundAudio } from '../audio/backgroundAudio';
+import { getSharedAudioContext } from '../audio/iosAudioUnlock';
 import {
   applyOnboardingChoice,
   isOnboarded,
@@ -31,11 +33,16 @@ import {
 } from './prefs';
 import { initUpcoming } from './upcoming';
 import { initRamowkaSettings } from './ramowkaSettings';
-import { openOnboarding } from './onboarding';
+import { openOnboarding, type WizardChoice } from './onboarding';
+import { mergeFeeds, savePendingPlus, takePendingPlus } from './wizardContent';
+import { REGISTER_PROMPT_AT_S, TRIAL_SECONDS, formatTrialCalm, shouldPromptRegister, showRegisterPrompt } from './trialNotice';
 import { initPlus, refreshPlusPanel, isPlusAudioPlaying, stopPlusAudio } from './plus';
 import { initProgrammeLine } from './pill';
 import { wireClassicDedications } from './dedicationModal';
+import { wireClassicComments } from './commentBox';
 import { wireClassicSocialStudio } from './socialCreatorStudio';
+import { classicShortcut, stepStation } from './keyboard';
+import { startPlaybackFlow } from './playbackGate';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -43,18 +50,10 @@ const $ = <T extends HTMLElement>(id: string): T => {
   return element as T;
 };
 
-const TRIAL_FALLBACK_SECONDS = 3600;
-const SECONDS_PER_HOUR = 3600;
-const SECONDS_PER_MINUTE = 60;
-
-/** 3600 -> "1:00:00", 125 -> "2:05" (hours only shown when the trial is an hour or more). */
-function formatTrialLeft(seconds: number): string {
-  const pad = (value: number) => String(value).padStart(2, '0');
-  const minutes = Math.floor((seconds % SECONDS_PER_HOUR) / SECONDS_PER_MINUTE);
-  const secs = seconds % SECONDS_PER_MINUTE;
-  if (seconds >= SECONDS_PER_HOUR) return `${Math.floor(seconds / SECONDS_PER_HOUR)}:${pad(minutes)}:${pad(secs)}`;
-  return `${minutes}:${pad(secs)}`;
-}
+// First visit: Classic | Orbita split; a saved Orbita choice leaves for /orbita.html right away.
+const leavingForOrbita = initEntry(localStorage, window.location.search, (version) => {
+  if (version === 'classic') saveViewPref(localStorage, 'classic'); // no embedded Orbita on the next load
+});
 
 const PLAY_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
 const PAUSE_SVG = '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg>';
@@ -284,10 +283,13 @@ function renderAccess(): void {
   } else {
     $('account').textContent = '';
     authBtn.textContent = 'Zaloguj się';
-    // Only show the countdown once listening started and time is left; an expired trial shows the modal instead.
+    // Calm indicator (minutes only) once listening started; an expired trial shows the modal instead.
     pill.hidden = !access?.trial_started || !access.allowed;
-    const left = Math.max(0, access?.trial_remaining ?? TRIAL_FALLBACK_SECONDS);
-    $('trialLeft').textContent = formatTrialLeft(left);
+    const left = Math.max(0, access?.trial_remaining ?? TRIAL_SECONDS);
+    const text = formatTrialCalm(left);
+    if ($('trialLeft').textContent !== text) $('trialLeft').textContent = text;
+    pill.classList.toggle('ending', left <= REGISTER_PROMPT_AT_S);
+    if (shouldPromptRegister(access, localStorage)) showRegisterPrompt(localStorage, () => openAuth('register'));
   }
 }
 
@@ -299,8 +301,11 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     playButton.setAttribute('aria-label', state === 'playing' ? 'Pauza' : 'Graj');
     newsButton.disabled = hostModeBtn.dataset.mode === 'music-only';
     if (state === 'loading') setStatus('Łączę z generatorem muzyki...');
+    if (state === 'playing') setTimeout(sendPresenceHeartbeat, 0); // count the listener now, not a minute later
+    if (state === 'idle' || state === 'paused') hideStartNotice();
   },
   onStatus: (text) => setStatus(text),
+  onMusicAudible: () => hideStartNotice(),
   onError: (text) => setStatus(text, true),
   onQueue: (queue, airingId) => renderQueue(queue, airingId),
   onUpcoming: (story) => upcoming.setStory(story),
@@ -338,8 +343,8 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     const airText = $('onAirText');
     const isMusicOnly = hostModeBtn.dataset.mode === 'music-only';
     if (speaking) {
-      label.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'DOS Radio' : 'Prowadzący na żywo';
-      airText.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'DOS Radio' : 'Prowadzący na żywo';
+      label.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'AmbiRadio' : 'Prowadzący na żywo';
+      airText.textContent = role === 'news' ? 'Wiadomości na żywo' : role === 'jingle' ? 'AmbiRadio' : 'Prowadzący na żywo';
     } else {
       label.textContent = 'Wiadomości';
       airText.textContent = isMusicOnly ? 'Tylko muzyka' : (engine.isPlaying ? 'Muzyka' : 'Poza anteną');
@@ -351,7 +356,7 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     prefs.playGroup = groupId;
     savePrefs();
     renderStations();
-    bgAudio.updateMetadata(st.name, groupId ? `DOS Radio · ${groupById(groupId)?.name ?? ''}` : 'DOS Radio', st.host);
+    bgAudio.updateMetadata(st.name, groupId ? `AmbiRadio · ${groupById(groupId)?.name ?? ''}` : 'AmbiRadio', st.host);
   },
 });
 engine.interval = prefs.interval;
@@ -370,7 +375,32 @@ async function refreshAccess(): Promise<AccessState> {
   void engine.programme.aired.pull();
   void refreshPlusPanel(access.plus).catch((error) => setStatus(`Plus: ${(error as Error).message}`, true));
   renderCategories(); // "Moje źródła" appears only for Plus listeners
+  if (access.plus) void flushWizardPlusSetup();
   return access;
+}
+
+/**
+ * Podcasts picked in the start wizard need the Plus API, which opens only once the trial runs.
+ * Example feeds join "Moje źródła"; a pasted link becomes a podcast in "Moje podcasty".
+ */
+async function flushWizardPlusSetup(): Promise<void> {
+  const pending = takePendingPlus(localStorage);
+  if (!pending) return;
+  try {
+    if (pending.feeds.length) {
+      const current = await radioApi.newsPreferences();
+      await radioApi.saveNewsPreferences(current.keywords, mergeFeeds(current.rss_feeds, pending.feeds));
+      if (!prefs.categories.includes('mine')) { prefs.categories = [...prefs.categories, 'mine']; savePrefs(); renderCategories(); void engine.setCategories(prefs.categories); }
+    }
+    if (pending.link) {
+      setStatus('Przygotowuję podcast z Twojego linku. Znajdziesz go w „Moje podcasty”.');
+      await radioApi.podcast(undefined, pending.link);
+      setStatus('Podcast z Twojego linku jest gotowy w „Moje podcasty”.');
+    }
+    await refreshPlusPanel(true);
+  } catch (error) {
+    setStatus(`Kreator: ${(error as Error).message}`, true);
+  }
 }
 
 function startTrialCountdown(): void {
@@ -387,18 +417,42 @@ function startTrialCountdown(): void {
 }
 
 async function togglePlay(): Promise<void> {
-  if (engine.isPlaying) { engine.stop(); setStatus('Pauza'); return; }
-  if (!isOnboarded(localStorage)) { showOnboarding(); return; }
+  if (engine.isPlaying) { engine.stop(); hideStartNotice(); setStatus('Pauza'); return; }
+  // iOS: resume synchronously inside the click; every await below would consume the gesture.
+  const ctx = getSharedAudioContext();
+  if (ctx.state !== 'running') void ctx.resume().catch(() => {});
+  // First play never waits for the wizard: the radio starts with default prefs and the
+  // wizard opens alongside; its answers are applied to the running radio.
+  if (!isOnboarded(localStorage)) {
+    markOnboarded(localStorage);
+    showOnboarding();
+  }
   await startPlayback();
 }
 
-/** First play and "Zmień, co chcesz słyszeć" both land here; "Graj!" saves the answers and starts the radio. */
+/** First play opens the wizard alongside the already-starting radio; "Zmień, co chcesz słyszeć" reopens it. Answers apply live, and "Graj" only starts playback if it hasn't started yet. */
 function showOnboarding(): void {
-  openOnboarding(prefs, (choice) => {
+  openOnboarding(prefs, (choice: WizardChoice) => {
+    const stationBefore = prefs.station;
+    savePendingPlus(localStorage, { feeds: choice.podcastFeeds, link: choice.podcastLink });
     applyChoice(choice);
+    if (prefs.station !== stationBefore) { void engine.setStation(stationById(prefs.station)); renderStations(); }
     markOnboarded(localStorage);
     if (!engine.isPlaying) void startPlayback();
+    else if (access?.plus) void flushWizardPlusSetup();
   }, Boolean(access?.plus));
+}
+
+const START_NOTICE_TEXT = 'Muzyka ruszy za kilka sekund — generuję pierwsze nuty. Prowadzący może już mówić.';
+function showStartNotice(): void {
+  const el = document.getElementById('startNotice');
+  if (!el) return;
+  el.querySelector('span')!.textContent = START_NOTICE_TEXT;
+  el.hidden = false;
+}
+function hideStartNotice(): void {
+  const el = document.getElementById('startNotice');
+  if (el) el.hidden = true;
 }
 
 function applyChoice(choice: OnboardingChoice): void {
@@ -416,14 +470,23 @@ function applyChoice(choice: OnboardingChoice): void {
 
 async function startPlayback(): Promise<void> {
   if (isPlusAudioPlaying()) stopPlusAudio(); // podcast/digest yields to the radio
+  if (!engine.isPlaying) showStartNotice();
   try {
-    let state = await refreshAccess();
-    if (!state.allowed) { openAuth('register', true); return; }
-    if (!state.registered && !state.trial_started) { state = await radioApi.startTrial(); access = state; renderAccess(); }
-    startTrialCountdown();
-    await engine.start();
-    $('onAirText').textContent = 'Muzyka';
+    const outcome = await startPlaybackFlow({
+      refreshAccess,
+      startTrial: () => radioApi.startTrial(),
+      setAccess: (state) => { access = state; renderAccess(); },
+      hasPendingDedication: () => engine.hasPendingDedication,
+      onceGreetingDone: (cb) => engine.onceGreetingDone(cb),
+      engineStart: () => engine.start(),
+      engineStop: () => { engine.stop(); hideStartNotice(); },
+      openRegisterPrompt: () => openAuth('register', true),
+      startTrialCountdown,
+    });
+    if (outcome === 'register') { hideStartNotice(); return; }
+    if (engine.isPlaying) $('onAirText').textContent = 'Muzyka';
   } catch (error) {
+    hideStartNotice();
     setStatus((error as Error).message, true);
     engine.stop();
   }
@@ -436,7 +499,7 @@ async function chooseStation(station: Station, shift = false): Promise<void> {
   prefs.playGroup = null;
   savePrefs();
   renderStations();
-  bgAudio.updateMetadata(station.name, 'DOS Radio', station.host);
+  bgAudio.updateMetadata(station.name, 'AmbiRadio', station.host);
   try { await engine.setStation(station); } catch (error) { setStatus((error as Error).message, true); }
 }
 
@@ -455,7 +518,7 @@ async function chooseGroup(groupId: MusicGroupId): Promise<void> {
   prefs.blend = null;
   savePrefs();
   renderStations();
-  bgAudio.updateMetadata(targetStation.name, `DOS Radio · ${groupById(groupId)?.name ?? ''}`, targetStation.host);
+  bgAudio.updateMetadata(targetStation.name, `AmbiRadio · ${groupById(groupId)?.name ?? ''}`, targetStation.host);
   try {
     await engine.setGroup(groupId, targetStation);
     if (!engine.isPlaying) await togglePlay();
@@ -480,9 +543,9 @@ const modal = $('authModal');
 
 function openAuth(mode: 'register' | 'login', trialEnded = false): void {
   authMode = mode;
-  $('authTitle').textContent = mode === 'register' ? (trialEnded ? 'Słuchaj dalej za darmo' : 'Załóż darmowe konto') : 'Zaloguj się';
+  $('authTitle').textContent = mode === 'register' ? (trialEnded ? 'Słuchaj AmbiRadio dalej za darmo' : 'Załóż darmowe konto AmbiRadio') : 'Zaloguj się';
   $('authLead').textContent = mode === 'register'
-    ? (trialEnded ? 'Twoja darmowa godzina minęła. Załóż konto i dostań 30 dni Plus za darmo.' : 'Załóż konto i dostań 30 dni Plus za darmo.')
+    ? (trialEnded ? 'Twoje 6 godzin pełnego dostępu minęło. Załóż konto i dostań 30 dni Plus za darmo.' : 'Załóż konto, zachowaj swoje ustawienia i dostań 30 dni Plus za darmo.')
     : 'Wpisz e-mail i hasło, żeby słuchać dalej.';
   $('perks').hidden = mode === 'login';
   $('authSubmit').textContent = mode === 'register' ? 'Załóż konto i dostań 30 dni Plus za darmo' : 'Zaloguj się';
@@ -642,7 +705,7 @@ const bgAudio = initBackgroundAudio(
   () => void engine.newsNow(),
 );
 
-// --- DOS Radio Plus ("Twoje źródła" + duet podcast) -------------------------------
+// --- AmbiRadio Plus ("Twoje źródła" + duet podcast) -------------------------------
 initPlus({
   onStatus: (text, isError) => setStatus(text, isError),
   stopRadio: () => { if (engine.isPlaying) engine.stop(); },
@@ -677,7 +740,7 @@ async function handleMoodSubmit(description: string): Promise<void> {
     $('nowStation').textContent = custom.name;
     $('nowTagline').textContent = custom.tagline;
     await engine.setStation(custom);
-    bgAudio.updateMetadata(custom.name, 'DOS Radio', 'Twój nastrój');
+    bgAudio.updateMetadata(custom.name, 'AmbiRadio', 'Twój nastrój');
     setStatus(`Gra nastrój: ${custom.name} · ${custom.tagline}`);
     if (!engine.isPlaying) await togglePlay();
   } catch (err) {
@@ -851,6 +914,22 @@ function switchView(view: ViewMode): void {
 viewClassicBtn.addEventListener('click', () => switchView('classic'));
 viewOrbitaBtn.addEventListener('click', () => switchView('orbita'));
 
+// --- Keyboard: Space = play/pause, ArrowLeft/ArrowRight = previous/next station ----
+const DIALOG_SELECTOR = '.modal.open, #dos-dedicate-overlay, .drplus-overlay, #dos-soc-overlay.open';
+document.addEventListener('keydown', (event) => {
+  const blocked = currentView !== 'classic' || Boolean(document.querySelector(DIALOG_SELECTOR));
+  const action = classicShortcut(event, blocked);
+  if (!action) return;
+  event.preventDefault();
+  if (action === 'toggle') { void togglePlay(); return; }
+  const visibleIds = Array.from(document.querySelectorAll<HTMLElement>('#stations .station')).map((b) => b.dataset.id ?? '');
+  const nextId = stepStation(visibleIds, prefs.station, action === 'next' ? 1 : -1);
+  if (!nextId) return;
+  const station = stationById(nextId);
+  setStatus(`Stacja: ${station.name}`);
+  void chooseStation(station);
+});
+
 window.addEventListener('message', (ev) => {
   const data = ev.data as {
     type?: string;
@@ -908,12 +987,13 @@ function getClientId(): string {
 }
 
 function sendPresenceHeartbeat(): void {
-  if (!engine.isPlaying || currentView !== 'classic') return;
+  // Hidden tabs do not count as listening rooms; visibilitychange sends one beat on return.
+  if (!engine.isPlaying || currentView !== 'classic' || document.hidden) return;
   void radioApi.presence({
     client_id: getClientId(),
-    station: prefs.station,
-    group: prefs.playGroup ?? null,
-    view: 'classic',
+    station_id: prefs.station,
+    group_id: prefs.playGroup ?? null,
+    view_mode: 'classic',
     ramowka: Boolean(prefs.autoRamowka),
   });
 }
@@ -924,13 +1004,18 @@ setInterval(() => {
     void syncRamowkaState();
   }
 }, 60_000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) sendPresenceHeartbeat();
+});
+
+document.querySelector('footer')?.append(changeVersionLink());
 
 renderStations();
 renderCategories();
 engine.setHostMode(prefs.hostMode);
 renderHostMode(prefs.hostMode);
 const initialStation = stationById(prefs.station);
-bgAudio.updateMetadata(initialStation.name, 'DOS Radio', initialStation.host);
+bgAudio.updateMetadata(initialStation.name, 'AmbiRadio', initialStation.host);
 wireClassicDedications(
   engine,
   (sid) => {
@@ -943,6 +1028,7 @@ wireClassicDedications(
   },
   setStatus,
 );
+wireClassicComments(engine, setStatus);
 wireClassicSocialStudio(
   engine,
   (sid) => {
@@ -966,4 +1052,4 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js').catch(() => {});
 }
 
-refreshAccess().catch((error) => setStatus(`Serwer radia niedostępny: ${(error as Error).message}`, true));
+if (!leavingForOrbita) refreshAccess().catch((error) => setStatus(`Serwer radia niedostępny: ${(error as Error).message}`, true));

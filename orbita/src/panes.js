@@ -134,11 +134,7 @@ export function podsPane(app) {
     <li><button class="btn small" type="button" id="stoicPlay">${t('showcasePlay')}</button><span>${esc(stoicPillTitle())}</span></li></ul>
   </section>
   ${prog.length ? `<section class="group"><h2>${t('inProgramme')}</h2><ul class="list">${prog.map(x => `<li style="align-items:center"><span style="flex:1">${esc(x.title)} (${x.done}/${x.total})</span><button class="btn small" type="button" data-rm="${esc(x.pillId)}" aria-label="${esc(t('remove'))}">×</button></li>`).join('')}</ul></section>` : ''}
-  <section class="group"><h2>${t('pillTitle')} ${lock(app)}</h2><p class="lead">${t('pillLead')}</p>
-    <form id="pillForm" style="display:grid;gap:8px"><label class="field" for="pillUrl">${t('pillUrl')}<input id="pillUrl" type="url" maxlength="300" placeholder="https://www.youtube.com/watch?v=…"></label>
-      <button class="btn" type="submit">${t('pillGo')}</button><p class="hint" id="pillInfo" role="status"></p></form>
-    ${saved.length ? `<h2>${t('myPills')}</h2><ul class="list">${saved.map(p => `<li style="align-items:center"><button class="btn icon" type="button" data-pill="${esc(p.id)}" aria-label="${esc(t('addToProg', { title: p.title }))}">${PLAY_SVG}</button><span>${esc(p.author ? `${p.title} — ${p.author}` : p.title)}</span></li>`).join('')}</ul>` : ''}
-  </section>`;
+  <section class="group"><h2>${t('pillTitle')}</h2><p class="lead">${t('pillOff')}</p></section>`;
   return { html, bind: root => {
     const form = root.querySelector('#podForm');
     root.querySelectorAll('[data-idea]').forEach(b => b.addEventListener('click', () => { root.querySelector('#podTopic').value = b.textContent; }));
@@ -146,7 +142,7 @@ export function podsPane(app) {
     root.querySelector('#showPlay').addEventListener('click', () => app.playShowcase('podcast'));
     root.querySelector('#stoicPlay').addEventListener('click', () => app.playShowcase('stoic'));
     root.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => { e.pills.remove(b.dataset.rm); app.renderPane('pods'); }));
-    root.querySelector('#pillForm').addEventListener('submit', ev => { ev.preventDefault(); app.makePill(root.querySelector('#pillUrl').value.trim(), root.querySelector('#pillInfo')); });
+    root.querySelector('#pillForm')?.addEventListener('submit', ev => { ev.preventDefault(); app.makePill(root.querySelector('#pillUrl').value.trim(), root.querySelector('#pillInfo')); });
     root.querySelectorAll('[data-pill]').forEach(b => b.addEventListener('click', () => app.queueSavedPill(b.dataset.pill)));
   } };
 }

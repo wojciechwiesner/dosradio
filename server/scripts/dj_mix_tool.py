@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CLI DJ Mixing & 4-Band DSP Verification Tool for DOSRadio.
+"""CLI DJ Mixing & 4-Band DSP Verification Tool for AmbiRadio.
 
 Renders BEFORE (legacy short pitch-shifted 2-band fade) vs AFTER (+/-12% Master-Tempo
 WSOLA + Genre-Aware DJ Transition) WAV files and outputs deterministic 4-band spectral

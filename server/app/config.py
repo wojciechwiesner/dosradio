@@ -1,4 +1,4 @@
-"""Runtime settings for the DOS Radio API, read once from the environment.
+"""Runtime settings for the AmbiRadio API, read once from the environment.
 
 Supports GEMINI_API_KEYS (comma-separated list of keys from multiple Google accounts)
 with round-robin and per-account rate limit rotation, so N accounts provide N x quota.
@@ -13,6 +13,30 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 log = logging.getLogger("dosradio.config")
+
+BRAND_NAME = "AmbiRadio"
+BRAND_TAGLINE = "AmbiRadio — Ambitnie dla Ciebie"
+DEFAULT_PUBLIC_BASE_URL = "https://ambiradio.com"
+# Hosts that serve the same app; the legacy domain keeps working after the rebrand.
+PUBLIC_HOSTS = ("ambiradio.com", "www.ambiradio.com", "dosradio.theones.io")
+
+
+def public_base_url() -> str:
+    """Absolute base URL for links we send out (e-mails, share links, bot user agents).
+
+    `DOSRADIO_PUBLIC_BASE_URL` wins; the older `DOSRADIO_PUBLIC_URL` is still honoured so
+    existing deployments keep their configured host.
+    """
+    for name in ("DOSRADIO_PUBLIC_BASE_URL", "DOSRADIO_PUBLIC_URL"):
+        value = os.environ.get(name, "").strip().rstrip("/")
+        if value:
+            return value
+    return DEFAULT_PUBLIC_BASE_URL
+
+
+def public_domain() -> str:
+    """Bare host of `public_base_url()` for display, e.g. `ambiradio.com`."""
+    return public_base_url().split("://", 1)[-1].split("/", 1)[0]
 
 
 class KeyPool:
@@ -77,7 +101,7 @@ def load_settings() -> Settings:
         key_pool=KeyPool(keys),
         secret=secret,
         data_dir=data_dir,
-        trial_seconds=int(os.environ.get("DOSRADIO_TRIAL_SECONDS", "3600")),
+        trial_seconds=int(os.environ.get("DOSRADIO_TRIAL_SECONDS", "21600")),
         news_model=os.environ.get("DOSRADIO_NEWS_MODEL", "gemini-3.8-flash"),
         tts_model=os.environ.get("DOSRADIO_TTS_MODEL", "gemini-3.8-flash-tts"),
         news_refresh_seconds=int(os.environ.get("DOSRADIO_NEWS_REFRESH", "3600")),

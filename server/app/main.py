@@ -1,10 +1,11 @@
-"""DOS Radio API: accounts + 1 h trial, AI news per category, shared TTS cache, Lyria RealTime WebSocket proxy.
+"""AmbiRadio API: accounts + 1 h trial, AI news per category, shared TTS cache, Lyria RealTime WebSocket proxy.
 
 The Gemini key never leaves the server. Run: uvicorn app.main:app --port 3015
 """
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -19,7 +20,7 @@ from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocket
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
-from .auth import AccessService, build_router, client_ip
+from .auth import DEDICATION_PASS_COOKIE, AccessService, build_router, client_ip
 from .config import load_settings
 from .db import Database
 from .gemini_client import build_gemini_client
@@ -47,6 +48,9 @@ from .admin_api import build_admin_router
 from .custom_radios import CustomRadioService, build_custom_radios_router
 from .og_preview import build_og_router
 from .social_api import build_social_router
+from .comments import CommentService, build_comments_router
+from .custom_radios import resolve_actor_key
+from .news import story_headline
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 log = logging.getLogger("dosradio")
@@ -99,9 +103,10 @@ started_at = time.time()
 async def render_host_audio(station_id: str, kind: str) -> Path:
     """Greeting or jingle for one station host, voiced once and cached forever."""
     host = host_for(station_id)
-    path = static_audio_dir / f"{kind}-{station_id}.wav"
+    text = host.greeting if kind == "welcome" else host.jingle
+    digest = hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]  # edited lines are voiced again
+    path = static_audio_dir / f"{kind}-{station_id}-{digest}.wav"
     if not path.exists():
-        text = host.greeting if kind == "welcome" else host.jingle
         audio = await gemini.speak(text, host.voice, host.style)
         tmp = path.with_suffix(".tmp")
         tmp.write_bytes(audio)
@@ -134,7 +139,7 @@ async def lifespan(_: FastAPI):
     await weather.aclose()
 
 
-app = FastAPI(title="DOS Radio API", lifespan=lifespan, docs_url=None, redoc_url=None)
+app = FastAPI(title="AmbiRadio API", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 
 @app.middleware("http")
@@ -159,6 +164,7 @@ app.include_router(
         speak=gemini.speak,
         audio_dir=static_audio_dir,
         db_path=settings.data_dir / "dosradio.db",
+        access=access,
         station_lookup=lambda sid: next(
             (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
             ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
@@ -192,6 +198,23 @@ app.include_router(build_social_router(
         (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
         ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
     ),
+))
+def _headline_now() -> str | None:
+    """The news topic already in the programme, so hosts can mention what the day is about."""
+    queue = news.global_queue()
+    return story_headline(queue[0]) if queue else None
+
+
+comment_service = CommentService(db, generate=gemini.generate_text, headline=_headline_now)
+app.include_router(build_comments_router(
+    service=comment_service,
+    speak=gemini.speak,
+    audio_dir=static_audio_dir,
+    station_lookup=lambda sid: next(
+        (s for s in catalog.public_catalog().get("stations", []) if s.get("id") == sid),
+        ({"id": sid, "name": sid} if sid in STATION_SPECS else None),
+    ),
+    actor_key=lambda request: resolve_actor_key(request, access, db),
 ))
 app.include_router(build_og_router(
     db=db,
@@ -228,6 +251,8 @@ def require_access(request: Request) -> None:
     if access.device_for_key(device_key):
         return
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
+    if access.dedication_pass_valid(request.cookies.get(DEDICATION_PASS_COOKIE)):
+        return
     if not access.resolve(request.cookies, ip).allowed:
         raise HTTPException(402, "Darmowa godzina minęła. Załóż konto i odbierz 30 dni Plus za darmo.")
 
@@ -430,16 +455,15 @@ async def personal_group(request: Request) -> dict:
     group = {"category": PERSONAL_CATEGORY, "label": "Moje źródła", "fetched_at": time.time(),
              "edition": None, "error": None, "stories": []}
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
-    current = access.resolve(request.cookies, ip)
-    user = db.find_user_by_email(current.email or "") if current.registered else None
-    if user is None or not current.plus:
-        group["error"] = "Własne źródła są w DOS Radio Plus."
+    owner_id = access.plus_owner_id(request.cookies, ip)  # account or running trial
+    if owner_id is None:
+        group["error"] = "Własne źródła są w AmbiRadio Plus."
         return group
-    prefs = db.get_news_preferences(int(user["id"])) or {}
+    prefs = db.get_news_preferences(owner_id) or {}
     if not prefs.get("rss_feeds") and not prefs.get("keywords"):
         group["error"] = "Dodaj kanał RSS w panelu Plus."
         return group
-    is_personal, stories = await personal.digest(int(user["id"]), prefs)
+    is_personal, stories = await personal.digest(owner_id, prefs)
     if not is_personal:
         group["error"] = "Twoje kanały teraz nie odpowiadają."
         return group

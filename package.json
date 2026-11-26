@@ -2,7 +2,7 @@
   "name": "dosradio",
   "private": true,
   "version": "1.0.0",
-  "description": "DOS Radio — prywatna stacja ze sztuczną inteligencją",
+  "description": "AmbiRadio — Ambitnie dla Ciebie",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -15,6 +15,7 @@
     "@google/genai": "^1.0.0"
   },
   "devDependencies": {
+    "@types/node": "^22.20.7",
     "jsdom": "^29.1.1",
     "three": "0.170.0",
     "typescript": "^5.5.4",

@@ -7,12 +7,13 @@ from typing import Callable
 
 import httpx
 
+from .config import public_base_url
 from .radio_script import weather_script
 
 FORECAST_URL = "https://api.open-meteo.com/v1/forecast"
 GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search"
 REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
-USER_AGENT = "DOSRadio/1.5 (+https://dosradio.theones.io)"
+USER_AGENT = f"AmbiRadio/1.5 (+{public_base_url()})"
 CACHE_SECONDS = 30 * 60
 COORD_DECIMALS = 2
 REQUEST_TIMEOUT_S = 10.0

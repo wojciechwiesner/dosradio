@@ -1,5 +1,5 @@
-<title>DOS Radio</title>
-<meta name="description" content="DOS Radio: osobiste radio AI w przestrzeni.">
+<title>AmbiRadio — Ambitnie dla Ciebie · Orbita</title>
+<meta name="description" content="AmbiRadio — Ambitnie dla Ciebie. Osobiste radio AI w przestrzeni: muzyka na żywo, prowadzący, twoje tematy.">
 <meta name="theme-color" content="#07060a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -29,6 +29,7 @@
   --fokus: #8f6bff; --chill: #35d0b5; --energia: #ff4f9a; --noc: #4d7dff;
   --font-ui: "Azeret Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
   --font-display: "Unbounded", "Azeret Mono", system-ui, sans-serif;
+  --font-read: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --gl: max(16px, env(safe-area-inset-left, 0px)); --gr: max(16px, env(safe-area-inset-right, 0px));
   --gt: max(14px, env(safe-area-inset-top, 0px)); --gb: max(14px, env(safe-area-inset-bottom, 0px));
   color-scheme: dark;
@@ -66,9 +67,22 @@ a { color: inherit; }
 .hud-bl { bottom: var(--gb); left: var(--gl); font-variant-numeric: tabular-nums; pointer-events: none; }
 .hud-br { bottom: var(--gb); right: var(--gr); font-variant-numeric: tabular-nums; pointer-events: none; }
 .hud .sep { width: 1px; height: 14px; background: var(--ink); opacity: .6; }
-.brand { font-weight: 700; letter-spacing: .08em; }
+.brand { font-weight: 700; letter-spacing: .08em; display: inline-flex; align-items: baseline; gap: 8px; }
+.brand .tagline { font-weight: 400; letter-spacing: .06em; color: var(--ink-dim); font-size: 10px; text-transform: none; }
+.hud-icon { width: 26px; height: 22px; display: inline-grid; place-items: center; padding: 0; background: none; border: 1px solid var(--line); color: var(--ink-dim); }
+.hud-icon svg { width: 14px; height: 14px; }
+.hud-icon:hover { color: var(--ink); }
+.hud-icon[aria-pressed="true"] { color: var(--accent-ink); background: var(--ink); border-color: var(--ink); }
+#nowPlaying { position: fixed; bottom: calc(var(--gb) + 2px); left: 50%; transition: opacity .3s; transform: translateX(-50%); z-index: 4; display: flex; align-items: baseline; gap: 10px; pointer-events: none; white-space: nowrap; text-shadow: 0 1px 10px rgba(0,0,0,.8); }
+body.has-captions #nowPlaying { opacity: 0; }
+.hud-kbd { pointer-events: auto; background: none; border: 0; padding: 0; cursor: pointer; }
+.hud-kbd:hover kbd { color: var(--ink); border-color: var(--ink-dim); }
+#nowPlaying .np-eyebrow { font-size: 9px; text-transform: uppercase; letter-spacing: .18em; color: var(--ink-dim); }
+#nowPlaying b { font-family: var(--font-display); font-weight: 500; font-size: 15px; letter-spacing: .01em; }
+#nowPlaying #npHost { font-family: var(--font-read); font-size: 12px; color: var(--ink-dim); font-style: italic; }
 .hud-link { background: none; border: 0; padding: 0; font-weight: 700; text-transform: uppercase; }
 .hud-link:hover, .lang button:hover { color: var(--accent); }
+.hud-link.change-version { font-weight: 400; text-transform: none; text-decoration: underline; text-underline-offset: 3px; opacity: .75; }
 .lang { display: flex; border: 1px solid var(--line); }
 .lang button { background: none; border: 0; padding: 2px 6px; font-size: 10px; color: var(--ink-dim); }
 .lang button[aria-pressed="true"] { background: var(--ink); color: var(--bg); font-weight: 700; }
@@ -80,7 +94,12 @@ a { color: inherit; }
 
 /* left column */
 #leftCol { position: fixed; top: calc(var(--gt) + 34px); left: var(--gl); width: 290px; z-index: 5; display: grid; gap: 8px; }
-.glass { background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); }
+.glass { background: var(--glass); border: 1px solid var(--line); backdrop-filter: blur(10px) saturate(1.15); -webkit-backdrop-filter: blur(10px) saturate(1.15); }
+/* backdrop blur over a live WebGL canvas is re-rendered every frame (~3 ms on an Intel iGPU at 1440x900):
+   below the top quality tiers the panels go solid instead */
+body[data-quality="low"] .glass, body[data-quality="medium"] .glass, body[data-quality="high"] .glass,
+body[data-quality="low"] .moon-label:not([aria-pressed="true"]), body[data-quality="medium"] .moon-label:not([aria-pressed="true"]), body:not([data-quality="ultra"]) .sat-label, body:not([data-quality="ultra"]) .sh-btn, body:not([data-quality="ultra"]) #ringBar, body[data-quality="low"] #captions p, body[data-quality="medium"] #captions p
+  { backdrop-filter: none; -webkit-backdrop-filter: none; background: rgba(12,10,17,.9); }
 #onair { padding: 10px 12px; display: grid; gap: 6px; }
 #autoRamowkaBar { padding: 9px 12px; display: grid; gap: 5px; border-color: var(--accent); }
 .ramowka-top { display: flex; align-items: center; gap: 7px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); }
@@ -126,11 +145,17 @@ details#sched { padding: 0; }
 #stoicQuote { margin: 0; font-family: var(--font-display); font-size: 14px; line-height: 1.35; font-weight: 500; text-wrap: balance; }
 #stoicAuthor { color: var(--ink-dim); font-size: 10px; text-transform: uppercase; letter-spacing: .1em; }
 .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+#card .actions { padding-top: 6px; border-top: 1px solid var(--line); }
+#card .actions .btn { height: 30px; padding: 0 10px; font-size: 10px; }
+#card .actions .btn.plus { border-color: var(--accent); color: var(--accent); }
+#card .actions #favStarBtn { width: 30px; height: 30px; border-radius: 0; }
 
 /* captions */
-#captions { position: fixed; left: 50%; bottom: calc(var(--gb) + 40px); transform: translateX(-50%); z-index: 6; width: min(640px, calc(100vw - 32px)); text-align: center; pointer-events: none; transition: opacity .3s; }
-#captions .who { display: inline-block; margin-bottom: 6px; padding: 2px 8px; background: var(--accent); color: var(--accent-ink); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .12em; }
-#captions p { margin: 0; display: inline-block; padding: 6px 12px; background: rgba(7,6,10,.62); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); font-size: clamp(14px, 1.6vw, 18px); line-height: 1.45; text-shadow: 0 1px 12px rgba(0,0,0,.9), 0 0 2px #000; text-wrap: balance; }
+/* captions: a readable proportional face, solid backdrop (contrast stays >= 7:1 over any frame), at most 3 lines */
+#captions { position: fixed; left: 50%; bottom: calc(var(--gb) + 40px); transform: translateX(-50%); z-index: 6; width: min(680px, calc(100vw - 32px)); text-align: center; pointer-events: none; transition: opacity .3s; }
+#captions .who { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 8px; padding: 3px 9px; background: rgba(7,6,10,.88); border: 1px solid var(--accent); color: var(--ink); font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .14em; }
+#captions .who::before { content: ""; width: 6px; height: 6px; background: var(--accent); }
+#captions p { margin: 0 auto; max-width: 52ch; padding: 10px 16px 11px; background: rgba(7,6,10,.86); border-left: 2px solid var(--accent); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-family: var(--font-read); font-size: clamp(16px, 1.55vw, 20px); font-weight: 450; line-height: 1.5; letter-spacing: .005em; color: #f6f3fb; text-wrap: balance; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
 /* station card */
 #card { position: fixed; left: var(--gl); bottom: calc(var(--gb) + 30px); z-index: 6; width: min(360px, calc(100vw - 32px)); display: grid; gap: 7px; padding: 13px 15px; }
@@ -155,6 +180,10 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 .playing .eq i { animation: eq .9s ease-in-out infinite; }
 .eq i:nth-child(2) { animation-delay: -.3s !important; } .eq i:nth-child(3) { animation-delay: -.6s !important; }
 @keyframes eq { 0%,100% { height: 25%; } 50% { height: 100%; } }
+#startNotice { display: flex; align-items: flex-start; gap: 7px; margin: 0; font-size: 12px; line-height: 1.45; color: var(--ink-dim); }
+#startNotice[hidden] { display: none; }
+#startNotice svg { flex: 0 0 auto; width: 13px; height: 13px; margin-top: 2px; animation: startPulse 1.8s ease-in-out infinite; }
+@keyframes startPulse { 50% { opacity: .35; } }
 #blendInfo { display: flex; align-items: center; gap: 8px; font-size: 11px; text-transform: uppercase; color: var(--ink-dim); }
 #blendInfo b { color: var(--ink); font-weight: 500; }
 #blendInfo button { background: none; border: 1px solid var(--line); width: 22px; height: 22px; padding: 0; }
@@ -211,7 +240,7 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 .plan.featured { border-color: var(--accent); }
 .plan b { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
 .price { font-family: var(--font-display); font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
-.price small { font-family: var(--font-ui); font-size: 10px; font-weight: 400; color: var(--ink-dim); }
+.price small { font-family: var(--font-ui); font-size: 10px; font-weight: 400; color: var(--ink-dim); white-space: nowrap; display: inline-block; }
 .plan ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
 .plan li { font-size: 10px; color: var(--ink-dim); line-height: 1.4; padding-left: 12px; position: relative; }
 .plan li::before { content: "+"; position: absolute; left: 0; color: var(--accent); }
@@ -253,7 +282,37 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 #toast button { background: none; border: 0; border-left: 1px solid rgba(7,6,10,.25); padding: 0 0 0 12px; color: var(--bg); font-weight: 700; text-transform: uppercase; white-space: nowrap; }
 #toast.error { background: #ff9a9a; }
 
-@media (max-width: 1100px) { #leftCol { width: 250px; } #stoic { display: none; } }
+/* listener comments on air */
+#cmtFeed { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 7px; }
+#cmtFeed[hidden] { display: none; }
+.cmt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; }
+.cmt-list li { display: flex; align-items: baseline; gap: 6px; font-size: 11px; color: var(--ink-dim); min-width: 0; }
+.cmt-list b { color: var(--ink); font-weight: 500; white-space: nowrap; }
+.cmt-line { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.cmt-badge { flex: none; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; padding: 1px 5px; background: var(--accent); color: var(--accent-ink); }
+.cmt-mine { border: 1px solid var(--line); padding: 7px 9px; display: grid; gap: 5px; }
+.cmt-mine.aired { border-color: var(--accent); background: rgba(255,107,61,.07); }
+.cmt-head { display: flex; align-items: center; gap: 6px; font-size: 10px; text-transform: uppercase; letter-spacing: .08em; }
+.cmt-head svg { width: 13px; height: 13px; flex: none; }
+.cmt-mine.aired .cmt-head svg { color: var(--accent); }
+.cmt-text { margin: 0; font-size: 12px; color: var(--ink-dim); line-height: 1.4; overflow-wrap: anywhere; }
+.cmt-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.cmt-actions .btn.playing { border-color: var(--accent); }
+.cmt-form { display: grid; gap: 10px; }
+.cmt-field { display: grid; gap: 4px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-dim); }
+.cmt-top { display: flex; justify-content: space-between; }
+.cmt-field textarea, .cmt-field input { font: inherit; font-size: 14px; text-transform: none; letter-spacing: 0; color: var(--ink); background: rgba(236,232,244,.05); border: 1px solid var(--line); padding: 8px 10px; width: 100%; box-sizing: border-box; resize: vertical; }
+.cmt-field textarea:focus, .cmt-field input:focus { outline: 1px solid var(--accent); }
+.cmt-err { margin: 0; color: #ff8a7a; font-size: 12px; }
+.cmt-err:empty { display: none; }
+.cmt-foot { display: flex; gap: 8px; justify-content: flex-end; }
+@media (max-width: 760px) {
+  #cmtFeed .cmt-list { display: none; }
+  #cmtFeed .cmt-text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-size: 11px; }
+  #cmtFeed .cmt-mine { padding: 6px 8px; gap: 4px; }
+}
+
+@media (max-width: 1100px) { #leftCol { width: 250px; } #stoic { display: none; } #nowPlaying, .brand .tagline { display: none; } }
 @media (max-width: 760px) {
   .mobile-only { display: inline-flex; }
   #leftCol { left: var(--gl); right: var(--gr); width: auto; top: calc(var(--gt) + 28px); gap: 5px; }
@@ -264,31 +323,52 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
   #deckBtn { display: none !important; }
   .group { padding-left: var(--gl); padding-right: var(--gr); }
   #card { left: var(--gl); right: var(--gr); width: auto; bottom: calc(64px + env(safe-area-inset-bottom, 0px)); padding: 10px 12px; }
-  #captions { bottom: auto; top: 46%; }
+  #captions { bottom: auto; top: 46%; z-index: 9; } /* above the thumb dial (z 8), below the deck sheet and nav */
+  #captions p { font-size: 16px; padding: 8px 12px; }
+  #orbPwaBtn span, #trialPill > span { display: none; }
+  #orbPwaBtn { width: 28px; padding: 0 !important; justify-content: center; }
+  .hud-tl { gap: 6px; }
+  /* phone: keep the card as short as before the action row was added, so it never covers the thumb dial */
+  #cardTag { display: none; }
+  #card { gap: 5px; }
+  #card .transport .btn { height: 32px; }
+  #card .transport .btn.primary { padding: 0 10px; }
+  #card .transport .eq { display: none; }
+  #card .actions { padding-top: 5px; gap: 5px; }
+  #card .actions .btn { width: 40px; padding: 0; }
+  #card .actions .btn span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  #card .actions #favStarBtn { width: 40px; }
+  .td-hint { text-shadow: 0 1px 6px #000, 0 0 2px #000; color: rgba(236,232,244,.8) !important; }
   .host-label { display: none; }
   .hud-br .hold-txt, .hud-tr .freq-top, .hud-tl .howto-wrap { display: none; }
   .hud { gap: 5px; font-size: 10px; }
   #classicViewBtn { height: 24px; padding: 0 7px; font-size: 9px; }
+  /* the top HUD is full on phones: "zmień wersję" sits in the free space under the filter bar */
+  .hud-tl { z-index: 9; } /* lets the fixed link below sit above the thumb dial (8) */
+  #changeVersionBtn { position: fixed; top: calc(132px + env(safe-area-inset-top, 0px)); right: 16px; font-size: 10px; }
   .lang button { padding: 2px 4px; font-size: 9px; }
   .stats { grid-template-columns: 1fr 1fr; }
   .plans { grid-template-columns: 1fr; }
 }
+body.calm *, body.calm *::before, body.calm *::after { animation: none !important; }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
 </style>
 
 <div id="stage"><canvas id="gl"></canvas><div id="labels"></div></div>
 
 <header class="hud hud-tl">
-  <span class="brand">DOS RADIO</span><span class="sep howto-wrap"></span><button id="infoBtn" class="hud-link howto-wrap" type="button" data-i18n="howto"></button>
+  <span class="brand">AMBIRADIO<small class="tagline" data-i18n="tagline"></small></span><span class="sep howto-wrap"></span><button id="infoBtn" class="hud-link howto-wrap" type="button" data-i18n="howto"></button><button id="changeVersionBtn" class="hud-link change-version" type="button" data-i18n="changeVersion"></button>
   <div class="lang" role="group" aria-label="Language"><button type="button" data-lang="pl">PL</button><button type="button" data-lang="en">EN</button><button type="button" data-lang="ru">RU</button></div>
+  <button id="calmBtn" class="hud-icon" type="button" aria-pressed="false" aria-keyshortcuts="M"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M1.5 6.5c2.2-2 4.3-2 6.5 0s4.3 2 6.5 0M1.5 10.5c2.2-2 4.3-2 6.5 0s4.3 2 6.5 0" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><span class="sr-only" data-i18n="calm"></span></button>
 </header>
+<div id="nowPlaying" aria-hidden="true"><span class="np-eyebrow" data-i18n="nowOn"></span><b id="npName"></b><span id="npHost"></span></div>
 <div class="hud hud-tr">
   <button id="classicViewBtn" class="btn small" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="3" width="12" height="3" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="8" width="5.5" height="5" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="8.5" y="8" width="5.5" height="5" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span data-i18n="classicView"></span></button>
   <button id="trialPill" type="button" hidden><svg class="ring" viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="2.5"/><circle id="trialRing" cx="10" cy="10" r="8" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-dasharray="50.3" stroke-dashoffset="0" transform="rotate(-90 10 10)"/></svg><span data-i18n="trialLeft"></span><b id="trialLeft">60:00</b></button>
   <span id="modeBadge" class="badge"></span><span class="sep freq-top"></span><span id="freqTop" class="freq-top"></span>
 </div>
 <div class="hud hud-bl"><span id="clock">00:00:000</span></div>
-<div class="hud hud-br"><span class="hold-txt" data-i18n="holdSeek"></span><span class="sep hold-txt"></span><span id="speedVal">1.00x</span></div>
+<div class="hud hud-br"><button id="paletteBtn" class="hud-kbd" type="button" aria-label="Ctrl+K" aria-keyshortcuts="Control+K"><kbd>Ctrl+K</kbd></button><span class="sep"></span><span class="hold-txt" data-i18n="holdSeek"></span><span class="sep hold-txt"></span><span id="speedVal">1.00x</span></div>
 
 <div id="leftCol">
   <div id="autoRamowkaBar" class="glass" hidden>
@@ -315,19 +395,24 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
   <h1 id="cardName"></h1>
   <p id="cardTag"></p>
   <p id="cardHost"><span id="cardHostLbl"></span>: <span id="cardHostName"></span></p>
-  <div class="row">
-    <button id="playBtn" class="btn primary" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path id="playIcon" d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg><span id="playTxt"></span><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></button>
-    <button id="prevBtn" class="btn icon" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
-    <button id="nextBtn" class="btn icon" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
-    <button id="newsNowBtn" class="btn" type="button" data-i18n="newsNow"></button>
-    <button id="dedicateBtn" class="btn" type="button" title="Udostępnij przez wybraną aplikację lub wyślij głosowe pozdrowienie"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 2.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-7 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM6.3 7.1l3.4-1.7M6.3 8.9l3.4 1.7" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span id="dedicateTxt">Udostępnij</span></button>
-    <button id="paletteBtn" class="btn" type="button" aria-label="Ctrl+K"><kbd>Ctrl+K</kbd></button>
+  <div class="row transport">
+    <button id="playBtn" class="btn primary" type="button" aria-keyshortcuts="P"><svg viewBox="0 0 16 16" aria-hidden="true"><path id="playIcon" d="M4 2.5v11l9-5.5z" fill="currentColor"/></svg><span id="playTxt"></span><span class="eq" aria-hidden="true"><i></i><i></i><i></i></span></button>
+    <button id="prevBtn" class="btn icon" type="button" aria-keyshortcuts="ArrowLeft"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10 3 5 8l5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+    <button id="nextBtn" class="btn icon" type="button" aria-keyshortcuts="ArrowRight"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="m6 3 5 5-5 5" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+    <button id="newsNowBtn" class="btn" type="button" data-i18n="newsNow" aria-keyshortcuts="N"></button>
+  </div>
+  <div class="row actions">
+    <button id="dedicateBtn" class="btn" type="button" aria-keyshortcuts="S"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11.5 2.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm-7 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zm7 3.5a2 2 0 1 1 0 4 2 2 0 0 1 0-4zM6.3 7.1l3.4-1.7M6.3 8.9l3.4 1.7" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span id="dedicateTxt" data-i18n="share"></span></button>
+    <button id="commentBtn" class="btn" type="button" aria-keyshortcuts="C"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><span data-i18n="comment"></span></button>
+    <button id="plusBtn" class="btn plus" type="button" aria-keyshortcuts="+"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v11M2.5 8h11" fill="none" stroke="currentColor" stroke-width="1.6"/></svg><span data-i18n="plusBtn"></span></button>
     <button id="deckBtn" class="btn icon mobile-only" type="button" aria-controls="deck" aria-expanded="false" aria-label="Radio"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="2.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M12.6 3.4l-1.4 1.4M4.8 11.2l-1.4 1.4" fill="none" stroke="currentColor" stroke-width="1.3"/></svg></button>
   </div>
+  <p id="startNotice" role="status" aria-live="polite" hidden><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6 12.5V3.5l7-1.5v9" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="4.3" cy="12.5" r="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/><circle cx="11.3" cy="11" r="1.8" fill="none" stroke="currentColor" stroke-width="1.3"/></svg><span data-i18n="startNotice"></span></p>
+  <div id="cmtFeed" hidden aria-live="polite"></div>
   <div id="blendInfo" hidden><span data-i18n="mixWith"></span> <b id="blendName"></b><button id="blendClear" type="button" aria-label="×">×</button></div>
 </section>
 
-<aside id="deck" class="glass" aria-label="DOS Radio">
+<aside id="deck" class="glass" aria-label="AmbiRadio">
   <div class="deck-head mobile-only"><span class="grip"></span><button id="deckClose" class="btn small" type="button" data-i18n="close"></button></div>
   <div class="tabs" role="tablist">
     <button role="tab" id="tab-radio" data-tab="radio" aria-selected="true" data-i18n="tabRadio"></button>
@@ -345,7 +430,7 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 
 <div id="enter">
   <div class="enter-inner">
-    <div class="enter-meta"><span>DOS Radio</span><span data-i18n="enterMeta1"></span><span id="enterMode"></span></div>
+    <div class="enter-meta"><span>AmbiRadio — <span data-i18n="tagline"></span></span><span data-i18n="enterMeta1"></span><span id="enterMode"></span></div>
     <h1><span data-i18n="enterTitle"></span><span>.</span></h1>
     <p data-i18n="enterLead"></p>
     <p class="free" data-i18n="enterFree"></p>
@@ -357,6 +442,7 @@ kbd { font: inherit; font-size: 10px; padding: 1px 4px; border: 1px solid var(--
 <div id="info" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="infoTitle"><div class="modal-box pad"><h2 id="infoTitle" data-i18n="infoTitle"></h2><dl id="infoList"></dl><p class="hint" data-i18n="infoNote"></p><div><button class="btn" type="button" data-close data-i18n="close"></button></div></div></div>
 <div id="paywall" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="pwTitle"><div class="modal-box pad" id="pwBox"></div></div>
 <div id="dedModal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="dedTitle"><div class="modal-box pad" id="dedModalBox"></div></div>
+<div id="cmtModal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="cmtTitle"><div class="modal-box pad" id="cmtModalBox"></div></div>
 <div id="toast" role="status" hidden><span id="toastMsg"></span><button id="toastAct" type="button" hidden></button></div>
 <div id="sr" class="sr-only" aria-live="polite"></div>
 

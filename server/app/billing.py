@@ -1,6 +1,9 @@
-"""Stripe Checkout billing for DOS Radio Plus (test mode).
+"""Stripe Checkout billing for AmbiRadio Plus (test mode).
 
-Plans: Plus 39 PLN/month, Plus+AI 59 PLN/month. The webhook grants `plus`
+Plans (USD): AmbiRadio Plus $2.99/month, AmbiRadio Plus AI $6.99/month. Stripe price
+ids come from env (`DOSRADIO_PLUS_PRICE_USD`, `DOSRADIO_PLUS_AI_PRICE_USD`); without them
+Checkout uses an inline USD price. The old `DOSRADIO_PLUS_PRICE_PLN` is deliberately not
+read any more: a PLN price id would charge PLN while the UI shows dollars. The webhook grants `plus`
 (plan='plus', plus_until=now+30d) on `checkout.session.completed`. Mount is
 handled by app.main via a guarded import; shared Database/AccessService are
 resolved lazily to avoid a circular import.
@@ -25,9 +28,24 @@ PLUS_DAYS = 30
 SEEN_EVENT_LIMIT = 2048  # in-memory idempotency guard; survives duplicate deliveries
 _seen_events: set[str] = set()
 
+CURRENCY = "usd"
+
+# amount_cents is the monthly price; yearly_cents is shown in the UI only (no yearly checkout yet).
 PLANS: dict[str, dict[str, Any]] = {
-    "plus": {"id": "plus", "name": "DOS Radio Plus", "amount_pln": 39, "price_env": "DOSRADIO_PLUS_PRICE_PLN"},
-    "plus_ai": {"id": "plus_ai", "name": "DOS Radio Plus+AI", "amount_pln": 59, "price_env": ""},
+    "plus": {
+        "id": "plus",
+        "name": "AmbiRadio Plus",
+        "amount_cents": 299,
+        "yearly_cents": 2990,
+        "price_envs": ("DOSRADIO_PLUS_PRICE_USD",),
+    },
+    "plus_ai": {
+        "id": "plus_ai",
+        "name": "AmbiRadio Plus AI",
+        "amount_cents": 699,
+        "yearly_cents": 6990,
+        "price_envs": ("DOSRADIO_PLUS_AI_PRICE_USD",),
+    },
 }
 
 router = APIRouter(prefix="/radio-api/billing")
@@ -56,21 +74,40 @@ class CheckoutRequest(BaseModel):
     b2b: bool = False  # B2B: monthly invoice instead of an immediate card charge
 
 
-def _line_item(plan_id: str) -> dict[str, Any]:
-    """Price ID from env when configured, otherwise an inline recurring price."""
+def _configured_price_id(plan_id: str) -> str:
     spec = PLANS[plan_id]
-    price_id = os.environ.get(spec["price_env"], "").strip() if spec["price_env"] else ""
-    if price_id:
-        return {"price": price_id, "quantity": 1}
-    return {
-        "quantity": 1,
-        "price_data": {
-            "currency": "pln",
-            "unit_amount": spec["amount_pln"] * 100,
-            "recurring": {"interval": "month"},
-            "product_data": {"name": spec["name"]},
-        },
-    }
+    for env_name in spec["price_envs"]:
+        price_id = os.environ.get(env_name, "").strip()
+        if price_id:
+            return price_id
+    return ""
+
+
+def _verified_price(client: stripe.StripeClient, plan_id: str) -> str:
+    """The configured Stripe price, but only when it charges exactly the displayed amount.
+
+    A display price is never turned into a charge on its own: without a configured price id,
+    or when the price bills a different amount, currency or interval, checkout fails clearly.
+    The yearly figure is display-only and is never sold here.
+    """
+    spec = PLANS[plan_id]
+    price_id = _configured_price_id(plan_id)
+    if not price_id:
+        raise HTTPException(503, f"Płatności dla planu {spec['name']} nie są skonfigurowane. Nie ma ceny Stripe do sprzedaży.")
+    try:
+        price = client.v1.prices.retrieve(price_id)
+    except Exception as error:
+        log.error("Stripe price lookup failed for %s: %s", price_id, error)
+        raise HTTPException(502, "Nie udało się sprawdzić ceny w Stripe. Spróbuj ponownie za chwilę.") from error
+    amount = _field(price, "unit_amount")
+    currency = str(_field(price, "currency") or "").lower()
+    recurring = _field(price, "recurring") or {}
+    interval = str(_field(recurring, "interval") or "")
+    if amount != spec["amount_cents"] or currency != CURRENCY or interval != "month" or not _field(price, "active"):
+        log.error("Stripe price %s is %s %s/%s (active=%s), UI shows %s %s/month",
+                  price_id, amount, currency, interval or "once", _field(price, "active"), spec["amount_cents"], CURRENCY)
+        raise HTTPException(503, f"Cena Stripe dla planu {spec['name']} nie zgadza się z ceną na stronie. Płatność wstrzymana.")
+    return price_id
 
 
 def _site_url(request: Request) -> str:
@@ -87,18 +124,18 @@ def _site_url(request: Request) -> str:
 def checkout(body: CheckoutRequest, request: Request) -> dict:
     """Open a Stripe Checkout session for any registered (non-Plus-required) listener."""
     if body.plan not in PLANS:
-        raise HTTPException(400, "Nieznany plan. Wybierz Plus albo Plus+AI.")
+        raise HTTPException(400, "Nieznany plan. Wybierz AmbiRadio Plus albo AmbiRadio Plus AI.")
     db, access = _core()
     current = access.resolve(request.cookies, _ip(request))
     if not current.registered or not current.email:
-        raise HTTPException(401, "Załóż konto i zaloguj się, żeby wykupić DOS Radio Plus.")
+        raise HTTPException(401, "Załóż konto i zaloguj się, żeby wykupić AmbiRadio Plus.")
     user = db.find_user_by_email(current.email)
     if user is None:
         raise HTTPException(401, "Nie znaleziono konta.")
     client = _stripe_client()
     params: dict[str, Any] = {
         "mode": "subscription",
-        "line_items": [_line_item(body.plan)],
+        "line_items": [{"price": _verified_price(client, body.plan), "quantity": 1}],
         "success_url": _site_url(request) + "/?billing=success",
         "cancel_url": _site_url(request) + "/?billing=cancel",
         "customer_email": current.email,
@@ -184,7 +221,16 @@ def billing_status(request: Request) -> dict:
         "email": current.email,
         "checkout_available": bool(os.environ.get("STRIPE_SECRET_KEY", "").strip()),
         "plans": [
-            {"id": spec["id"], "name": spec["name"], "amount_pln": spec["amount_pln"], "interval": "month"}
+            {
+                "id": spec["id"],
+                "name": spec["name"],
+                "currency": CURRENCY,
+                "amount_cents": spec["amount_cents"],
+                "yearly_cents": spec["yearly_cents"],  # display only: there is no yearly checkout
+                "yearly_checkout": False,
+                "checkout_available": bool(os.environ.get("STRIPE_SECRET_KEY", "").strip()) and bool(_configured_price_id(spec["id"])),
+                "interval": "month",
+            }
             for spec in PLANS.values()
         ],
     }

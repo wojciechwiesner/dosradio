@@ -1,6 +1,6 @@
 """Mix engine: join two recordings seamlessly with phrase-length DJ crossfades and downbeat bass-swap.
 
-Two distinct boundary regimes exist in DOS Radio streams:
+Two distinct boundary regimes exist in AmbiRadio streams:
   1. Intra-session (consecutive 30s slices of the same 3-minute Lyria recording, gap <= 45s):
      `join_intra_session` performs a 15 ms equal-power de-click splice without cutting beats.
   2. Inter-session (two different recordings/sessions or station rotation):
@@ -419,6 +419,46 @@ def _deck_grid(audio: np.ndarray, rel_kicks: np.ndarray) -> BeatGrid | None:
     return fitted
 
 
+def _ordinal_swap_times(
+    tail_rel_kicks: np.ndarray,
+    head_rel_kicks: np.ndarray,
+    tail_grid: BeatGrid,
+    head_grid: BeatGrid,
+    tail_first: float,
+    head_beat0: float,
+    shift_s: float,
+    swap_index: int,
+) -> tuple[float, float]:
+    """(tail_time, trimmed_head_time) of the bass swap, snapped to the real measured kick on each deck.
+
+    Picking the swap purely from each deck's fitted-line prediction treats the decks independently: each
+    grid has its own few-ms residual, so "beat N of the tail" and "beat N of the head" land at idealised
+    grid times that are each several ms from the deck's real kick attack, in opposite directions. Swapping
+    the bass there crossfades two kicks that do not coincide; through the anti-flam ramp neither survives
+    at full strength and the join reads as a dropped/doubled beat. Instead pair kicks by their grid
+    ordinal on each deck and swap exactly on the measured kick at that ordinal; fall back to the grid time
+    only when that beat has no detected kick.
+
+    head_rel_kicks and head_grid live in the UNTRIMMED head frame while head_beat0 is in the trimmed one
+    (trimmed = untrimmed - shift_s), so the target ordinal is computed in the untrimmed frame and the
+    matched kick converted back to trimmed time.
+    """
+    tail_ideal = tail_first + swap_index * tail_grid.period_s
+    head_ideal = head_beat0 + swap_index * head_grid.period_s
+    tail_kicks = np.asarray(tail_rel_kicks, dtype=np.float64)
+    head_kicks = np.asarray(head_rel_kicks, dtype=np.float64)
+    tail_candidates = tail_kicks[
+        np.round((tail_kicks - tail_grid.origin_s) / tail_grid.period_s) == tail_grid.nearest_index(tail_ideal)
+    ]
+    head_candidates = head_kicks[
+        np.round((head_kicks - head_grid.origin_s) / head_grid.period_s)
+        == head_grid.nearest_index(head_ideal + shift_s)
+    ]
+    t_time = float(tail_candidates[0]) if len(tail_candidates) else tail_ideal
+    h_time = float(head_candidates[0]) - shift_s if len(head_candidates) else head_ideal
+    return t_time, h_time
+
+
 def _grid_swap_anchors(
     tail_slice: np.ndarray,
     head_slice: np.ndarray,
@@ -451,8 +491,11 @@ def _grid_swap_anchors(
     if beats_in_tail < 4:
         return None
     swap_index = max(1, int(round(cfg.bass_swap_position * beats_in_tail)))
-    t_swap = int(round((tail_first + swap_index * tail_grid.period_s) * RATE))
-    h_swap = int(round((head_beat0 + swap_index * head_grid.period_s) * RATE))
+    t_swap_time, h_swap_time = _ordinal_swap_times(
+        tail_rel_kicks, head_rel_kicks, tail_grid, head_grid, tail_first, head_beat0, shift_s, swap_index
+    )
+    t_swap = int(round(t_swap_time * RATE))
+    h_swap = int(round(h_swap_time * RATE))
     if not (0 < t_swap < tail_frames and 0 < h_swap < head_frames - head_shift):
         return None
     return t_swap, h_swap, ratio, beats_in_tail, head_shift

@@ -19,7 +19,8 @@ const ICONS = {
   friends: '<svg viewBox="0 0 20 20" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="7.5" cy="6.8" r="2.8"/><path d="M2.5 16.5c0-2.6 2.2-4.6 5-4.6s5 2 5 4.6"/><circle cx="14.2" cy="7.5" r="2.1"/><path d="M14.2 12c2 .2 3.3 1.7 3.3 4.3"/></svg>',
 };
 
-function getClientId() {
+/** Shared with the Classic page (same localStorage key), so one browser is one listener in the stats. */
+export function getClientId() {
   try {
     let v = localStorage.getItem(CID_KEY);
     if (!v) { v = 'orb_' + Math.random().toString(36).slice(2, 11) + Date.now().toString(36).slice(-4); localStorage.setItem(CID_KEY, v); }
@@ -221,7 +222,7 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
     const baseUrl = `${location.origin}/?station=${encodeURIComponent(st.id)}`;
     const baseInv = stationMetaInvite(st.id, `Antena na żywo · ${st.name}`, `wspólny odsłuch na żywo z prowadzącym ${st.host} i wyselekcjonowanymi pigułkami wiedzy`);
     openQuickShareSheet({
-      title: `DOS Radio · ${st.name}`,
+      title: `AmbiRadio · ${st.name}`,
       subtitle: `${st.freq} MHz · ${st.bpm} BPM · Prowadzi ${st.host}`,
       url: baseUrl,
       text: formatInviteShareText(baseInv),
@@ -263,7 +264,7 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
       b.type = 'button';
       b.className = 'sm-btn';
       b.style.cssText = 'margin:0 14px 10px;width:calc(100% - 28px)';
-      b.textContent = '+ Stwórz własne radio lub kanał YT';
+      b.textContent = '+ Stwórz własne radio';
       b.onclick = () => openModal('creator');
       pr.prepend(b);
     }
@@ -374,13 +375,13 @@ export function initOrbitaSocial({ app, STATIONS, byId, dial, renderCard }) {
     } else if (activeTab === 'creator') {
       bodyHtml = `
         <form id="createRadioForm" class="sm-f">
-          <strong>Własne radio na żywo / Kanał Twórcy YT</strong>
+          <strong>Własne radio na żywo</strong>
           <input class="sm-in" name="name" placeholder="Nazwa stacji (np. Cyber Kodowanie Live)" required>
-          <input class="sm-in" name="creator_name" placeholder="Twórca / Kanał YouTube" value="${esc(localStorage.getItem(NAME_KEY) || '')}">
+          <input class="sm-in" name="creator_name" placeholder="Twórca" value="${esc(localStorage.getItem(NAME_KEY) || '')}">
           <select class="sm-sel" name="mode"><option value="describe">Opisz klimat słowami</option><option value="modify">Zmodyfikuj wybraną stację</option></select>
           <select class="sm-sel" name="base_station_id">${stOpts}</select>
           <textarea class="sm-ta" name="description" rows="2" placeholder="Opisz brzmienie i klimat prowadzącego..."></textarea>
-          <textarea class="sm-ta" name="pills_raw" rows="2" placeholder="Pigułki Twórcy / Linki YT (1 w linii: https://... | opis)"></textarea>
+          <textarea class="sm-ta" name="pills_raw" rows="2" placeholder="Pigułki wiedzy: link do artykułu albo notatka (1 w linii: https://... | opis)"></textarea>
           <button class="sm-btn" type="submit">Utwórz stację i udostępnij</button>
         </form>
         <div style="margin-top:10px">${customRadios.slice(0, 6).map(r => `

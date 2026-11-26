@@ -69,27 +69,30 @@ function openClassicDedicationModal(currentStationId: string): void {
 
   const overlay = mk(
     'div',
-    'position:fixed;inset:0;z-index:9999;background:rgba(8,10,15,.76);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:16px',
+    'position:fixed;inset:0;z-index:9999;background:rgba(5,5,6,.82);display:flex;align-items:center;justify-content:center;padding:16px',
   );
   overlay.id = 'dos-dedicate-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', 'Udostępnij stację z dedykacją');
 
   const card = mk(
     'div',
-    'width:100%;max-width:480px;background:#12151e;color:#f3f4f6;border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:22px;box-shadow:0 24px 64px rgba(0,0,0,.55)',
+    'width:100%;max-width:480px;max-height:calc(100vh - 32px);overflow-y:auto;background:var(--bg-2);color:var(--text);border:1px solid var(--line-strong);border-top:4px solid var(--accent);padding:32px 24px 24px',
   );
 
-  const eyebrow = mk('div', 'font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:#9ca3af;margin-bottom:4px', 'DOS RADIO · DEDYKACJA');
-  const h2 = mk('h2', 'margin:0 0 6px;font-size:20px', 'Udostępnij stację z dedykacją');
+  const eyebrow = mk('div', 'font:500 12px/1.4 var(--font-mono);letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin-bottom:8px', 'AmbiRadio · Dedykacja');
+  const h2 = mk('h2', 'margin:0 0 8px;font-size:32px;line-height:1.1;letter-spacing:-.03em', 'Udostępnij stację z dedykacją');
   const sub = mk(
     'p',
-    'margin:0 0 14px;font-size:13px;color:#9ca3af;line-height:1.45',
+    'margin:0 0 24px;font-size:14px;color:var(--dim);line-height:1.5',
     'Prowadzący przywita odbiorcę po imieniu, przeczyta Twoje pozdrowienia na starcie i zaprosi do wspólnego słuchania.',
   );
 
-  const inCss = 'width:100%;padding:9px 11px;border-radius:9px;border:1px solid rgba(255,255,255,.16);background:#1a1e2b;color:#f9fafb;font-size:14px;box-sizing:border-box';
-  const form = mk('form', 'display:flex;flex-direction:column;gap:11px');
+  const inCss = 'width:100%;min-height:44px;padding:10px 12px;border-radius:0;border:1px solid var(--line-strong);background:var(--bg);color:var(--text);font:16px var(--font-sans);box-sizing:border-box';
+  const form = mk('form', 'display:flex;flex-direction:column;gap:16px');
 
-  const stLbl = mk('label', 'display:flex;flex-direction:column;gap:4px;font-size:12px;color:#d1d5db', 'Stacja muzyczna');
+  const stLbl = mk('label', 'display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--dim)', 'Stacja muzyczna');
   const sel = mk('select', inCss);
   for (const s of STATIONS) {
     const opt = document.createElement('option');
@@ -100,15 +103,15 @@ function openClassicDedicationModal(currentStationId: string): void {
   }
   stLbl.appendChild(sel);
 
-  const grid = mk('div', 'display:grid;grid-template-columns:1fr 1fr;gap:10px');
-  const toLbl = mk('label', 'display:flex;flex-direction:column;gap:4px;font-size:12px;color:#d1d5db', 'Dla kogo (imię)');
+  const grid = mk('div', 'display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:16px');
+  const toLbl = mk('label', 'display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--dim)', 'Dla kogo (imię)');
   const toIn = mk('input', inCss);
   toIn.required = true;
   toIn.maxLength = 40;
   toIn.placeholder = 'np. Klaudia';
   toLbl.appendChild(toIn);
 
-  const frLbl = mk('label', 'display:flex;flex-direction:column;gap:4px;font-size:12px;color:#d1d5db', 'Od kogo (imię)');
+  const frLbl = mk('label', 'display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--dim)', 'Od kogo (imię)');
   const frIn = mk('input', inCss);
   frIn.required = true;
   frIn.maxLength = 40;
@@ -116,9 +119,9 @@ function openClassicDedicationModal(currentStationId: string): void {
   frLbl.appendChild(frIn);
   grid.append(toLbl, frLbl);
 
-  const msgLbl = mk('label', 'display:flex;flex-direction:column;gap:4px;font-size:12px;color:#d1d5db');
+  const msgLbl = mk('label', 'display:flex;flex-direction:column;gap:8px;font-size:14px;color:var(--dim)');
   const msgHead = mk('div', 'display:flex;justify-content:space-between');
-  const cnt = mk('span', 'color:#9ca3af', '0 / 200');
+  const cnt = mk('span', 'color:var(--faint);font-family:var(--font-mono)', '0 / 200');
   msgHead.append(mk('span', '', 'Dedykacja (do 200 znaków)'), cnt);
   const msgIn = mk('textarea', `${inCss};resize:vertical`);
   msgIn.rows = 3;
@@ -129,31 +132,36 @@ function openClassicDedicationModal(currentStationId: string): void {
   });
   msgLbl.append(msgHead, msgIn);
 
-  const resBox = mk('div', 'display:none;padding:12px;border-radius:10px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.04)');
+  const resBox = mk('div', 'display:none;padding:16px;border:1px solid var(--accent);background:var(--accent-soft)');
   const linkIn = mk('input', `${inCss};font-family:monospace;font-size:12px;margin:6px 0 8px`);
   linkIn.readOnly = true;
   const resRow = mk('div', 'display:flex;gap:8px;flex-wrap:wrap');
-  const copyBtn = mk('button', 'padding:8px 14px;border-radius:8px;border:0;background:#f59e0b;color:#111827;font-weight:600;cursor:pointer', 'Kopiuj link');
+  const copyBtn = mk('button', 'min-height:44px;padding:0 16px;border:0;background:var(--accent);color:var(--on-accent);font-weight:700;cursor:pointer', 'Kopiuj link');
   copyBtn.type = 'button';
-  const prevBtn = mk('button', 'padding:8px 14px;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:transparent;color:#f3f4f6;cursor:pointer', 'Odsłuchaj powitanie');
+  const prevBtn = mk('button', 'min-height:44px;padding:0 16px;border:1px solid var(--line-strong);background:transparent;color:var(--text);cursor:pointer', 'Odsłuchaj powitanie');
   prevBtn.type = 'button';
   const audioEl = mk('audio', 'width:100%;margin-top:8px;display:none');
   audioEl.controls = true;
   resRow.append(copyBtn, prevBtn);
-  resBox.append(mk('div', 'font-size:12px;color:#9ca3af', 'Link z dedykacją gotowy:'), linkIn, resRow, audioEl);
+  resBox.append(mk('div', 'font:500 12px var(--font-mono);color:var(--text)', 'Link z dedykacją gotowy:'), linkIn, resRow, audioEl);
 
-  const errEl = mk('div', 'display:none;color:#f87171;font-size:12px');
-  const foot = mk('div', 'display:flex;justify-content:flex-end;gap:8px;margin-top:4px');
-  const closeBtn = mk('button', 'padding:9px 14px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#e5e7eb;cursor:pointer', 'Zamknij');
+  const errEl = mk('div', 'display:none;color:var(--danger);font-size:14px');
+  const foot = mk('div', 'display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:8px');
+  const closeBtn = mk('button', 'min-height:44px;padding:0 16px;border:1px solid var(--line-strong);background:transparent;color:var(--text);cursor:pointer', 'Zamknij');
   closeBtn.type = 'button';
-  const subBtn = mk('button', 'padding:9px 16px;border-radius:9px;border:0;background:#f59e0b;color:#111827;font-weight:600;cursor:pointer', 'Utwórz link z dedykacją');
+  const subBtn = mk('button', 'min-height:44px;padding:0 16px;border:0;background:var(--accent);color:var(--on-accent);font-weight:700;cursor:pointer', 'Utwórz link z dedykacją');
   subBtn.type = 'submit';
   foot.append(closeBtn, subBtn);
 
+  const onKey = (ev: KeyboardEvent) => {
+    if (ev.key === 'Escape') close();
+  };
   const close = () => {
     audioEl.pause();
     overlay.remove();
+    document.removeEventListener('keydown', onKey);
   };
+  document.addEventListener('keydown', onKey);
   closeBtn.addEventListener('click', close);
   overlay.addEventListener('click', (ev) => {
     if (ev.target === overlay) close();
