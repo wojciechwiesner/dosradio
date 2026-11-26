@@ -127,3 +127,12 @@ def test_dedications_create_get_and_synthesise_greeting(tmp_path: Path) -> None:
     wav_res_cached = client.get(data["audio_url"])
     assert wav_res_cached.status_code == 200
     assert len(spoken_calls) == 1
+
+
+def test_polish_dedication_script_keeps_sender_name_uninflected() -> None:
+    from app.dedications import build_dedication_script
+
+    script = build_dedication_script(host_name="Kuba", station_name="Ambi Groove", to_name="Ola",
+                                     from_name="Wojtek", message="Sto lat!", lang="pl")
+    assert "od Wojtek" not in script
+    assert "Wojtek przesyła ci gorące pozdrowienia" in script
