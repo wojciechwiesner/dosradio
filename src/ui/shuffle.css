@@ -1,0 +1,42 @@
+/* "Losuj stację": desktop = compact button in the Stacje header, mobile = round floating button above the safe area. */
+.shuffle-btn {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px;
+  border: 1px solid var(--accent); border-radius: 999px; background: var(--accent-soft); color: var(--accent);
+  font: 600 var(--fs-14, 14px)/1 var(--font-sans); cursor: pointer;
+}
+.shuffle-btn:hover:not(:disabled) { background: var(--accent); color: var(--on-accent); }
+.shuffle-btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+.shuffle-btn:disabled { opacity: 0.7; cursor: progress; }
+.shuffle-btn svg { width: 20px; height: 20px; flex: none; }
+
+.shuffle-card {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 70;
+  bottom: calc(144px + env(safe-area-inset-bottom, 0px)); /* above the floating button and the 56 px Classic nav */
+  width: min(320px, calc(100vw - 32px)); padding: 14px 18px; border-radius: 16px;
+  background: var(--bg-2); border: 1px solid var(--line-strong); border-left: 4px solid var(--shuffle-color, var(--accent));
+  color: var(--text); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); display: grid; gap: 4px;
+}
+.shuffle-card[hidden] { display: none; }
+.shuffle-card b { font-size: 18px; }
+.shuffle-card span { color: var(--dim); font-size: 14px; }
+.shuffle-card em { color: var(--accent); font-size: 13px; font-style: normal; margin-top: 4px; }
+.shuffle-card.is-reel { padding: 0; border-left-color: var(--accent); }
+.shuffle-window { height: 56px; overflow: hidden; border-radius: 12px; }
+.shuffle-strip > div {
+  height: 56px; display: flex; align-items: center; justify-content: center; padding: 0 16px;
+  font: 700 18px/1 var(--font-sans); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+@media (max-width: 820px) {
+  .shuffle-btn {
+    position: fixed; left: 50%; transform: translateX(-50%); z-index: 40; /* below the Orbita shell (45) and dialogs (960) */
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px)); width: 56px; height: 56px; min-height: 56px; padding: 0; justify-content: center;
+    background: var(--accent); color: var(--on-accent); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  }
+  .shuffle-btn:hover:not(:disabled) { background: var(--accent); }
+  .shuffle-btn span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); } /* label stays for screen readers */
+  .shuffle-btn svg { width: 28px; height: 28px; }
+}
+@media (min-width: 821px) { .shuffle-card { bottom: 24px; left: auto; right: 24px; transform: none; } }
+@media (max-width: 760px) { .shuffle-btn { bottom: calc(68px + env(safe-area-inset-bottom, 0px)); } } /* Classic mobile nav: 56 px, z-index 900 */
+@media (prefers-reduced-motion: reduce) { .shuffle-strip { transition: none !important; } }
