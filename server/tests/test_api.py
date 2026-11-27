@@ -74,7 +74,7 @@ def test_trial_defaults_to_six_hours(tmp_path, monkeypatch):
 
 def test_trial_then_register_then_login(client, captured_emails):
     me = client.get("/radio-api/me").json()
-    assert me == {"allowed": True, "registered": False, "email": None, "trial_started": False, "trial_remaining": 3600, "plus": False, "trial_plus": False}
+    assert me == {"allowed": True, "registered": False, "email": None, "trial_started": False, "trial_remaining": 3600, "plus": False, "trial_plus": False, "email_verified": False}
 
     started = client.post("/radio-api/trial/start").json()
     assert started["trial_started"] is True and 3595 <= started["trial_remaining"] <= 3600
@@ -96,10 +96,13 @@ def test_trial_then_register_then_login(client, captured_emails):
     assert ok.status_code == 200 and ok.json()["pending_verification"] is True
     assert len(captured_emails) == 1 and captured_emails[0][0] == "ola@example.com"
 
-    # Until the e-mail is confirmed there is no access and login is blocked.
-    assert client.get("/radio-api/me").json()["registered"] is False
+    # The account works at once (fast sign-up); confirming the e-mail adds the welcome Plus.
+    me = client.get("/radio-api/me").json()
+    assert me["registered"] is True and me["allowed"] is True and me["email_verified"] is False
+    client.post("/radio-api/logout")
+    client.cookies.clear()
     login = client.post("/radio-api/login", json={"email": "ola@example.com", "password": "dlugiehaslo1"})
-    assert login.status_code == 403
+    assert login.status_code == 200 and login.json()["email_verified"] is False
 
     # Wrong tokens are rejected, the real token from the e-mail confirms the account.
     assert client.post("/radio-api/verify", json={"token": "nieprawidlowytoken"}).status_code == 400

@@ -1,10 +1,16 @@
 /** Pure logic behind the Classic ambient shader: scene mapping, audio features, host fade, frame gating. No DOM, no WebGL. */
 import type { MusicGroupId, Station } from '../radio/stations';
 
-export type SceneId = 'nature' | 'techno' | 'night' | 'focus';
-export const SCENE_ORDER: readonly SceneId[] = ['nature', 'techno', 'night', 'focus'];
+export type SceneId =
+  | 'nature' | 'techno' | 'night' | 'focus' | 'aurora' | 'ocean' | 'synthwave'
+  | 'neon' | 'smoke' | 'dunes' | 'laser' | 'warp' | 'liquid' | 'candle';
+/** Index order is the shader's scene id (see scene() in ambientGL.glsl.ts). */
+export const SCENE_ORDER: readonly SceneId[] = [
+  'nature', 'techno', 'night', 'focus', 'aurora', 'ocean', 'synthwave',
+  'neon', 'smoke', 'dunes', 'laser', 'warp', 'liquid', 'candle',
+];
 
-export const SCENE_CROSSFADE_S = 2.5;
+export const SCENE_CROSSFADE_S = 3;
 export const HOST_FADE_IN_S = 0.6;
 export const HOST_FADE_OUT_S = 1.2;
 export const SHIMMER_S = 1.2;
@@ -25,6 +31,7 @@ const ATTACK_S = 0.04;
 const RELEASE_S = 0.2;
 const BASS_AVG_S = 0.5; // fast enough that steady bass stops reading as a kick within ~1 s
 
+/** Fallback per group, used for custom stations and anything not in STATION_SCENE. */
 export const GROUP_SCENE: Record<MusicGroupId, SceneId> = {
   'klasyka-instrumentalna': 'nature',
   'etno-folk': 'nature',
@@ -36,48 +43,185 @@ export const GROUP_SCENE: Record<MusicGroupId, SceneId> = {
   'przestrzenie-b2b': 'focus',
 };
 
+/** One mood per preset station, so moving between stations actually changes the picture. */
+export const STATION_SCENE: Record<string, SceneId> = {
+  // Fokus i Puls
+  'dos-groove': 'focus', 'lofi-nauka': 'night', 'micro-house': 'focus', 'deep-tech': 'liquid',
+  'dub-techno': 'ocean', 'minimal-techno': 'focus',
+  // Klub i Energia
+  'tech-house': 'techno', 'club-dance': 'laser', 'detroit-techno': 'techno', 'melodic-house': 'aurora',
+  'progressive-house': 'warp', 'trance': 'warp', 'drum-and-bass': 'warp', 'liquid-dnb': 'liquid',
+  // Synth i Filmowa
+  'stranger-synth': 'synthwave', 'muzyka-filmowa': 'aurora', 'cyber-noir': 'neon',
+  // Klasyka i Instrumentalna
+  'muzyka-klasyczna': 'candle', 'instrumentalna-akustyczna': 'nature', 'stoa': 'candle',
+  // Etno i Folk
+  'etno-world': 'dunes', 'slowianski-folk': 'nature', 'afro-house': 'dunes', 'organic-house': 'dunes',
+  // Chill i Noc
+  'deep-house': 'liquid', 'poranna-kawa': 'nature', 'groove-funk': 'smoke', 'deep-ambient': 'aurora',
+  'warm-jazz': 'smoke', 'trip-hop': 'neon', 'nocny-dub': 'ocean',
+  // Techno i Rave
+  'raw-techno': 'laser', 'berlin-bcco-techno': 'techno', 'hypnotic-techno': 'techno', 'etno-techno': 'dunes',
+  'tribal-techno': 'laser', 'goa-trance': 'warp', 'hard-dance': 'laser', 'tekk': 'laser',
+  // Przestrzenie B2B
+  'salon-beauty-spa': 'ocean', 'lobby-hotelowe': 'candle', 'poczekalnia': 'focus',
+};
+
 const NAME_HINTS: Array<[RegExp, SceneId]> = [
-  [/techno|rave|klub|club|dance|house|trance/i, 'techno'],
-  [/noc|night|chill|lofi|lo-fi|jazz/i, 'night'],
-  [/fokus|focus|puls|ambient|b2b|przestrze/i, 'focus'],
-  [/klasy|folk|etno|natur|akust|film|orkiest/i, 'nature'],
+  [/hard|tekk|raw|rave/i, 'laser'],
+  [/trance|goa|dnb|drum/i, 'warp'],
+  [/techno|klub|club|dance|house/i, 'techno'],
+  [/jazz|funk|soul/i, 'smoke'],
+  [/synth|retro|80/i, 'synthwave'],
+  [/noir|cyber|trip/i, 'neon'],
+  [/ambient|spa|aurora|kosmos|space/i, 'aurora'],
+  [/morze|ocean|dub|sea/i, 'ocean'],
+  [/klasy|orkiest|piano|fortepian/i, 'candle'],
+  [/afro|etno|world|tribal/i, 'dunes'],
+  [/noc|night|chill|lofi|lo-fi/i, 'night'],
+  [/fokus|focus|puls|b2b|przestrze/i, 'focus'],
+  [/folk|natur|akust|film|las|forest/i, 'nature'],
 ];
 
-/** Group id first, then the station's own group, then name hints, then BPM. */
+/** Station id first, then the group, then name hints, then BPM. */
 export function sceneForStation(
-  station: Pick<Station, 'name' | 'bpm' | 'group'> | null,
+  station: (Pick<Station, 'name' | 'bpm' | 'group'> & { id?: string }) | null,
   groupId: MusicGroupId | string | null,
 ): SceneId {
+  if (station?.id && station.id in STATION_SCENE) return STATION_SCENE[station.id];
+  const label = `${station?.name ?? ''} ${station?.id ?? ''}`;
+  for (const [pattern, scene] of NAME_HINTS) if (pattern.test(label)) return scene;
   const known = (id: string | null | undefined): SceneId | null =>
     id && id in GROUP_SCENE ? GROUP_SCENE[id as MusicGroupId] : null;
   const direct = known(groupId) ?? known(station?.group);
   if (direct) return direct;
-  const label = `${groupId ?? ''} ${station?.group ?? ''} ${station?.name ?? ''}`;
-  for (const [pattern, scene] of NAME_HINTS) if (pattern.test(label)) return scene;
+  const groupLabel = `${groupId ?? ''} ${station?.group ?? ''}`;
+  for (const [pattern, scene] of NAME_HINTS) if (pattern.test(groupLabel)) return scene;
   if (station && station.bpm >= TECHNO_BPM) return 'techno';
   return 'focus';
 }
 
-export type SceneWeights = [number, number, number, number];
-
-export function oneHot(scene: SceneId): SceneWeights {
-  return SCENE_ORDER.map((id) => (id === scene ? 1 : 0)) as SceneWeights;
+/** Stable 0..1 look per station, so two stations sharing a mood still differ (palette, layout, camera). */
+export function variantForStation(id: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 1000) / 1000;
 }
 
-/** Moves the weights towards the target scene so a full switch takes SCENE_CROSSFADE_S. Always sums to 1. */
-export function stepSceneWeights(weights: SceneWeights, target: SceneId, dtS: number): SceneWeights {
-  const goal = oneHot(target);
-  const step = Math.max(0, dtS) / SCENE_CROSSFADE_S;
-  const next = weights.map((w, i) => {
-    const diff = goal[i] - w;
-    return Math.abs(diff) <= step ? goal[i] : w + Math.sign(diff) * step;
-  });
-  const sum = next.reduce((a, b) => a + b, 0) || 1;
-  return next.map((w) => w / sum) as SceneWeights;
+/** Next look inside the same mood after a musical section change; golden-ratio step keeps it far from the last. */
+export const nextVariant = (v: number): number => (v + 0.381966) % 1;
+
+export interface SceneKey { scene: SceneId; variant: number }
+
+const sameKey = (a: SceneKey, b: SceneKey): boolean =>
+  a.scene === b.scene && Math.abs(a.variant - b.variant) < 1e-6;
+
+/**
+ * Two-slot crossfade: the shader renders only `from` and `to`, mixed by an eased `mix`.
+ * A change that arrives mid-fade waits for the running fade to land, so the picture never pops.
+ */
+export class SceneFader {
+  from: SceneKey;
+  to: SceneKey;
+  progress = 1;
+  private pending: SceneKey | null = null;
+
+  constructor(initial: SceneKey) {
+    this.from = { ...initial };
+    this.to = { ...initial };
+  }
+
+  set(next: SceneKey): void {
+    if (this.progress >= 1) {
+      if (sameKey(next, this.to)) return;
+      this.from = this.to;
+      this.to = { ...next };
+      this.progress = 0;
+      return;
+    }
+    this.pending = sameKey(next, this.to) ? null : { ...next };
+  }
+
+  update(dtS: number): void {
+    if (this.progress >= 1) return;
+    this.progress = Math.min(1, this.progress + Math.max(0, dtS) / SCENE_CROSSFADE_S);
+    if (this.progress >= 1 && this.pending) {
+      const next = this.pending;
+      this.pending = null;
+      this.from = this.to;
+      this.to = next;
+      this.progress = 0;
+    }
+  }
+
+  /** Jump to the final state (reduced motion). */
+  snap(): void {
+    if (this.pending) this.to = this.pending;
+    this.pending = null;
+    this.from = { ...this.to };
+    this.progress = 1;
+  }
+
+  /** Smoothstep-eased weight of `to`. */
+  get mix(): number {
+    const x = this.progress;
+    return x * x * (3 - 2 * x);
+  }
+
+  get settled(): boolean {
+    return this.progress >= 1 && this.pending === null;
+  }
+
+  /** Where the fade is heading (pending change included). */
+  get target(): SceneKey {
+    return this.pending ?? this.to;
+  }
 }
 
-export function weightsSettled(weights: SceneWeights, target: SceneId): boolean {
-  return weights[SCENE_ORDER.indexOf(target)] >= 0.999;
+export const SECTION_COOLDOWN_S = 30;
+export const SECTION_HOLD_S = 1.5;
+export const SECTION_WARMUP_S = 8;
+const SECTION_DELTA = 0.3;
+const SECTION_FAST_S = 2;
+const SECTION_SLOW_S = 20;
+
+/**
+ * Detects a musical section change (breakdown, drop, a new track in the mix) from the real audio:
+ * a fast energy average leaving the slow one by more than 30 % for 1.5 s. Cooldown 30 s.
+ */
+export class SectionDetector {
+  private fast = 0;
+  private slow = 0;
+  private hold = 0;
+  private warm = 0;
+  private cooldown = 0;
+
+  update(frame: Pick<AudioFrame, 'bass' | 'level'>, dtS: number): boolean {
+    const dt = Math.max(0, dtS);
+    const energy = 0.6 * frame.bass + 0.4 * clamp01(frame.level * 3);
+    if (this.warm === 0) this.fast = this.slow = energy;
+    this.warm += dt;
+    this.fast += (energy - this.fast) * Math.min(1, dt / SECTION_FAST_S);
+    this.slow += (energy - this.slow) * Math.min(1, dt / SECTION_SLOW_S);
+    this.cooldown = Math.max(0, this.cooldown - dt);
+    if (this.warm < SECTION_WARMUP_S || this.cooldown > 0) {
+      this.hold = 0;
+      return false;
+    }
+    const rel = Math.abs(this.fast - this.slow) / Math.max(this.slow, 0.05);
+    this.hold = rel > SECTION_DELTA ? this.hold + dt : 0;
+    if (this.hold < SECTION_HOLD_S) return false;
+    this.hold = 0;
+    this.cooldown = SECTION_COOLDOWN_S;
+    this.slow = this.fast;
+    return true;
+  }
+
+  /** Start over (station change, pause, host talking: the music is ducked, that is not a section change). */
+  reset(): void {
+    this.warm = 0;
+    this.hold = 0;
+  }
 }
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : v);

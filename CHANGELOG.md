@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **14 ambient scenes**: nature, techno, night, focus, aurora, ocean, synthwave, neon, smoke, dunes, laser, warp, liquid
+  and candle. Every preset station has its own mood (`STATION_SCENE`), plus a stable per-station variant (palette,
+  layout, camera), so two techno stations no longer look the same. The shader evaluates only the two scenes being
+  faded, so mobile cost is unchanged (~0.1 ms/draw measured).
+- **Scenes follow the music**: a station change fades over 3 s with an eased mix (a change mid-fade queues, no pop); a
+  breakdown or drop in the mix (`SectionDetector`, bass/level against a slow baseline, 45 s cooldown, ignored while the
+  host speaks) fades to another look of the same mood.
 - **Classic ambient background**: one full-screen WebGL1 shader (`src/ui/ambientGL.ts`, `ambientGL.glsl.ts`, pure logic in
   `ambientLogic.ts`) driven by real audio (bass/kick, level, voice). Four scenes (nature, techno, night, focus) mapped from
   the music group, ~2.5 s crossfade, BPM/name fallback for extra groups. Renders at 0.6x (mobile) / 0.75x DPR, 60 fps cap,
@@ -24,7 +31,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   landing pulse where `navigator.vibrate` exists; reduced motion skips the reel. Shake to shuffle via `devicemotion`
   (peak delta > 18 m/s², two peaks within 600 ms, 2.5 s cooldown; iOS permission asked on the first tap; toggle in
   localStorage `ambi.shuffle.shake`). Tests: `tests/shuffle.test.ts`.
+- **Stripe subscription lifecycle** (`server/app/billing.py`): the webhook now handles `invoice.paid` (renewal: paid
+  Plus runs to the invoice period end + 1 grace day), `customer.subscription.updated` (switch between Plus and
+  Plus AI) and `customer.subscription.deleted` (paid Plus ends, longer free or admin Plus is kept). Checkout stores
+  the Stripe customer and subscription ids on the user (`stripe_customer_id`, `stripe_subscription_id`, `paid_plan`,
+  added by migration), sends the plan in `subscription_data.metadata` and reuses the existing Stripe customer.
+  Tests: `test_billing_lifecycle.py` (18).
+- **Manage subscription** (`POST /radio-api/billing/portal`, `src/ui/billing.ts`): a "Zarządzaj subskrypcją" button
+  opens the Stripe Customer Portal (cancel, change card, invoices). The modal marks the current paid plan and does
+  not offer a second subscription. `/radio-api/billing/status` reports `paid`, `paid_plan`, `can_manage`.
+- **Terms and privacy policy** (`public/regulamin.html`, `public/prywatnosc.html`, `public/legal.css`), linked from
+  the footer, the sign-up dialog and the Plus modal.
+- **12-month retention purge** (`server/app/retention.py`): once a day deletes trial markers, presence, comments,
+  dedications and friend identities older than 365 days, as the privacy policy states. Test: `test_retention.py`.
+- **Referral attribution** (`server/app/referrals.py`): opening a shared dedication (`?d=`), greeting (`w_`) or
+  url-podcast (`p_`) link by someone who is not the sender is stored once per visitor in `referral_opens` and sets a
+  30-day `dr_ref` cookie (first link wins); registration copies it to `users.referred_by`. The admin overview shows
+  the funnel per link type (opened by newcomers, accounts, confirmed). Tests: `test_referrals.py` (12).
+
+### Changed
+- **Fast sign-up**: registration logs the listener in at once and playback continues; the confirmation e-mail now
+  only unlocks the 30 days of Plus. An unconfirmed account works for 7 days, then needs the link (login after that is
+  refused as before). A bar under the header offers "Wyślij link ponownie" (`POST /radio-api/verify/resend`, from the
+  session, 60 s cooldown). A failing mail server no longer blocks sign-up. Registrations are limited to 5 per hour per
+  address. An unconfirmed account never gets admin rights. Shorter sign-up dialog: two fields, one button, one line
+  about Plus. Orbita does the same. Terms updated (7 days). Tests: `test_signup_fast.py` (13).
+  Before: 5 of 10 production accounts never confirmed and could not listen.
+
 ### Fixed
+- Trial-end messages said "Darmowa godzina" / "Your hour" while the free trial is 6 hours (API 402 detail, classic
+  client, Orbita recap in PL/EN/RU).
+- **Paid Plus lapsed after the first month while Stripe kept charging**: only `checkout.session.completed` granted
+  Plus (30 days), renewals were ignored. Fixed by the lifecycle handling above.
 - Polish dedication greeting no longer says "pozdrowienia od Wojtek": the sender's name stays in the nominative.
 
 ### Changed

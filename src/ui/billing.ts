@@ -16,6 +16,9 @@ interface BillingStatus {
   plans: PlanInfo[];
   plan?: string;
   plus_until?: number | null;
+  paid?: boolean;
+  paid_plan?: string | null;
+  can_manage?: boolean;
 }
 
 const CLOSE_SVG =
@@ -78,6 +81,12 @@ const STYLE = `
 .drplus-note{margin:0 0 16px;font-size:14px;color:var(--dim)}
 .drplus-error{margin:16px 0 0;color:var(--danger,#ff8a7a);font-size:14px;min-height:1.5em}
 .drplus-foot{margin:16px 0 0;font:12px/1.5 var(--font-mono,monospace);color:var(--faint)}
+.drplus-foot a{color:inherit;text-decoration:underline}
+.drplus-manage{min-height:44px;margin:0 0 16px;padding:0 16px;border:1px solid var(--accent);border-radius:0;
+  background:transparent;color:var(--accent);font:700 14px/1 var(--font-sans,system-ui,sans-serif);cursor:pointer}
+.drplus-manage:hover{background:var(--accent);color:var(--bg)}
+.drplus-manage[disabled]{opacity:0.4;cursor:default}
+.drplus-current{display:block;min-height:44px;padding:13px 0;font-size:14px;color:var(--accent);font-weight:700}
 `;
 
 let overlay: HTMLElement | null = null;
@@ -132,8 +141,29 @@ async function choosePlan(planId: string, button: HTMLButtonElement, errorLine: 
   button.textContent = buyLabel(planId);
 }
 
+async function openPortal(button: HTMLButtonElement, errorLine: HTMLElement): Promise<void> {
+  button.disabled = true;
+  button.textContent = 'Otwieram panel...';
+  const { ok, body } = await fetchJson('/radio-api/billing/portal', { method: 'POST' });
+  if (ok && body && typeof (body as { url?: unknown }).url === 'string') {
+    location.href = (body as { url: string }).url;
+    return;
+  }
+  const detail = body && typeof (body as { detail?: unknown }).detail === 'string'
+    ? (body as { detail: string }).detail : null;
+  errorLine.textContent = detail || 'Nie udało się otworzyć panelu subskrypcji. Spróbuj ponownie.';
+  button.disabled = false;
+  button.textContent = MANAGE_LABEL;
+}
+
+const MANAGE_LABEL = 'Zarządzaj subskrypcją';
+
 function statusLine(status: BillingStatus | null): string {
   if (!status) return 'Nie udało się pobrać statusu. Odśwież stronę i spróbuj ponownie.';
+  if (status.paid) {
+    const name = status.paid_plan === 'plus_ai' ? 'AmbiRadio Plus AI' : 'AmbiRadio Plus';
+    return `<span class="ok">${name} aktywny. Dzięki za wsparcie!</span>`;
+  }
   if (!status.checkout_available) return '<span class="warn">Płatności są w tej chwili wyłączone — wróć wkrótce.</span>';
   if (status.plus) {
     const until = status.plus_until
@@ -200,12 +230,29 @@ function renderModal(dialog: HTMLElement, status: BillingStatus | null): void {
     redirectNote = '';
   }
   if (!status) return;
+  if (status.can_manage) {
+    const manage = document.createElement('button');
+    manage.className = 'drplus-manage';
+    manage.type = 'button';
+    manage.textContent = MANAGE_LABEL;
+    manage.addEventListener('click', () => void openPortal(manage, errorLine));
+    cards.before(manage);
+  }
   cards.replaceChildren(...status.plans.map(planCard));
   cards.querySelectorAll<HTMLElement>('.drplus-card').forEach((card) => {
     const planId = card.dataset.plan ?? '';
     const buy = card.querySelector<HTMLButtonElement>('.drplus-buy');
     if (!buy) return;
-    buy.disabled = !status.checkout_available;
+    if (status.paid && status.paid_plan === planId) {
+      // Current plan: no second subscription; changes go through the Stripe portal.
+      const current = document.createElement('span');
+      current.className = 'drplus-current';
+      current.textContent = 'Twój obecny plan';
+      buy.replaceWith(current);
+      return;
+    }
+    buy.disabled = !status.checkout_available || Boolean(status.paid);
+    if (status.paid) buy.title = 'Zmień plan w panelu subskrypcji';
     buy.addEventListener('click', () => void choosePlan(planId, buy, errorLine));
   });
 }
@@ -251,7 +298,14 @@ function openModal(): void {
   error.className = 'drplus-error';
   const foot = document.createElement('p');
   foot.className = 'drplus-foot';
-  foot.textContent = 'Płatności obsługuje Stripe. Subskrypcję możesz anulować w każdej chwili.';
+  foot.textContent = 'Płatności obsługuje Stripe. Subskrypcję możesz anulować w każdej chwili. ';
+  const terms = document.createElement('a');
+  terms.href = '/regulamin.html';
+  terms.textContent = 'Regulamin';
+  const privacy = document.createElement('a');
+  privacy.href = '/prywatnosc.html';
+  privacy.textContent = 'Polityka prywatności';
+  foot.append(terms, document.createTextNode(' · '), privacy);
   dialog.append(head, status, cards, error, foot);
   overlay.append(dialog);
   document.body.append(overlay);
@@ -284,6 +338,7 @@ function handleRedirectReturn(): void {
   const result = params.get('billing');
   if (result === 'success') redirectNote = 'Dziękujemy! Potwierdzamy płatność — Plus aktywuje się automatycznie.';
   else if (result === 'cancel') redirectNote = 'Płatność anulowana. Możesz spróbować ponownie kiedy chcesz.';
+  else if (result === 'portal') redirectNote = 'Zmiany w subskrypcji zapisane w Stripe. Status odświeży się za chwilę.';
   if (result) {
     params.delete('billing');
     const query = params.toString();

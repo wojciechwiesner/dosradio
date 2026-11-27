@@ -28,7 +28,7 @@ from .auth import SESSION_COOKIE, AccessService, client_ip, token_hash, verify_p
 from .auto_ramowka import RamowkaService
 from .catalog import CatalogService, validate_slug
 from .db import Database, SECONDS_PER_DAY
-from . import mixer
+from . import mixer, referrals
 from .telemetry import TelemetryService
 
 log = logging.getLogger("dosradio.admin")
@@ -399,7 +399,8 @@ def build_admin_router(
         if resolved.registered and resolved.email:
             email_low = resolved.email.strip().lower()
             user = db.find_user_by_email(email_low)
-            if user is not None and email_low in admin_emails:
+            # An unconfirmed account proves nothing about who owns the address.
+            if user is not None and user["email_verified"] and email_low in admin_emails:
                 return {"admin": True, "email": email_low, "via": "session"}
             raise HTTPException(403, "Brak uprawnień administratora")
 
@@ -490,6 +491,7 @@ def build_admin_router(
 
         return {
             "ok": True,
+            "referrals": referrals.summary(db),
             "users": {
                 "registered": total_users,
                 "verified": verified_users,

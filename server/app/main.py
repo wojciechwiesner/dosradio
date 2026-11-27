@@ -20,7 +20,14 @@ from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocket
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
-from .auth import DEDICATION_PASS_COOKIE, AccessService, build_router, client_ip
+from .auth import (
+    DEDICATION_PASS_COOKIE,
+    TRIAL_ENDED_DETAIL,
+    UNVERIFIED_ENDED_DETAIL,
+    AccessService,
+    build_router,
+    client_ip,
+)
 from .config import load_settings
 from .db import Database
 from .gemini_client import build_gemini_client
@@ -28,6 +35,7 @@ from .news import CATEGORIES, NewsService
 from .archive import ArchiveRegistry
 from .stream import build_stream_router
 from .recorder import StationRecorder, STATION_SPECS
+from .retention import retention_loop
 from .mood import MoodRecorder
 from .notifier import trigger_telegram_alert
 from .hosts import BORROWED_HOSTS, HOSTS, host_for
@@ -127,6 +135,7 @@ async def prewarm_hosts() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     tasks = [asyncio.create_task(recorder.record_loop())]  # 100h archive per station
+    tasks.append(asyncio.create_task(retention_loop(db)))  # 12-month purge promised in prywatnosc.html
     if settings.prewarm:
         tasks.append(asyncio.create_task(news.hourly_loop()))  # one edition per topic per hour
         tasks.append(asyncio.create_task(prewarm_hosts()))
@@ -253,8 +262,9 @@ def require_access(request: Request) -> None:
     ip = client_ip({k.lower(): v for k, v in request.headers.items()}, request.client.host if request.client else None)
     if access.dedication_pass_valid(request.cookies.get(DEDICATION_PASS_COOKIE)):
         return
-    if not access.resolve(request.cookies, ip).allowed:
-        raise HTTPException(402, "Darmowa godzina minęła. Załóż konto i odbierz 30 dni Plus za darmo.")
+    current = access.resolve(request.cookies, ip)
+    if not current.allowed:
+        raise HTTPException(402, UNVERIFIED_ENDED_DETAIL if current.registered else TRIAL_ENDED_DETAIL)
 
 
 app.include_router(build_voice_router(

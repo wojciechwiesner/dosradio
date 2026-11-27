@@ -87,6 +87,15 @@ class Database:
         if "plus_paid_until" not in columns:
             # Set only by a Stripe payment; welcome / admin Plus leaves it NULL (daily podcast limit applies).
             conn.execute("ALTER TABLE users ADD COLUMN plus_paid_until REAL")
+        # Stripe links: renewals and cancellations arrive without our session, only with these ids.
+        for column in ("stripe_customer_id", "stripe_subscription_id", "paid_plan"):
+            if column not in columns:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {column} TEXT")
+        if "referred_by" not in columns:
+            # "<kind>:<token>" of the shared link that brought the listener (app.referrals).
+            conn.execute("ALTER TABLE users ADD COLUMN referred_by TEXT")
+        if "verify_resent_at" not in columns:
+            conn.execute("ALTER TABLE users ADD COLUMN verify_resent_at REAL")
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:
@@ -100,11 +109,11 @@ class Database:
             conn.close()
 
     # --- users -------------------------------------------------------------
-    def create_user(self, email: str, password_hash: str) -> int:
+    def create_user(self, email: str, password_hash: str, *, verified: bool = True, referred_by: str | None = None) -> int:
         with self.connect() as conn:
             cursor = conn.execute(
-                "INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)",
-                (email, password_hash, time.time()),
+                "INSERT INTO users (email, password_hash, created_at, email_verified, referred_by) VALUES (?, ?, ?, ?, ?)",
+                (email, password_hash, time.time(), 1 if verified else 0, referred_by),
             )
             return int(cursor.lastrowid or 0)
 

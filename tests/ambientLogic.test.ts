@@ -1,42 +1,116 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AudioFeatures, GROUP_SCENE, HostPresence, IDLE_PAUSE_MS, SCENE_CROSSFADE_S, analyzeSpectrum, canvasSize,
-  needsFrames, oneHot, renderScale, sceneForStation, stepSceneWeights, voiceFromRms, weightsSettled,
+  AudioFeatures, GROUP_SCENE, HostPresence, IDLE_PAUSE_MS, SCENE_CROSSFADE_S, SCENE_ORDER, STATION_SCENE,
+  SECTION_COOLDOWN_S, SceneFader, SectionDetector, analyzeSpectrum, canvasSize, needsFrames, nextVariant,
+  renderScale, sceneForStation, variantForStation, voiceFromRms,
 } from '../src/ui/ambientLogic';
-import { MUSIC_GROUPS } from '../src/radio/stations';
+import { FRAGMENT_SRC } from '../src/ui/ambientGL.glsl';
+import { MUSIC_GROUPS, STATIONS } from '../src/radio/stations';
 
-describe('group -> scene mapping', () => {
-  it('maps every music group to one of the four scenes as specified', () => {
+describe('station -> scene mapping', () => {
+  it('maps every music group to a known scene', () => {
     expect(MUSIC_GROUPS.every((g) => g.id in GROUP_SCENE)).toBe(true);
-    expect(GROUP_SCENE['klasyka-instrumentalna']).toBe('nature');
-    expect(GROUP_SCENE['etno-folk']).toBe('nature');
-    expect(GROUP_SCENE['synth-filmowa']).toBe('nature');
-    expect(GROUP_SCENE['klub-energia']).toBe('techno');
-    expect(GROUP_SCENE['techno-rave']).toBe('techno');
-    expect(GROUP_SCENE['chill-noc']).toBe('night');
-    expect(GROUP_SCENE['fokus-puls']).toBe('focus');
-    expect(GROUP_SCENE['przestrzenie-b2b']).toBe('focus');
+    expect(Object.values(GROUP_SCENE).every((s) => SCENE_ORDER.includes(s))).toBe(true);
   });
 
-  it('falls back by name, then by BPM, for unknown groups', () => {
+  it('gives every preset station a valid scene and spreads them over at least 12 of the 14 moods', () => {
+    const used = new Set(STATIONS.map((st) => sceneForStation(st, st.group ?? null)));
+    for (const s of used) expect(SCENE_ORDER).toContain(s);
+    expect(SCENE_ORDER.length).toBe(14);
+    expect(used.size).toBeGreaterThanOrEqual(12);
+    expect(Object.values(STATION_SCENE).every((s) => SCENE_ORDER.includes(s))).toBe(true);
+  });
+
+  it('every scene id has a branch in the shader', () => {
+    for (const id of SCENE_ORDER) expect(FRAGMENT_SRC).toMatch(new RegExp(`vec3 ${id}\\(vec2 uv,float v\\)`));
+    expect(FRAGMENT_SRC).toMatch(new RegExp(`if\\(id<${SCENE_ORDER.length - 1.5}\\)`));
+  });
+
+  it('falls back by name, then by group, then by BPM, for custom stations', () => {
     expect(sceneForStation({ name: 'X', bpm: 130 }, 'nowa-grupa')).toBe('techno');
-    expect(sceneForStation({ name: 'Nocny jazz', bpm: 80 }, 'inna')).toBe('night');
+    expect(sceneForStation({ name: 'Nocny jazz', bpm: 80 }, 'inna')).toBe('smoke');
     expect(sceneForStation({ name: 'Zzz', bpm: 90 }, null)).toBe('focus');
     expect(sceneForStation({ name: 'Zzz', bpm: 120, group: 'chill-noc' }, null)).toBe('night');
+    expect(sceneForStation({ id: 'warm-jazz', name: 'Warm Jazz', bpm: 90 }, null)).toBe('smoke');
+  });
+
+  it('gives each station a stable variant, and the next variant is far from the last', () => {
+    expect(variantForStation('hypnotic-techno')).toBe(variantForStation('hypnotic-techno'));
+    expect(variantForStation('hypnotic-techno')).not.toBe(variantForStation('berlin-bcco-techno'));
+    const v = variantForStation('dub-techno');
+    const d = Math.abs(nextVariant(v) - v);
+    expect(Math.min(d, 1 - d)).toBeGreaterThan(0.3);
   });
 });
 
 describe('scene crossfade', () => {
-  it('takes about 2.5 s, never cuts, and always sums to 1', () => {
-    let w = oneHot('nature');
-    w = stepSceneWeights(w, 'techno', 0.016);
-    expect(w[0]).toBeGreaterThan(0.9);
-    expect(w[1]).toBeGreaterThan(0);
-    for (let i = 0; i < 100; i++) w = stepSceneWeights(w, 'techno', 0.016);
-    expect(w.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 5);
-    expect(weightsSettled(w, 'techno')).toBe(false);
-    for (let t = 1.6; t < SCENE_CROSSFADE_S + 0.1; t += 0.016) w = stepSceneWeights(w, 'techno', 0.016);
-    expect(weightsSettled(w, 'techno')).toBe(true);
+  const step = (f: SceneFader, s: number): void => { for (let t = 0; t < s; t += 0.016) f.update(0.016); };
+
+  it('fades over ~3 s with an eased mix, never cuts', () => {
+    const f = new SceneFader({ scene: 'nature', variant: 0.2 });
+    f.set({ scene: 'techno', variant: 0.5 });
+    f.update(0.016);
+    expect(f.from.scene).toBe('nature');
+    expect(f.to.scene).toBe('techno');
+    expect(f.mix).toBeGreaterThan(0);
+    expect(f.mix).toBeLessThan(0.01);
+    step(f, SCENE_CROSSFADE_S / 2 - 0.05);
+    expect(f.mix).toBeGreaterThan(0.4);
+    expect(f.mix).toBeLessThan(0.6);
+    expect(f.settled).toBe(false);
+    step(f, SCENE_CROSSFADE_S / 2 + 0.1);
+    expect(f.mix).toBe(1);
+    expect(f.settled).toBe(true);
+  });
+
+  it('a change during a fade waits for it to land, then fades again (no pop)', () => {
+    const f = new SceneFader({ scene: 'nature', variant: 0 });
+    f.set({ scene: 'techno', variant: 0 });
+    step(f, 1);
+    const mid = f.mix;
+    f.set({ scene: 'ocean', variant: 0.3 });
+    expect(f.to.scene).toBe('techno');
+    expect(f.mix).toBe(mid);
+    expect(f.target.scene).toBe('ocean');
+    step(f, SCENE_CROSSFADE_S);
+    expect(f.from.scene).toBe('techno');
+    expect(f.to.scene).toBe('ocean');
+    step(f, SCENE_CROSSFADE_S + 0.1);
+    expect(f.settled).toBe(true);
+  });
+
+  it('the same mood with a new variant also fades; an identical key is ignored', () => {
+    const f = new SceneFader({ scene: 'laser', variant: 0.1 });
+    f.set({ scene: 'laser', variant: 0.1 });
+    expect(f.settled).toBe(true);
+    f.set({ scene: 'laser', variant: 0.6 });
+    expect(f.settled).toBe(false);
+    f.snap();
+    expect(f.to.variant).toBe(0.6);
+    expect(f.mix).toBe(1);
+  });
+});
+
+describe('musical section changes', () => {
+  const run = (d: SectionDetector, frame: { bass: number; level: number }, s: number): number => {
+    let hits = 0;
+    for (let t = 0; t < s; t += 0.05) if (d.update(frame, 0.05)) hits += 1;
+    return hits;
+  };
+
+  it('steady music never triggers; a breakdown does, once, then cools down', () => {
+    const d = new SectionDetector();
+    expect(run(d, { bass: 0.8, level: 0.15 }, 40)).toBe(0);
+    expect(run(d, { bass: 0.15, level: 0.05 }, 6)).toBe(1);
+    expect(run(d, { bass: 0.8, level: 0.15 }, SECTION_COOLDOWN_S - 8)).toBe(0);
+  });
+
+  it('a short dip (under 1.5 s) is not a section change, and reset() starts over', () => {
+    const d = new SectionDetector();
+    run(d, { bass: 0.8, level: 0.15 }, 30);
+    expect(run(d, { bass: 0.1, level: 0.02 }, 0.8)).toBe(0);
+    d.reset();
+    expect(run(d, { bass: 0.1, level: 0.02 }, 6)).toBe(0); // warm-up after reset
   });
 });
 

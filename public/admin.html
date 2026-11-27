@@ -213,6 +213,8 @@ function tDash(v){
       var rows=list.map(function(x){return '<tr><td>'+esc(pick(x,'email','user','name','id','session')||'anonim')+'</td><td><span class="pill ac">'+viewOf(x)+'</span></td><td>'+esc(pick(x,'station_name','station_id','station')||'-')+'</td><td class="muted">'+fdate(pick(x,'last_seen','last_seen_at','since','started_at'))+'</td></tr>'}).join('')||'<tr><td colspan="4" class="muted">Brak aktywnych słuchaczy</td></tr>';
       var st=(a.by_station||[]).map(function(s){return '<tr><td>'+esc(pick(s,'station_id','station','name'))+'</td><td>'+fmt(pick(s,'hours','total_hours'))+' h</td><td>'+fmt(pick(s,'segments','total_segments'))+'</td><td>'+fmt(pick(s,'mb','total_mb'))+' MB</td></tr>'}).join('')||'<tr><td colspan="4" class="muted">Brak danych</td></tr>';
       var t30=o.tokens&&o.tokens.totals_30d;
+      var rf=o.referrals||{},rk=rf.by_kind||{};
+      var refRows=['d','w','p'].map(function(k){var r=rk[k]||{};return '<tr><td>'+esc(r.label||k)+'</td><td>'+fmt(r.opened)+'</td><td>'+fmt(r.signups)+'</td><td>'+fmt(r.verified)+'</td><td class="muted">'+fmt(r.opened_by_members)+'</td></tr>'}).join('');
       v.innerHTML=head('Pulpit i Aktywni','Statystyki na żywo, odświeżane co 15 s.')+
       '<div class="card row" style="align-items:center"><span class="muted">Szybkie linki:</span><a class="btn" href="/">Radio Classic</a><a class="btn" href="/orbita.html">Orbita</a><a class="btn" href="https://zrobi.my" target="_blank" rel="noopener">zrobi.my</a></div>'+
       '<div class="grid kpis" style="margin-bottom:16px">'+
@@ -222,7 +224,10 @@ function tDash(v){
       '<div class="grid g2"><div class="card"><h2>Aktywni słuchacze</h2><div class="row" style="margin-bottom:10px">'+
         '<span class="pill">Classic: '+counts.classic+'</span><span class="pill">Orbita: '+counts.orbita+'</span><span class="pill">Auto-Ramówka: '+counts.ramowka+'</span></div>'+
         '<div class="scroll"><table><tr><th>Słuchacz</th><th>Widok</th><th>Stacja</th><th>Aktywność</th></tr>'+rows+'</table></div></div>'+
-      '<div class="card"><h2>Archiwum wg stacji</h2><p class="muted">Nagrywana teraz: '+esc(a.current_recording_station||'-')+'</p><div class="scroll"><table><tr><th>Stacja</th><th>Godziny</th><th>Segmenty</th><th>Rozmiar</th></tr>'+st+'</table></div></div></div>';
+      '<div class="card"><h2>Archiwum wg stacji</h2><p class="muted">Nagrywana teraz: '+esc(a.current_recording_station||'-')+'</p><div class="scroll"><table><tr><th>Stacja</th><th>Godziny</th><th>Segmenty</th><th>Rozmiar</th></tr>'+st+'</table></div></div></div>'+
+      '<div class="card" style="margin-top:16px"><h2>Polecenia</h2><p class="muted">Otwarcia udostępnionych linków przez nowe osoby (bez nadawcy) i konta założone po takim linku. Liczone od wdrożenia pomiaru.</p>'+
+        '<div class="scroll"><table><tr><th>Link</th><th>Otwarcia (nowi)</th><th>Konta</th><th>Potwierdzone</th><th>Otwarcia (mający konto)</th></tr>'+refRows+
+        '<tr><th>Razem</th><th>'+fmt(rf.opened)+'</th><th>'+fmt(rf.signups)+'</th><th>'+fmt(rf.verified)+'</th><th class="muted">'+fmt(rf.opened_by_members)+'</th></tr></table></div></div>';
     });
   }
   return load().then(function(){dashTimer=setInterval(function(){if(cur==='dash')load().catch(function(){})},15000)});

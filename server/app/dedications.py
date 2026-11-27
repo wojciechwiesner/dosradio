@@ -14,7 +14,9 @@ from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 
+from . import referrals
 from .auth import DEDICATION_PASS_COOKIE, AccessService, client_ip
+from .custom_radios import resolve_actor_key
 from .hosts import Host, host_for
 from .moderation import moderate_many
 
@@ -177,6 +179,12 @@ class DedicationStore:
             )
         return self.get(token)  # type: ignore[return-value]
 
+    def sender_hash(self, token: str) -> str:
+        """Hashed sender address of a dedication ('' when unknown), so the sender's own opens are not referrals."""
+        with self._conn() as conn:
+            row = conn.execute("SELECT ip_hash FROM station_dedications WHERE id = ?", (token,)).fetchone()
+        return str(row["ip_hash"] or "") if row else ""
+
     def get(self, token: str) -> dict[str, Any] | None:
         with self._conn() as conn:
             row = conn.execute(
@@ -305,6 +313,17 @@ def build_dedications_router(
                 {k.lower(): v for k, v in request.headers.items()},
                 request.client.host if request.client else None,
             )
+            current = access.resolve(request.cookies, ip)
+            sender_hash = hashlib.sha256(f"ded:{ip}".encode("utf-8")).hexdigest()[:16]
+            try:
+                visitor = resolve_actor_key(request, access, access.db)
+                referrals.record_open(
+                    access.db, request, response, kind="d", token=token, visitor_key=visitor,
+                    is_sender=store.sender_hash(token) == sender_hash,
+                    is_member=current.registered,
+                )
+            except Exception:
+                logger.exception("Referral open not recorded for dedication %s", token)
             granted = access.grant_dedication_pass(token, ip)
             if granted:
                 value, max_age = granted

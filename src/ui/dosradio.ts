@@ -287,7 +287,9 @@ function renderAccess(): void {
     pill.hidden = true;
     $('account').textContent = access.email ?? '';
     authBtn.textContent = 'Wyloguj';
+    $('verifyBar').hidden = access.email_verified !== false;
   } else {
+    $('verifyBar').hidden = true;
     $('account').textContent = '';
     authBtn.textContent = 'Zaloguj się';
     // Calm indicator (minutes only) once listening started; an expired trial shows the modal instead.
@@ -370,7 +372,7 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     prefs.playGroup = groupId;
     savePrefs();
     renderStations();
-    ambient?.setScene(sceneForStation(st, groupId));
+    ambient?.setScene(sceneForStation(st, groupId), st.id);
     hostCaption?.setHostName(st.host ?? '');
     bgAudio.updateMetadata(st.name, groupId ? `AmbiRadio · ${groupById(groupId)?.name ?? ''}` : 'AmbiRadio', st.host);
   },
@@ -378,7 +380,7 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
 ambient = createAmbientGL(engine, () => document.body.classList.remove('ambient-on'));
 if (ambient) {
   document.body.classList.add('ambient-on');
-  ambient.setScene(sceneForStation(stationById(prefs.station), prefs.playGroup));
+  ambient.setScene(sceneForStation(stationById(prefs.station), prefs.playGroup), prefs.station);
 }
 hostCaption = createHostLiveCaption($('hostLive'), () => engine.getVoiceLevel());
 watchTitleChange($('nowStation'));
@@ -568,10 +570,12 @@ function openAuth(mode: 'register' | 'login', trialEnded = false): void {
   authMode = mode;
   $('authTitle').textContent = mode === 'register' ? (trialEnded ? 'Słuchaj AmbiRadio dalej za darmo' : 'Załóż darmowe konto AmbiRadio') : 'Zaloguj się';
   $('authLead').textContent = mode === 'register'
-    ? (trialEnded ? 'Twoje 6 godzin pełnego dostępu minęło. Załóż konto i dostań 30 dni Plus za darmo.' : 'Załóż konto, zachowaj swoje ustawienia i dostań 30 dni Plus za darmo.')
+    ? (trialEnded
+      ? 'Darmowe 6 godzin minęło. E-mail i hasło wystarczą, słuchasz dalej od razu.'
+      : 'E-mail i hasło wystarczą. Słuchasz dalej od razu, ustawienia zostają.')
     : 'Wpisz e-mail i hasło, żeby słuchać dalej.';
   $('perks').hidden = mode === 'login';
-  $('authSubmit').textContent = mode === 'register' ? 'Załóż konto i dostań 30 dni Plus za darmo' : 'Zaloguj się';
+  $('authSubmit').textContent = mode === 'register' ? 'Załóż konto i słuchaj dalej' : 'Zaloguj się';
   $<HTMLInputElement>('authPassword').autocomplete = mode === 'register' ? 'new-password' : 'current-password';
   $('authSwitch').firstChild!.textContent = mode === 'register' ? 'Masz już konto? ' : 'Nie masz konta? ';
   $('toLogin').textContent = mode === 'register' ? 'Zaloguj się' : 'Załóż konto';
@@ -595,12 +599,15 @@ $('authForm').addEventListener('submit', async (event) => {
   submit.disabled = true;
   try {
     if (authMode === 'register') {
-      await radioApi.register(email, password);
-      // Account created, but access is granted only after e-mail confirmation.
+      const created = await radioApi.register(email, password);
+      // Fast sign-up: the account works now; the e-mail link only unlocks the 30 days of Plus.
       $('authError').textContent = '';
-      $('authLead').textContent = `Sprawdź skrzynkę ${email} (też spam) — wysłaliśmy link potwierdzający. Kliknij go, żeby aktywować konto.`;
-      $('authForm').hidden = true;
-      $('perks').hidden = true;
+      modal.classList.remove('open');
+      await refreshAccess();
+      setStatus(created.verification_sent === false
+        ? 'Konto gotowe. Nie udało się wysłać e-maila — wyślij link ponownie z paska u góry.'
+        : `Konto gotowe, słuchasz dalej. Potwierdź e-mail (${email}), a dostaniesz 30 dni Plus.`);
+      if (!engine.isPlaying) await togglePlay();
       return;
     }
     await radioApi.login(email, password);
@@ -618,6 +625,20 @@ $('authForm').addEventListener('submit', async (event) => {
 });
 
 // Re-send the confirmation e-mail for an unverified account (login form is pre-filled).
+$('verifyResend').addEventListener('click', async () => {
+  const button = $<HTMLButtonElement>('verifyResend');
+  button.disabled = true;
+  try {
+    const result = await radioApi.resendMyVerification();
+    if (result.already_verified) { await refreshAccess(); return; }
+    $('verifyText').textContent = 'Nowy link poszedł. Sprawdź skrzynkę i spam.';
+  } catch (error) {
+    $('verifyText').textContent = (error as Error).message;
+  } finally {
+    setTimeout(() => { button.disabled = false; }, 60_000);
+  }
+});
+
 $('resendLink').addEventListener('click', async () => {
   const email = $<HTMLInputElement>('authEmail').value.trim();
   const password = $<HTMLInputElement>('authPassword').value;
