@@ -87,7 +87,8 @@ float smin(float a,float b,float k){float x=clamp(.5+.5*(b-a)/k,0.,1.);return mi
 vec3 presence(vec2 uv,vec3 tint){
  float asp=r.x/r.y;
  vec2 c=(uv-.5)*vec2(asp,1.);
- vec2 hc=vec2(clamp(asp*.13,0.,.24),-.02);
+ // Landscape: right of centre behind the content. Portrait (phone): upper area behind the station title.
+ vec2 hc=asp<1.?vec2(asp*.18,.22):vec2(clamp(asp*.13,0.,.24),-.02);
  vec2 p=c-hc;
  float ang=atan(p.y,p.x);
  float head=length(p-vec2(0.,.17))-.115;
@@ -114,9 +115,11 @@ void main(){
  if(sc.y>.001){col+=techno(uv)*sc.y;tint+=vec3(.8,.9,.85)*sc.y;}
  if(sc.z>.001){col+=night(uv)*sc.z;tint+=vec3(1.,.75,.6)*sc.z;}
  if(sc.w>.001){col+=focus(uv)*sc.w;tint+=vec3(.55,.95,.8)*sc.w;}
- if(host>.001)col+=presence(uv,tint)*host;
  if(shimmer>.001)col+=LIME*shimmer*.05*smoothstep(.2,0.,abs(uv.x-(1.-shimmer)))*(.6+.4*sin(uv.y*40.+t*6.));
  float g=h(gl_FragCoord.xy+fract(t)*91.)*.04;col+=g-.02;
  col*=1.-.55*pow(length(uv-.5)*1.25,2.);
- gl_FragColor=vec4(min(col,vec3(.42)),1.);}
+ col=min(col,vec3(.42));
+ // The host sits above the scene brightness cap so the "reflection" reads through the glass panels.
+ if(host>.001)col=min(col+presence(uv,tint)*host*1.6,vec3(.78));
+ gl_FragColor=vec4(col,1.);}
 `;

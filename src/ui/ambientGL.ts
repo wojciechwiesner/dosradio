@@ -221,6 +221,8 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
       wake();
     };
     const exposed = {
+      /** Read-only: the last audio frame measured from the real engine output (for E2E checks). */
+      get live(): AudioFrame & { presence: number } { return { ...frame, presence: host.presence }; },
       get scene(): SceneId | null { return debug.scene; },
       set scene(v: SceneId | null) {
         debug.scene = v;
@@ -240,8 +242,8 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
       set kick(v: number | null) { debug.kick = v; force(); },
       get level(): number | null { return debug.level; },
       set level(v: number | null) { debug.level = v; force(); },
-    } satisfies AmbiDebug;
-    (window as unknown as { __ambiDebug: AmbiDebug }).__ambiDebug = exposed;
+    } satisfies AmbiDebug & { readonly live: unknown };
+    (window as unknown as { __ambiDebug: typeof exposed }).__ambiDebug = exposed;
   }
 
   canvas.addEventListener('webglcontextlost', (event) => {

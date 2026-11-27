@@ -137,3 +137,23 @@ describe('performance gates', () => {
     expect(needsFrames({ ...base, playing: true, reduced: true })).toBe(false);
   });
 });
+
+describe('real-audio calibration (regression: kick barely registered on real techno)', () => {
+  it('turns a measured techno kick swing (bass ~0.78 -> ~0.84) into a visible kick', () => {
+    // REGRESSION INVARIANT: on the production master the bass bins sit around 0.8 and each kick
+    // lifts them only ~0.05-0.1. The visualizer must still read that as a clear kick (> 0.4).
+    const feats = new AudioFeatures();
+    const steady = new Uint8Array(256).fill(30);
+    steady.fill(Math.round(0.78 * 255), 0, 3);
+    for (let i = 0; i < 120; i++) feats.update(steady, 0, 0.016);
+    const hit = new Uint8Array(256).fill(30);
+    hit.fill(Math.round(0.84 * 255), 0, 3);
+    expect(feats.update(hit, 0, 0.016).kick).toBeGreaterThan(0.4);
+  });
+
+  it('keeps analyser headroom so the byte spectrum does not saturate', async () => {
+    const src = (await import('node:fs')).readFileSync('src/radio/publicRadioEngine.ts', 'utf8');
+    expect(src).toMatch(/analyser\.maxDecibels = -10;/);
+    expect(src).toMatch(/analyser\.minDecibels = -90;/);
+  });
+});

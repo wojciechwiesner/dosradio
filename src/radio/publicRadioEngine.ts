@@ -198,7 +198,11 @@ export class PublicRadioEngine {
     this.limiter.connect(this.analyser);
     this.limiter.connect(this.ctx.destination);
     this.analyser.fftSize = 512;
-    this.analyser.smoothingTimeConstant = 0.55; // frequency data only; the level meter reads time-domain data
+    this.analyser.smoothingTimeConstant = 0.35; // frequency data only; the level meter reads time-domain data
+    // Default -100..-30 dB saturates the byte spectrum on limited masters (bass pinned at ~1, no kick).
+    // Keep headroom so the visualizer sees the kick; time-domain level metering is unaffected.
+    this.analyser.minDecibels = -90;
+    this.analyser.maxDecibels = -10;
     this.voiceGain.connect(this.voiceAnalyser);
     this.voiceAnalyser.fftSize = 1024;
   }

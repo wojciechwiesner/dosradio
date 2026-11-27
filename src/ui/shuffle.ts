@@ -53,6 +53,7 @@ function buildCard(): HTMLElement {
 export function initShuffle(hooks: ShuffleHooks): void {
   const button = document.getElementById('shuffleBtn');
   if (!(button instanceof HTMLButtonElement)) return; // autocheck: markup missing, feature stays off
+  placeButton(button);
   const card = buildCard();
   let busy = false;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
@@ -168,4 +169,23 @@ export function initShuffle(hooks: ShuffleHooks): void {
   // Android and desktop need no permission: listen right away. iOS waits for the first tap.
   const request = typeof DeviceMotionEvent === 'undefined' ? null : (DeviceMotionEvent as unknown as MotionPermission).requestPermission;
   if (typeof request !== 'function' && isTouch()) startMotion();
+}
+
+/** Mobile: move the button into the transport row (next to play) so it is under the thumb and covers nothing;
+ *  desktop: keep it in the Stacje header. Re-run on breakpoint change. */
+function placeButton(button: HTMLButtonElement): void {
+  const header = button.parentElement;
+  const transport = document.querySelector('.controls.transport');
+  const volume = transport?.querySelector('.volume') ?? null;
+  if (!header || !transport) return;
+  const mq = window.matchMedia('(max-width: 820px)');
+  const apply = (): void => {
+    if (mq.matches) {
+      if (button.parentElement !== transport) transport.insertBefore(button, volume);
+    } else if (button.parentElement !== header) {
+      header.appendChild(button);
+    }
+  };
+  apply();
+  mq.addEventListener('change', apply);
 }

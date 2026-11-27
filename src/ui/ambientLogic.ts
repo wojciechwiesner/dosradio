@@ -19,11 +19,11 @@ export const TECHNO_BPM = 118;
 
 const BASS_BINS = 3;
 const BASS_FLOOR = 0.35;
-const KICK_GAIN = 3;
+const KICK_GAIN = 8; // measured on real techno output: bass swings ~0.05-0.1 around its average per kick
 const VOICE_RMS_GAIN = 4;
 const ATTACK_S = 0.04;
 const RELEASE_S = 0.2;
-const BASS_AVG_S = 1.2;
+const BASS_AVG_S = 0.5; // fast enough that steady bass stops reading as a kick within ~1 s
 
 export const GROUP_SCENE: Record<MusicGroupId, SceneId> = {
   'klasyka-instrumentalna': 'nature',
