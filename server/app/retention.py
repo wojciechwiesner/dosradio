@@ -27,6 +27,7 @@ RETAINED: dict[str, str] = {
     "social_identities": "updated_at",
     "listener_comments": "created_at",
     "station_dedications": "created_at",
+    "referral_opens": "created_at",
 }
 
 

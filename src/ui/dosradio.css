@@ -396,6 +396,10 @@ footer a:hover, footer a:focus-visible { color: var(--text); }
 .ramowka-bar { margin-top: var(--s-2); padding: var(--s-1) var(--s-2); border: 1px solid var(--accent); display: flex; align-items: center;
   justify-content: space-between; gap: var(--s-1) var(--s-2); flex-wrap: wrap; font: var(--fs-12)/1.5 var(--font-mono); }
 .ramowka-bar[hidden] { display: none !important; }
+.verify-bar { margin-top: var(--s-2); padding: var(--s-1) var(--s-2); border: 1px solid var(--line); display: flex;
+  align-items: center; justify-content: space-between; gap: var(--s-2); flex-wrap: wrap; font-size: var(--fs-14, 14px); }
+.verify-bar .btn { min-height: 44px; }
+.verify-bar[hidden] { display: none !important; }
 .ramowka-bar-main { display: flex; align-items: center; gap: var(--s-1); font-weight: 500; color: var(--text); text-transform: uppercase; letter-spacing: 0.04em; }
 .ramowka-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.2s infinite; flex: none; }
 .ramowka-icon { width: 16px; height: 16px; color: var(--accent); }

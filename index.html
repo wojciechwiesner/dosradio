@@ -67,6 +67,11 @@
       </div>
     </header>
 
+    <div id="verifyBar" class="verify-bar" role="status" hidden>
+      <span id="verifyText">Potwierdź e-mail, a dostaniesz 30 dni Plus za darmo. Link jest w skrzynce (sprawdź też spam).</span>
+      <button type="button" id="verifyResend" class="btn ghost">Wyślij link ponownie</button>
+    </div>
+
     <div id="autoRamowkaBar" class="ramowka-bar" hidden>
       <div class="ramowka-bar-main">
         <span class="ramowka-live-dot"></span>
@@ -275,19 +280,14 @@
   <div class="modal" id="authModal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
     <div class="dialog">
       <h2 id="authTitle">Słuchaj dalej za darmo</h2>
-      <p id="authLead">Twoje 6 godzin pełnego dostępu minęło. Załóż konto i dostań 30 dni Plus za darmo.</p>
-      <ul class="perks" id="perks">
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>30 dni Plus za darmo po potwierdzeniu e-maila</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>Komponowanie muzyki z własnego opisu nastroju</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>Wiadomości z wybranych tematów</li>
-        <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m5 12 5 5 9-10"/></svg>W Plus (od $2.99 / mies.): podcasty w duecie i własne źródła wiadomości</li>
-      </ul>
+      <p id="authLead">Darmowe 6 godzin minęło. E-mail i hasło wystarczą, słuchasz dalej od razu.</p>
+      <p class="perks" id="perks">Po potwierdzeniu e-maila: 30 dni Plus za darmo. Bez karty.</p>
       <form id="authForm" novalidate>
         <input type="email" id="authEmail" placeholder="E-mail" autocomplete="email" required aria-label="E-mail" />
         <input type="password" id="authPassword" placeholder="Hasło (min. 8 znaków)" autocomplete="new-password" minlength="8" required aria-label="Hasło" />
         <div class="form-error" id="authError" role="alert"></div>
         <button type="button" id="resendLink" hidden>Wyślij link potwierdzający ponownie</button>
-        <button class="btn primary" type="submit" id="authSubmit">Załóż konto i dostań 30 dni Plus za darmo</button>
+        <button class="btn primary" type="submit" id="authSubmit">Załóż konto i słuchaj dalej</button>
       </form>
       <div class="switch" id="authSwitch">Masz już konto? <button type="button" id="toLogin">Zaloguj się</button></div>
       <p class="auth-legal">Zakładając konto, akceptujesz <a href="/regulamin.html" target="_blank" rel="noopener">Regulamin</a> i <a href="/prywatnosc.html" target="_blank" rel="noopener">Politykę prywatności</a>.</p>

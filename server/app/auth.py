@@ -13,13 +13,23 @@ from typing import Any, Callable
 from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
-from . import mailer
+from . import mailer, referrals
 from .db import Database
 
 log = logging.getLogger("dosradio.auth")
 
 VERIFY_TTL_SECONDS = mailer.VERIFY_TTL_SECONDS
 WELCOME_PLUS_DAYS = 30
+# A new account works at once; without a confirmed e-mail it keeps working for this long.
+UNVERIFIED_GRACE_SECONDS = 7 * 86400
+RESEND_COOLDOWN_SECONDS = 60
+REGISTER_LIMIT_PER_HOUR = 5  # per address, against scripted sign-ups (no CAPTCHA in front)
+
+TRIAL_ENDED_DETAIL = (
+    "Darmowy czas słuchania minął. Załóż konto: słuchasz dalej od razu, "
+    "a po potwierdzeniu e-maila dostajesz 30 dni Plus za darmo."
+)
+UNVERIFIED_ENDED_DETAIL = "Potwierdź adres e-mail, żeby słuchać dalej. Link jest w skrzynce, możesz też wysłać nowy."
 
 SESSION_COOKIE = "dr_session"
 ANON_COOKIE = "dr_anon"
@@ -69,6 +79,7 @@ class Access:
     trial_remaining: int  # seconds, 0 when used up
     plus: bool = False  # Plus features on: active AmbiRadio Plus subscription or a running trial
     trial_plus: bool = False  # Plus comes from the anonymous trial, not from an account
+    email_verified: bool = False  # only meaningful for registered accounts
 
     def as_dict(self) -> dict:
         return {
@@ -79,6 +90,7 @@ class Access:
             "trial_remaining": self.trial_remaining,
             "plus": self.plus,
             "trial_plus": self.trial_plus,
+            "email_verified": self.email_verified,
         }
 
 
@@ -147,7 +159,19 @@ class AccessService:
             user = self.db.user_for_session(token_hash(session))
             if user and user["email_verified"]:
                 plus = user["plan"] == "plus" and (user["plus_until"] is None or user["plus_until"] > now)
-                return Access(True, True, user["email"], True, self.trial_seconds, plus)
+                return Access(True, True, user["email"], True, self.trial_seconds, plus, email_verified=True)
+            if user:
+                # Unconfirmed account: listens at once, keeps the rest of the trial's Plus, locks after the grace.
+                # A Stripe payment counts as proof of a real listener: paid Plus works and never locks.
+                paid_until = user["plus_paid_until"] if "plus_paid_until" in user.keys() else None
+                if paid_until and paid_until > now and user["plan"] == "plus":
+                    return Access(True, True, user["email"], True, self.trial_seconds, plus=True)
+                if now - float(user["created_at"]) >= UNVERIFIED_GRACE_SECONDS:
+                    return Access(False, True, user["email"], True, 0)
+                started = self.db.trial_started_at(self._trial_keys(ip, cookies.get(ANON_COOKIE)))
+                trial_left = max(0, int(self.trial_seconds - (now - started))) if started is not None else 0
+                return Access(True, True, user["email"], True, self.trial_seconds,
+                              plus=trial_left > 0, trial_plus=trial_left > 0)
         if ip.startswith("100.") or ip in ("127.0.0.1", "::1", "unknown"):
             return Access(True, False, "admin@theones.io", True, self.trial_seconds)
         started = self.db.trial_started_at(self._trial_keys(ip, cookies.get(ANON_COOKIE)))
@@ -202,6 +226,7 @@ class VerifyToken(BaseModel):
 
 def build_router(access: AccessService) -> APIRouter:
     router = APIRouter(prefix="/radio-api")
+    register_times: dict[str, list[float]] = {}  # ip -> recent registration times
 
     def set_cookie(response: Response, name: str, value: str, max_age: int) -> None:
         response.set_cookie(name, value, max_age=max_age, httponly=True, secure=True, samesite="lax", path="/")
@@ -231,28 +256,34 @@ def build_router(access: AccessService) -> APIRouter:
     def register(body: Credentials, request: Request, response: Response) -> dict:
         if access.db.find_user_by_email(body.email):
             raise HTTPException(409, "Konto z tym adresem już istnieje. Zaloguj się.")
-        user_id = access.db.create_user(body.email, hash_password(body.password))
+        ip = ip_of(request)
+        if not _register_allowed(ip):
+            raise HTTPException(429, "Za dużo nowych kont z tego adresu. Spróbuj za godzinę.")
+        referred_by = referrals.parse_ref(request.cookies.get(referrals.REF_COOKIE))
+        user_id = access.db.create_user(body.email, hash_password(body.password), verified=False, referred_by=referred_by)
         # Sources, podcasts and pills set up during the trial move onto the new account.
-        trial_owner = access.db.trial_owner_id(access.trial_key(request.cookies, ip_of(request)), create=False)
+        trial_owner = access.db.trial_owner_id(access.trial_key(request.cookies, ip), create=False)
         if trial_owner is not None:
             access.db.adopt_trial_data(trial_owner, user_id)
-        _send_verification(body.email, user_id)
+        # The account works right away; the e-mail only unlocks the 30 days of Plus.
+        open_session(response, user_id)
+        sent = _send_verification(body.email, user_id, raise_on_error=False)
         if getattr(access, "on_register", None):
             try:
                 access.on_register(body.email, access.db.count_users())
             except Exception:
                 pass
-        return {"ok": True, "email": body.email, "pending_verification": True}
+        return {"ok": True, "email": body.email, "pending_verification": True, "verification_sent": sent}
 
     @router.post("/login")
     def login(body: Credentials, response: Response) -> dict:
         user = access.db.find_user_by_email(body.email)
         if not user or not verify_password(body.password, user["password_hash"]):
             raise HTTPException(401, "Zły e-mail albo hasło.")
-        if not user["email_verified"]:
-            raise HTTPException(403, "Najpierw potwierdź adres e-mail — sprawdź skrzynkę (link wygasa po 24 h).")
+        if not user["email_verified"] and time.time() - float(user["created_at"]) >= UNVERIFIED_GRACE_SECONDS:
+            raise HTTPException(403, "Najpierw potwierdź adres e-mail — sprawdź skrzynkę albo wyślij nowy link.")
         open_session(response, int(user["id"]))
-        return {"ok": True, "email": body.email}
+        return {"ok": True, "email": body.email, "email_verified": bool(user["email_verified"])}
 
     @router.post("/verify")
     def verify(body: VerifyToken, response: Response) -> dict:
@@ -278,14 +309,47 @@ def build_router(access: AccessService) -> APIRouter:
         _send_verification(body.email, int(user["id"]))
         return {"ok": True, "sent": True}
 
-    def _send_verification(email: str, user_id: int) -> None:
+    @router.post("/verify/resend")
+    def resend_from_session(request: Request) -> dict:
+        """New confirmation link for the logged-in, unconfirmed account (no password needed)."""
+        session = request.cookies.get(SESSION_COOKIE)
+        user = access.db.user_for_session(token_hash(session)) if session else None
+        if user is None:
+            raise HTTPException(401, "Zaloguj się, żeby wysłać link ponownie.")
+        if user["email_verified"]:
+            return {"ok": True, "already_verified": True}
+        last = user["verify_resent_at"] if "verify_resent_at" in user.keys() else None
+        if last and time.time() - float(last) < RESEND_COOLDOWN_SECONDS:
+            raise HTTPException(429, "Link już poszedł. Poczekaj minutę i sprawdź też spam.")
+        with access.db.connect() as conn:
+            conn.execute("UPDATE users SET verify_resent_at = ? WHERE id = ?", (time.time(), int(user["id"])))
+        _send_verification(user["email"], int(user["id"]))
+        return {"ok": True, "sent": True}
+
+    def _register_allowed(ip: str) -> bool:
+        now = time.time()
+        recent = [t for t in register_times.get(ip, []) if now - t < 3600]
+        if len(recent) >= REGISTER_LIMIT_PER_HOUR:
+            register_times[ip] = recent
+            return False
+        recent.append(now)
+        register_times[ip] = recent
+        if len(register_times) > 5000:
+            for key in [k for k, v in register_times.items() if not v or now - v[-1] > 3600]:
+                del register_times[key]
+        return True
+
+    def _send_verification(email: str, user_id: int, raise_on_error: bool = True) -> bool:
         token = secrets.token_urlsafe(32)
         access.db.set_email_verification(user_id, token_hash(token), time.time() + VERIFY_TTL_SECONDS)
         try:
             mailer.send_verification_email(email, token)
         except Exception as error:
             log.error("Verification e-mail failed for %s: %s", email, error)
+            if not raise_on_error:
+                return False
             raise HTTPException(503, "Nie udało się wysłać e-maila potwierdzającego. Spróbuj ponownie za chwilę.")
+        return True
 
     @router.post("/logout")
     def logout(request: Request, response: Response) -> dict:

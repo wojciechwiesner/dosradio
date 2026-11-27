@@ -199,7 +199,14 @@ export class Sales {
     if (pw.length < 8) { err.textContent = t('pwShort'); return; }
     const btn = form.querySelector('[type=submit]'); btn.disabled = true;
     try {
-      if (this.authMode === 'register') { await this.app.api.register(email, pw); form.innerHTML = `<p class="lead">${esc(t('checkMail', { e: email }))}</p>`; return; }
+      if (this.authMode === 'register') {
+        // Fast sign-up: the account works now; confirming the e-mail adds the 30 days of Plus.
+        await this.app.api.register(email, pw);
+        document.getElementById('paywall').hidden = true;
+        await this.app.refreshMe(); this.app.toast(t('checkMail', { e: email }), { long: true });
+        if (!this.app.engine.playing) this.app.togglePlay(true);
+        return;
+      }
       await this.app.api.login(email, pw);
       document.getElementById('paywall').hidden = true;
       await this.app.refreshMe(); this.app.toast(t('loggedIn'));

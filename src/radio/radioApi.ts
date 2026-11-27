@@ -15,6 +15,8 @@ export interface AccessState {
   plus: boolean;
   /** Plus comes from the anonymous trial; older servers omit it. */
   trial_plus?: boolean;
+  /** Registered but the e-mail is not confirmed yet (account works; the 30-day Plus waits). */
+  email_verified?: boolean;
 }
 
 export interface NewsPreferences {
@@ -128,7 +130,7 @@ export interface PresencePayload {
 }
 
 export class TrialEndedError extends Error {
-  constructor() { super('Darmowa godzina minęła. Załóż konto, żeby słuchać dalej.'); }
+  constructor(message = 'Darmowy czas słuchania minął. Załóż konto, żeby słuchać dalej.') { super(message); }
 }
 
 const isPlusPath = (path: string): boolean => path.includes('/radio-api/plus/');
@@ -190,10 +192,12 @@ export const airedRemote: AiredRemote = {
 export const radioApi = {
   me: () => request<AccessState>('/radio-api/me'),
   startTrial: () => postJson<AccessState>('/radio-api/trial/start'),
-  register: (email: string, password: string) => postJson<{ email: string; pending_verification: boolean }>('/radio-api/register', { email, password }),
-  login: (email: string, password: string) => postJson<{ email: string }>('/radio-api/login', { email, password }),
+  register: (email: string, password: string) => postJson<{ email: string; pending_verification: boolean; verification_sent?: boolean }>('/radio-api/register', { email, password }),
+  login: (email: string, password: string) => postJson<{ email: string; email_verified?: boolean }>('/radio-api/login', { email, password }),
   verify: (token: string) => postJson<{ email: string; verified: boolean }>('/radio-api/verify', { token }),
   resendVerification: (email: string, password: string) => postJson<{ ok: boolean; sent?: boolean }>('/radio-api/resend-verification', { email, password }),
+  /** New confirmation link for the logged-in account (no password). */
+  resendMyVerification: () => postJson<{ ok: boolean; sent?: boolean; already_verified?: boolean }>('/radio-api/verify/resend'),
   logout: () => postJson<{ ok: boolean }>('/radio-api/logout'),
   news: (categories: NewsCategory[]) =>
     request<{ categories: CategoryNews[] }>(`/radio-api/news?cats=${categories.join(',')}`),

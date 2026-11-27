@@ -20,8 +20,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the footer, the sign-up dialog and the Plus modal.
 - **12-month retention purge** (`server/app/retention.py`): once a day deletes trial markers, presence, comments,
   dedications and friend identities older than 365 days, as the privacy policy states. Test: `test_retention.py`.
+- **Referral attribution** (`server/app/referrals.py`): opening a shared dedication (`?d=`), greeting (`w_`) or
+  url-podcast (`p_`) link by someone who is not the sender is stored once per visitor in `referral_opens` and sets a
+  30-day `dr_ref` cookie (first link wins); registration copies it to `users.referred_by`. The admin overview shows
+  the funnel per link type (opened by newcomers, accounts, confirmed). Tests: `test_referrals.py` (12).
+
+### Changed
+- **Fast sign-up**: registration logs the listener in at once and playback continues; the confirmation e-mail now
+  only unlocks the 30 days of Plus. An unconfirmed account works for 7 days, then needs the link (login after that is
+  refused as before). A bar under the header offers "Wyślij link ponownie" (`POST /radio-api/verify/resend`, from the
+  session, 60 s cooldown). A failing mail server no longer blocks sign-up. Registrations are limited to 5 per hour per
+  address. An unconfirmed account never gets admin rights. Shorter sign-up dialog: two fields, one button, one line
+  about Plus. Orbita does the same. Terms updated (7 days). Tests: `test_signup_fast.py` (13).
+  Before: 5 of 10 production accounts never confirmed and could not listen.
 
 ### Fixed
+- Trial-end messages said "Darmowa godzina" / "Your hour" while the free trial is 6 hours (API 402 detail, classic
+  client, Orbita recap in PL/EN/RU).
 - **Paid Plus lapsed after the first month while Stripe kept charging**: only `checkout.session.completed` granted
   Plus (30 days), renewals were ignored. Fixed by the lifecycle handling above.
 - Polish dedication greeting no longer says "pozdrowienia od Wojtek": the sender's name stays in the nominative.
