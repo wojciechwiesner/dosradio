@@ -15,6 +15,10 @@ import {
   type Station,
 } from '../radio/stations';
 import { intervalLabel, normalizeInterval } from '../radio/radioClock';
+import { createAmbientGL, type AmbientGL } from './ambientGL';
+import { sceneForStation } from './ambientLogic';
+import { createHostLiveCaption } from './hostLiveCaption';
+import { watchTitleChange } from './titleReveal';
 import { initBackgroundAudio } from '../audio/backgroundAudio';
 import { getSharedAudioContext } from '../audio/iosAudioUnlock';
 import {
@@ -43,6 +47,7 @@ import { wireClassicComments } from './commentBox';
 import { wireClassicSocialStudio } from './socialCreatorStudio';
 import { classicShortcut, stepStation } from './keyboard';
 import { startPlaybackFlow } from './playbackGate';
+import { initShuffle } from './shuffle';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -295,6 +300,9 @@ function renderAccess(): void {
   }
 }
 
+let ambient: AmbientGL | null = null;
+let hostCaption: ReturnType<typeof createHostLiveCaption> | null = null;
+
 // --- engine --------------------------------------------------------------------
 const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categories, {
   onState: (state) => {
@@ -305,6 +313,7 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     if (state === 'loading') setStatus('Łączę z generatorem muzyki...');
     if (state === 'playing') setTimeout(sendPresenceHeartbeat, 0); // count the listener now, not a minute later
     if (state === 'idle' || state === 'paused') hideStartNotice();
+    ambient?.setPlayerState(state);
   },
   onStatus: (text) => setStatus(text),
   onMusicAudible: () => hideStartNotice(),
@@ -351,6 +360,9 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
       label.textContent = 'Wiadomości';
       airText.textContent = isMusicOnly ? 'Tylko muzyka' : (engine.isPlaying ? 'Muzyka' : 'Poza anteną');
     }
+    ambient?.setHost(speaking, role);
+    if (speaking && (role === 'host' || role === 'news')) hostCaption?.show(stationById(prefs.station).host ?? '');
+    else hostCaption?.hide();
   },
   onLevel: renderLevel,
   onStationChange: (st, groupId) => {
@@ -358,9 +370,18 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     prefs.playGroup = groupId;
     savePrefs();
     renderStations();
+    ambient?.setScene(sceneForStation(st, groupId));
+    hostCaption?.setHostName(st.host ?? '');
     bgAudio.updateMetadata(st.name, groupId ? `AmbiRadio · ${groupById(groupId)?.name ?? ''}` : 'AmbiRadio', st.host);
   },
 });
+ambient = createAmbientGL(engine, () => document.body.classList.remove('ambient-on'));
+if (ambient) {
+  document.body.classList.add('ambient-on');
+  ambient.setScene(sceneForStation(stationById(prefs.station), prefs.playGroup));
+}
+hostCaption = createHostLiveCaption($('hostLive'), () => engine.getVoiceLevel());
+watchTitleChange($('nowStation'));
 engine.interval = prefs.interval;
 engine.newsEnabled = prefs.newsEnabled;
 engine.setProgramme(programmeOptions(prefs));
@@ -1033,6 +1054,7 @@ wireClassicDedications(
   setStatus,
 );
 wireClassicComments(engine, setStatus);
+initShuffle({ currentStationId: () => prefs.station, isPlaying: () => engine.isPlaying, chooseStation, togglePlay });
 wireClassicSocialStudio(
   engine,
   (sid) => {

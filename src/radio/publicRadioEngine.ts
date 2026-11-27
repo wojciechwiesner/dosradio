@@ -78,6 +78,9 @@ export class PublicRadioEngine {
   private duckLevel = DUCK_LEVEL;
   private ducked = false;
   private readonly analyser = this.ctx.createAnalyser();
+  /** Tap on the voice bus only, feeds getVoiceLevel(); never part of the audible path. */
+  private readonly voiceAnalyser = this.ctx.createAnalyser();
+  private voiceBuffer: Float32Array<ArrayBuffer> | null = null;
 
   private helper: LiveMusicHelper | null = null;
   private chunkStreamer: ChunkStreamer | null = null;
@@ -195,6 +198,28 @@ export class PublicRadioEngine {
     this.limiter.connect(this.analyser);
     this.limiter.connect(this.ctx.destination);
     this.analyser.fftSize = 512;
+    this.analyser.smoothingTimeConstant = 0.35; // frequency data only; the level meter reads time-domain data
+    // Default -100..-30 dB saturates the byte spectrum on limited masters (bass pinned at ~1, no kick).
+    // Keep headroom so the visualizer sees the kick; time-domain level metering is unaffected.
+    this.analyser.minDecibels = -90;
+    this.analyser.maxDecibels = -10;
+    this.voiceGain.connect(this.voiceAnalyser);
+    this.voiceAnalyser.fftSize = 1024;
+  }
+
+  /** Read-only tap: fills `out` with limiter-output frequency data (0..255 per bin). */
+  getSpectrum(out: Uint8Array<ArrayBuffer>): void {
+    this.analyser.getByteFrequencyData(out);
+  }
+
+  /** RMS (0..1) of the host/news/jingle voice bus only. */
+  getVoiceLevel(): number {
+    const size = this.voiceAnalyser.fftSize;
+    if (!this.voiceBuffer || this.voiceBuffer.length !== size) this.voiceBuffer = new Float32Array(size);
+    this.voiceAnalyser.getFloatTimeDomainData(this.voiceBuffer);
+    let sum = 0;
+    for (let i = 0; i < size; i++) sum += this.voiceBuffer[i] * this.voiceBuffer[i];
+    return Math.sqrt(sum / size);
   }
 
   get isPlaying(): boolean {

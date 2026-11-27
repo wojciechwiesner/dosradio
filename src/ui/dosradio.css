@@ -44,6 +44,10 @@
   --s-8: 64px;
   --s-10: 80px;
 
+  /* motion language: one easing, one base duration */
+  --ease: cubic-bezier(.22, 1, .36, 1);
+  --dur: 0.4s;
+
   --tap: 44px;              /* minimum touch target */
   --radius: 0;              /* raw: square corners everywhere except dots */
   --focus: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
