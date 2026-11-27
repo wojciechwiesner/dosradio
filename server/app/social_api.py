@@ -6,10 +6,11 @@ import hashlib
 import logging
 from typing import Any, Callable
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
+from . import referrals
 from .auth import AccessService
 from .custom_radios import resolve_actor_key
 from .db import Database
@@ -352,11 +353,24 @@ def build_social_router(
             raise HTTPException(404, "Nieznany spot") from err
         return FileResponse(wav_path, media_type="audio/wav")
 
+    def _track_open(request: Request, response: Response, drop: dict[str, Any], actor: str) -> None:
+        """Count a newcomer opening a greeting (w_) or url-podcast (p_) link; never the sender."""
+        kind = str(drop.get("token", ""))[:1]
+        if kind not in ("w", "p"):
+            return
+        try:
+            registered = actor.startswith("u:")
+            referrals.record_open(db, request, response, kind=kind, token=str(drop["token"]), visitor_key=actor,
+                                  is_sender=actor == drop.get("from_key"), is_member=registered)
+        except Exception:
+            log.exception("Referral open not recorded for drop %s", drop.get("token"))
+
     @router.get("/url-podcast-link/{token}")
-    async def get_url_podcast_link(token: str) -> dict[str, Any]:
+    async def get_url_podcast_link(token: str, request: Request, response: Response) -> dict[str, Any]:
         drop = social.get_drop(token)
         if not drop:
             raise HTTPException(404, "Nie znaleziono tej audycji")
+        _track_open(request, response, drop, resolve_actor_key(request, access, db))
         return {"drop": _enrich_drop(drop)}
 
     @router.get("/drops/{token}")
@@ -367,13 +381,14 @@ def build_social_router(
         return {"drop": _enrich_drop(drop)}
 
     @router.post("/drops/{token}/claim")
-    async def claim_drop(token: str, body: ClaimDropBody, request: Request) -> dict[str, Any]:
+    async def claim_drop(token: str, body: ClaimDropBody, request: Request, response: Response) -> dict[str, Any]:
         actor = resolve_actor_key(request, access, db)
         cname = _caller_name(request, body.display_name)
         social.upsert_identity(actor, display_name=cname)
         claimed = social.claim_drop(token, actor, cname)
         if not claimed:
             raise HTTPException(404, "Nie znaleziono wrzutki")
+        _track_open(request, response, claimed, actor)
         return {"drop": _enrich_drop(claimed), "auto_paired": claimed.get("auto_paired", False)}
 
     @router.get("/drops/{token}/parts/{file_name}")

@@ -29,7 +29,7 @@ fi
 
 echo "=== 1. Building frontend (Orbita bundle, type check, Vite) ==="
 npm run build
-for f in index.html sw.js icon-192.png manifest.webmanifest orbita.html admin.html; do
+for f in index.html sw.js icon-192.png manifest.webmanifest orbita.html admin.html regulamin.html prywatnosc.html legal.css; do
   test -f "dist/$f" || { echo "Missing dist/$f" >&2; exit 1; }
 done
 
