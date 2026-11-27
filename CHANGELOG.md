@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- **Classic ambient background**: one full-screen WebGL1 shader (`src/ui/ambientGL.ts`, `ambientGL.glsl.ts`, pure logic in
+  `ambientLogic.ts`) driven by real audio (bass/kick, level, voice). Four scenes (nature, techno, night, focus) mapped from
+  the music group, ~2.5 s crossfade, BPM/name fallback for extra groups. Renders at 0.6x (mobile) / 0.75x DPR, 60 fps cap,
+  pauses when hidden or idle for 3 s, static frame under `prefers-reduced-motion`, CSS background kept when WebGL is missing.
+- **Live AI host presence**: while the host or news speaks, a soft head-and-shoulders contour silhouette fades into the
+  shader (0.6 s in, 1.2 s out) and ripples with the voice level; jingles only shimmer. Caption "<host> mówi na żywo" with
+  five voice bars next to the on-air label.
+- `PublicRadioEngine.getSpectrum()` and `getVoiceLevel()` (read-only taps; a second analyser on the voice bus).
+- Motion language variables `--ease` / `--dur`; the station title slides up like a film title.
+- Debug: `?ambidebug=1` exposes `window.__ambiDebug` to force scene, speaking, voice, kick, level.
+
 ### Fixed
 - Polish dedication greeting no longer says "pozdrowienia od Wojtek": the sender's name stays in the nominative.
 
