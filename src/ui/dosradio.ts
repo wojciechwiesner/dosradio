@@ -47,6 +47,7 @@ import { wireClassicComments } from './commentBox';
 import { wireClassicSocialStudio } from './socialCreatorStudio';
 import { classicShortcut, stepStation } from './keyboard';
 import { startPlaybackFlow } from './playbackGate';
+import { initShuffle } from './shuffle';
 
 const $ = <T extends HTMLElement>(id: string): T => {
   const element = document.getElementById(id);
@@ -1053,6 +1054,7 @@ wireClassicDedications(
   setStatus,
 );
 wireClassicComments(engine, setStatus);
+initShuffle({ currentStationId: () => prefs.station, isPlaying: () => engine.isPlaying, chooseStation, togglePlay });
 wireClassicSocialStudio(
   engine,
   (sid) => {

@@ -17,7 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `PublicRadioEngine.getSpectrum()` and `getVoiceLevel()` (read-only taps; a second analyser on the voice bus).
 - Motion language variables `--ease` / `--dur`; the station title slides up like a film title.
 - Debug: `?ambidebug=1` exposes `window.__ambiDebug` to force scene, speaking, voice, kick, level.
-
+- **"Losuj stację" shuffle (Classic)**: a round floating button on mobile (above the Classic nav and safe area) and a compact
+  button in the Stacje header on desktop. A 1.4 s slot-machine reel lands on a random enabled station other than the
+  current one, steered away from the last 5 picks (kept in localStorage), switches through the station-list path,
+  starts playback if the radio is off and shows a 2.5 s card with name, tagline and group colour. Haptic ticks and a
+  landing pulse where `navigator.vibrate` exists; reduced motion skips the reel. Shake to shuffle via `devicemotion`
+  (peak delta > 18 m/s², two peaks within 600 ms, 2.5 s cooldown; iOS permission asked on the first tap; toggle in
+  localStorage `ambi.shuffle.shake`). Tests: `tests/shuffle.test.ts`.
 ### Fixed
 - Polish dedication greeting no longer says "pozdrowienia od Wojtek": the sender's name stays in the nominative.
 
