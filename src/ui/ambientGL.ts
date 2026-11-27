@@ -7,14 +7,15 @@ import {
   SCENE_ORDER,
   canvasSize,
   needsFrames,
-  oneHot,
+  nextVariant,
   renderScale,
-  stepSceneWeights,
-  weightsSettled,
+  SceneFader,
+  SectionDetector,
+  variantForStation,
   type AudioFrame,
   type HostRole,
   type SceneId,
-  type SceneWeights,
+  type SceneKey,
 } from './ambientLogic';
 
 export interface AmbientAudioSource {
@@ -23,7 +24,8 @@ export interface AmbientAudioSource {
 }
 
 export interface AmbientGL {
-  setScene(scene: SceneId): void;
+  /** Mood + per-station look. `stationId` picks the variant so two stations sharing a mood still differ. */
+  setScene(scene: SceneId, stationId?: string): void;
   setPlayerState(state: 'idle' | 'loading' | 'playing' | 'paused'): void;
   setHost(speaking: boolean, role: HostRole): void;
   destroy(): void;
@@ -32,6 +34,7 @@ export interface AmbientGL {
 /** Test and screenshot overrides, exposed as window.__ambiDebug only with ?ambidebug=1. */
 export interface AmbiDebug {
   scene: SceneId | null;
+  variant: number | null;
   speaking: boolean | null;
   voice: number | null;
   kick: number | null;
@@ -40,7 +43,8 @@ export interface AmbiDebug {
 
 const SPECTRUM_BINS = 256;
 const STATIC_TIME_S = 14;
-const UNIFORMS = ['r', 't', 'sc', 'kick', 'level', 'bass', 'voice', 'host', 'shimmer'] as const;
+const UNIFORMS = ['r', 't', 'sa', 'sb', 'va', 'vb', 'mx', 'kick', 'level', 'bass', 'voice', 'host', 'shimmer'] as const;
+const sceneIndex = (id: SceneId): number => Math.max(0, SCENE_ORDER.indexOf(id));
 
 function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLShader | null {
   const shader = gl.createShader(type);
@@ -95,8 +99,9 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
   const features = new AudioFeatures();
   const host = new HostPresence();
   const spectrum = new Uint8Array(new ArrayBuffer(SPECTRUM_BINS));
-  let weights: SceneWeights = oneHot('focus');
-  let target: SceneId = 'focus';
+  const fader = new SceneFader({ scene: 'focus', variant: 0 });
+  const sections = new SectionDetector();
+  let variantShifts = 0;
   let playing = false;
   let idleSince = performance.now();
   let clock = STATIC_TIME_S;
@@ -107,7 +112,7 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
   let dead = false;
   let debugSpeaking: boolean | null = null;
 
-  const debug: AmbiDebug = { scene: null, speaking: null, voice: null, kick: null, level: null };
+  const debug: AmbiDebug = { scene: null, variant: null, speaking: null, voice: null, kick: null, level: null };
 
   function resize(): void {
     const size = canvasSize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1, renderScale(window.innerWidth, coarse.matches));
@@ -122,7 +127,11 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
     const g = gl!;
     g.uniform2f(loc.r, canvas.width, canvas.height);
     g.uniform1f(loc.t, clock);
-    g.uniform4f(loc.sc, weights[0], weights[1], weights[2], weights[3]);
+    g.uniform1f(loc.sa, sceneIndex(fader.from.scene));
+    g.uniform1f(loc.sb, sceneIndex(fader.to.scene));
+    g.uniform1f(loc.va, fader.from.variant);
+    g.uniform1f(loc.vb, fader.to.variant);
+    g.uniform1f(loc.mx, fader.mix);
     g.uniform1f(loc.kick, frame.kick);
     g.uniform1f(loc.level, frame.level);
     g.uniform1f(loc.bass, frame.bass);
@@ -141,7 +150,7 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
   }
 
   function transitioning(): boolean {
-    return !weightsSettled(weights, target) || !host.settled;
+    return !fader.settled || !host.settled;
   }
 
   function tick(now: number): void {
@@ -154,9 +163,15 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
     const dt = Math.min(0.1, last ? (now - last) / 1000 : 0.016);
     last = now;
     clock += dt;
-    weights = stepSceneWeights(weights, target, dt);
+    fader.update(dt);
     host.update(dt);
     readAudio(dt);
+    // A breakdown, drop or the next track in the mix: fade to another look of the same mood.
+    if (playing && host.presence < 0.01 && !debug.scene && sections.update(frame, dt)) {
+      variantShifts += 1;
+      const cur = fader.target;
+      fader.set({ scene: cur.scene, variant: nextVariant(cur.variant) });
+    }
     draw();
     const gate = {
       hidden: document.hidden,
@@ -172,7 +187,7 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
   function wake(): void {
     if (dead) return;
     if (motion.matches) {
-      weights = oneHot(target);
+      fader.snap();
       host.snap();
       frame = { bass: 0, kick: 0, level: 0, voice: debug.voice ?? 0 };
       clock = STATIC_TIME_S;
@@ -186,19 +201,22 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
   }
 
   const api: AmbientGL = {
-    setScene(scene) {
+    setScene(scene, stationId) {
       if (debug.scene) return;
-      target = scene;
+      const key: SceneKey = { scene, variant: stationId ? variantForStation(stationId) : fader.target.variant };
+      sections.reset();
+      fader.set(key);
       wake();
     },
     setPlayerState(state) {
       playing = state === 'playing' || state === 'loading';
-      if (!playing) idleSince = performance.now();
+      if (!playing) { idleSince = performance.now(); sections.reset(); }
       wake();
     },
     setHost(speaking, role) {
       if (debugSpeaking !== null) return;
       host.setSpeaking(speaking, role);
+      if (speaking) sections.reset(); // ducked music under the host is not a section change
       wake();
     },
     destroy() {
@@ -223,10 +241,20 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
     const exposed = {
       /** Read-only: the last audio frame measured from the real engine output (for E2E checks). */
       get live(): AudioFrame & { presence: number } { return { ...frame, presence: host.presence }; },
+      /** Read-only fade state: from/to scene + variant, eased mix, section-driven look changes so far. */
+      get fade() {
+        return { from: { ...fader.from }, to: { ...fader.to }, mix: fader.mix, settled: fader.settled, variantShifts };
+      },
       get scene(): SceneId | null { return debug.scene; },
       set scene(v: SceneId | null) {
         debug.scene = v;
-        if (v && SCENE_ORDER.includes(v)) target = v;
+        if (v && SCENE_ORDER.includes(v)) fader.set({ scene: v, variant: debug.variant ?? fader.target.variant });
+        force();
+      },
+      get variant(): number | null { return debug.variant; },
+      set variant(v: number | null) {
+        debug.variant = v;
+        if (v !== null) fader.set({ scene: fader.target.scene, variant: v });
         force();
       },
       get speaking(): boolean | null { return debugSpeaking; },
@@ -242,7 +270,7 @@ export function createAmbientGL(audio: AmbientAudioSource, onLost?: () => void):
       set kick(v: number | null) { debug.kick = v; force(); },
       get level(): number | null { return debug.level; },
       set level(v: number | null) { debug.level = v; force(); },
-    } satisfies AmbiDebug & { readonly live: unknown };
+    } satisfies AmbiDebug & { readonly live: unknown; readonly fade: unknown };
     (window as unknown as { __ambiDebug: typeof exposed }).__ambiDebug = exposed;
   }
 

@@ -372,7 +372,7 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
     prefs.playGroup = groupId;
     savePrefs();
     renderStations();
-    ambient?.setScene(sceneForStation(st, groupId));
+    ambient?.setScene(sceneForStation(st, groupId), st.id);
     hostCaption?.setHostName(st.host ?? '');
     bgAudio.updateMetadata(st.name, groupId ? `AmbiRadio · ${groupById(groupId)?.name ?? ''}` : 'AmbiRadio', st.host);
   },
@@ -380,7 +380,7 @@ const engine = new PublicRadioEngine(stationById(prefs.station), prefs.categorie
 ambient = createAmbientGL(engine, () => document.body.classList.remove('ambient-on'));
 if (ambient) {
   document.body.classList.add('ambient-on');
-  ambient.setScene(sceneForStation(stationById(prefs.station), prefs.playGroup));
+  ambient.setScene(sceneForStation(stationById(prefs.station), prefs.playGroup), prefs.station);
 }
 hostCaption = createHostLiveCaption($('hostLive'), () => engine.getVoiceLevel());
 watchTitleChange($('nowStation'));

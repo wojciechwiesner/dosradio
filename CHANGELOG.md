@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **14 ambient scenes**: nature, techno, night, focus, aurora, ocean, synthwave, neon, smoke, dunes, laser, warp, liquid
+  and candle. Every preset station has its own mood (`STATION_SCENE`), plus a stable per-station variant (palette,
+  layout, camera), so two techno stations no longer look the same. The shader evaluates only the two scenes being
+  faded, so mobile cost is unchanged (~0.1 ms/draw measured).
+- **Scenes follow the music**: a station change fades over 3 s with an eased mix (a change mid-fade queues, no pop); a
+  breakdown or drop in the mix (`SectionDetector`, bass/level against a slow baseline, 45 s cooldown, ignored while the
+  host speaks) fades to another look of the same mood.
 - **Classic ambient background**: one full-screen WebGL1 shader (`src/ui/ambientGL.ts`, `ambientGL.glsl.ts`, pure logic in
   `ambientLogic.ts`) driven by real audio (bass/kick, level, voice). Four scenes (nature, techno, night, focus) mapped from
   the music group, ~2.5 s crossfade, BPM/name fallback for extra groups. Renders at 0.6x (mobile) / 0.75x DPR, 60 fps cap,
