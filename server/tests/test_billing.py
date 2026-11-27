@@ -251,6 +251,6 @@ def test_webhook_idempotent(client, db, monkeypatch):
 def test_webhook_ignores_other_event_types(client, db, monkeypatch):
     monkeypatch.setenv("STRIPE_WEBHOOK_SECRET", WEBHOOK_SECRET)
     user_id = login_user(client, db)
-    payload, header = signed_event({"id": "evt_other", "type": "invoice.paid", "data": {"object": {}}})
+    payload, header = signed_event({"id": "evt_other", "type": "charge.refunded", "data": {"object": {}}})
     assert client.post("/radio-api/billing/webhook", content=payload, headers={"stripe-signature": header}).status_code == 200
     assert db.find_user_by_email("plus@test.pl")["plan"] == "free"

@@ -87,6 +87,10 @@ class Database:
         if "plus_paid_until" not in columns:
             # Set only by a Stripe payment; welcome / admin Plus leaves it NULL (daily podcast limit applies).
             conn.execute("ALTER TABLE users ADD COLUMN plus_paid_until REAL")
+        # Stripe links: renewals and cancellations arrive without our session, only with these ids.
+        for column in ("stripe_customer_id", "stripe_subscription_id", "paid_plan"):
+            if column not in columns:
+                conn.execute(f"ALTER TABLE users ADD COLUMN {column} TEXT")
 
     @contextmanager
     def connect(self) -> Iterator[sqlite3.Connection]:

@@ -28,6 +28,7 @@ from .news import CATEGORIES, NewsService
 from .archive import ArchiveRegistry
 from .stream import build_stream_router
 from .recorder import StationRecorder, STATION_SPECS
+from .retention import retention_loop
 from .mood import MoodRecorder
 from .notifier import trigger_telegram_alert
 from .hosts import BORROWED_HOSTS, HOSTS, host_for
@@ -127,6 +128,7 @@ async def prewarm_hosts() -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     tasks = [asyncio.create_task(recorder.record_loop())]  # 100h archive per station
+    tasks.append(asyncio.create_task(retention_loop(db)))  # 12-month purge promised in prywatnosc.html
     if settings.prewarm:
         tasks.append(asyncio.create_task(news.hourly_loop()))  # one edition per topic per hour
         tasks.append(asyncio.create_task(prewarm_hosts()))

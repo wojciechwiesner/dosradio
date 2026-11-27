@@ -1,11 +1,19 @@
-"""Stripe Checkout billing for AmbiRadio Plus (test mode).
+"""Stripe Checkout billing for AmbiRadio Plus.
 
 Plans (USD): AmbiRadio Plus $2.99/month, AmbiRadio Plus AI $6.99/month. Stripe price
-ids come from env (`DOSRADIO_PLUS_PRICE_USD`, `DOSRADIO_PLUS_AI_PRICE_USD`); without them
-Checkout uses an inline USD price. The old `DOSRADIO_PLUS_PRICE_PLN` is deliberately not
-read any more: a PLN price id would charge PLN while the UI shows dollars. The webhook grants `plus`
-(plan='plus', plus_until=now+30d) on `checkout.session.completed`. Mount is
-handled by app.main via a guarded import; shared Database/AccessService are
+ids come from env (`DOSRADIO_PLUS_PRICE_USD`, `DOSRADIO_PLUS_AI_PRICE_USD`) and are
+checked against the displayed amount before every checkout. The old
+`DOSRADIO_PLUS_PRICE_PLN` is deliberately not read any more: a PLN price id would
+charge PLN while the UI shows dollars.
+
+Subscription lifecycle (webhook):
+- `checkout.session.completed`: paid Plus for 30 days, the Stripe customer and
+  subscription ids are stored on the user, `paid_plan` = plus | plus_ai.
+- `invoice.paid`: renewal, paid Plus runs to the invoice period end + 1 grace day.
+- `customer.subscription.updated`: plan tier switch (from subscription metadata).
+- `customer.subscription.deleted`: paid Plus ends now; free Plus that runs longer stays.
+`POST /portal` opens the Stripe Customer Portal (cancel, change card, invoices).
+Mount is handled by app.main via a guarded import; shared Database/AccessService are
 resolved lazily to avoid a circular import.
 """
 from __future__ import annotations
@@ -25,6 +33,7 @@ from .db import Database
 log = logging.getLogger("dosradio.billing")
 
 PLUS_DAYS = 30
+GRACE_SECONDS = 86400  # Stripe retries a failed renewal for a while; do not cut access mid-retry
 SEEN_EVENT_LIMIT = 2048  # in-memory idempotency guard; survives duplicate deliveries
 _seen_events: set[str] = set()
 
@@ -133,17 +142,24 @@ def checkout(body: CheckoutRequest, request: Request) -> dict:
     if user is None:
         raise HTTPException(401, "Nie znaleziono konta.")
     client = _stripe_client()
+    metadata = {"user_id": str(user["id"]), "plan": body.plan}
     params: dict[str, Any] = {
         "mode": "subscription",
         "line_items": [{"price": _verified_price(client, body.plan), "quantity": 1}],
         "success_url": _site_url(request) + "/?billing=success",
         "cancel_url": _site_url(request) + "/?billing=cancel",
-        "customer_email": current.email,
         "client_reference_id": str(user["id"]),
-        "metadata": {"user_id": str(user["id"]), "plan": body.plan},
+        "metadata": metadata,
+        # Renewal invoices and subscription events carry the subscription's metadata, not the session's.
+        "subscription_data": {"metadata": dict(metadata)},
     }
+    customer_id = _row_value(user, "stripe_customer_id")
+    if customer_id:
+        params["customer"] = customer_id  # one Stripe customer per account, also after a cancellation
+    else:
+        params["customer_email"] = current.email
     if body.b2b:
-        params["subscription_data"] = {"collection_method": "send_invoice", "days_until_due": 14}
+        params["subscription_data"].update({"collection_method": "send_invoice", "days_until_due": 14})
     try:
         session = client.v1.checkout.sessions.create(params=params)
     except Exception as error:
@@ -152,10 +168,120 @@ def checkout(body: CheckoutRequest, request: Request) -> dict:
     return {"url": session.url, "plan": body.plan}
 
 
-def _grant_plus(db: Database, user_id: int) -> None:
+def _plan_or_default(raw: Any) -> str:
+    plan = str(raw or "")
+    return plan if plan in PLANS else "plus"
+
+
+def _row_value(row: Any, key: str) -> Any:
+    """Column value from a sqlite3.Row, None when the column does not exist (pre-migration)."""
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return None
+
+
+def _extend_paid_plus(db: Database, user_id: int, until: float, plan: str | None = None) -> None:
+    """Paid Plus up to `until`; never shortens access that is already longer."""
     with db.connect() as conn:
-        until = time.time() + PLUS_DAYS * 86400
-        conn.execute("UPDATE users SET plan = 'plus', plus_until = ?, plus_paid_until = ? WHERE id = ?", (until, until, user_id))
+        conn.execute(
+            "UPDATE users SET plan = 'plus',"
+            " plus_paid_until = MAX(COALESCE(plus_paid_until, 0), ?),"
+            " plus_until = CASE WHEN plus_until IS NULL AND plan = 'plus' THEN NULL"
+            "                   ELSE MAX(COALESCE(plus_until, 0), ?) END,"
+            " paid_plan = COALESCE(?, paid_plan, 'plus')"
+            " WHERE id = ?",
+            (until, until, plan, user_id),
+        )
+
+
+def _grant_plus(db: Database, user_id: int, plan: str = "plus", customer: str | None = None,
+                subscription: str | None = None) -> None:
+    with db.connect() as conn:
+        conn.execute(
+            "UPDATE users SET stripe_customer_id = COALESCE(?, stripe_customer_id),"
+            " stripe_subscription_id = COALESCE(?, stripe_subscription_id) WHERE id = ?",
+            (customer, subscription, user_id),
+        )
+    _extend_paid_plus(db, user_id, time.time() + PLUS_DAYS * 86400, plan)
+
+
+def _user_id_by_stripe(db: Database, customer: Any, subscription: Any) -> int | None:
+    with db.connect() as conn:
+        for column, value in (("stripe_subscription_id", subscription), ("stripe_customer_id", customer)):
+            if value:
+                row = conn.execute(f"SELECT id FROM users WHERE {column} = ?", (str(value),)).fetchone()
+                if row:
+                    return int(row["id"])
+    return None
+
+
+def _invoice_period_end(invoice: Any) -> float | None:
+    lines = _field(_field(invoice, "lines") or {}, "data") or []
+    ends = [_field(_field(line, "period") or {}, "end") for line in lines]
+    ends = [float(end) for end in ends if end]
+    return max(ends) if ends else None
+
+
+def _on_checkout_completed(db: Database, event_id: str, session: Any) -> None:
+    user_id = _user_id_from_session(db, session)
+    if user_id is None:
+        log.warning("Webhook %s: checkout session without a matching user", event_id)
+        return
+    plan = _plan_or_default(_field(_field(session, "metadata") or {}, "plan"))
+    customer = _field(session, "customer")
+    subscription = _field(session, "subscription")
+    _grant_plus(db, user_id, plan, str(customer) if customer else None, str(subscription) if subscription else None)
+    log.info("Granted %s to user %s (event %s)", plan, user_id, event_id)
+
+
+def _on_invoice_paid(db: Database, event_id: str, invoice: Any) -> None:
+    user_id = _user_id_by_stripe(db, _field(invoice, "customer"), _field(invoice, "subscription"))
+    period_end = _invoice_period_end(invoice)
+    if user_id is None or period_end is None:
+        log.warning("Webhook %s: paid invoice without a matching user or period", event_id)
+        return
+    _extend_paid_plus(db, user_id, period_end + GRACE_SECONDS)
+    log.info("Renewed paid Plus for user %s until %s (event %s)", user_id, int(period_end), event_id)
+
+
+def _on_subscription_updated(db: Database, event_id: str, subscription: Any) -> None:
+    user_id = _user_id_by_stripe(db, _field(subscription, "customer"), _field(subscription, "id"))
+    if user_id is None:
+        return
+    plan = _field(_field(subscription, "metadata") or {}, "plan")
+    if plan in PLANS:
+        with db.connect() as conn:
+            conn.execute("UPDATE users SET paid_plan = ? WHERE id = ?", (plan, user_id))
+        log.info("User %s is now on %s (event %s)", user_id, plan, event_id)
+
+
+def _on_subscription_deleted(db: Database, event_id: str, subscription: Any) -> None:
+    user_id = _user_id_by_stripe(db, _field(subscription, "customer"), _field(subscription, "id"))
+    if user_id is None:
+        return
+    ended = float(_field(subscription, "ended_at") or time.time())
+    with db.connect() as conn:
+        row = conn.execute("SELECT plus_until, plus_paid_until FROM users WHERE id = ?", (user_id,)).fetchone()
+        paid_until = row["plus_paid_until"] or 0
+        plus_until = row["plus_until"]
+        # Free Plus (welcome / admin) that runs past the paid period is kept; only the paid part ends.
+        # plus_until NULL on a Plus account means unlimited (admin) and is kept as well.
+        keeps_free_plus = plus_until is None or plus_until > paid_until + 1
+        new_plus_until = plus_until if plus_until is None or keeps_free_plus else min(plus_until, ended)
+        conn.execute(
+            "UPDATE users SET plus_paid_until = ?, plus_until = ?, stripe_subscription_id = NULL WHERE id = ?",
+            (min(paid_until, ended), new_plus_until, user_id),
+        )
+    log.info("Subscription ended for user %s (event %s)", user_id, event_id)
+
+
+WEBHOOK_HANDLERS = {
+    "checkout.session.completed": _on_checkout_completed,
+    "invoice.paid": _on_invoice_paid,
+    "customer.subscription.updated": _on_subscription_updated,
+    "customer.subscription.deleted": _on_subscription_deleted,
+}
 
 
 def _field(obj: Any, key: str) -> Any:
@@ -199,15 +325,33 @@ async def stripe_webhook(request: Request) -> dict:
     if len(_seen_events) >= SEEN_EVENT_LIMIT:
         _seen_events.clear()
     _seen_events.add(event["id"])
-    if event["type"] == "checkout.session.completed":
+    handler = WEBHOOK_HANDLERS.get(event["type"])
+    if handler is not None:
         db, _ = _core()
-        user_id = _user_id_from_session(db, event["data"]["object"])
-        if user_id is None:
-            log.warning("Webhook %s: checkout session without a matching user", event["id"])
-        else:
-            _grant_plus(db, user_id)
-            log.info("Granted Plus to user %s (event %s)", user_id, event["id"])
+        handler(db, event["id"], event["data"]["object"])
     return {"received": True}
+
+
+@router.post("/portal")
+def customer_portal(request: Request) -> dict:
+    """Stripe Customer Portal: cancel, change the card, download invoices."""
+    db, access = _core()
+    current = access.resolve(request.cookies, _ip(request))
+    if not current.registered or not current.email:
+        raise HTTPException(401, "Zaloguj się, żeby zarządzać subskrypcją.")
+    user = db.find_user_by_email(current.email)
+    customer_id = _row_value(user, "stripe_customer_id") if user else None
+    if user is None or not customer_id:
+        raise HTTPException(404, "To konto nie ma jeszcze subskrypcji w Stripe.")
+    client = _stripe_client()
+    try:
+        session = client.v1.billing_portal.sessions.create(
+            params={"customer": customer_id, "return_url": _site_url(request) + "/?billing=portal"},
+        )
+    except Exception as error:
+        log.error("Stripe portal failed for user %s: %s", user["id"], error)
+        raise HTTPException(502, "Nie udało się otworzyć panelu subskrypcji. Spróbuj ponownie za chwilę.") from error
+    return {"url": session.url}
 
 
 @router.get("/status")
@@ -239,4 +383,11 @@ def billing_status(request: Request) -> dict:
         if user:
             info["plan"] = user["plan"]
             info["plus_until"] = user["plus_until"]
+            paid_until = _row_value(user, "plus_paid_until")
+            info["paid"] = bool(paid_until and paid_until > time.time())
+            info["paid_plan"] = (_row_value(user, "paid_plan") or "plus") if info["paid"] else None
+            info["can_manage"] = bool(_row_value(user, "stripe_customer_id"))
+    info.setdefault("paid", False)
+    info.setdefault("paid_plan", None)
+    info.setdefault("can_manage", False)
     return info

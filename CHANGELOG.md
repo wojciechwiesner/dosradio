@@ -6,7 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- **Stripe subscription lifecycle** (`server/app/billing.py`): the webhook now handles `invoice.paid` (renewal: paid
+  Plus runs to the invoice period end + 1 grace day), `customer.subscription.updated` (switch between Plus and
+  Plus AI) and `customer.subscription.deleted` (paid Plus ends, longer free or admin Plus is kept). Checkout stores
+  the Stripe customer and subscription ids on the user (`stripe_customer_id`, `stripe_subscription_id`, `paid_plan`,
+  added by migration), sends the plan in `subscription_data.metadata` and reuses the existing Stripe customer.
+  Tests: `test_billing_lifecycle.py` (18).
+- **Manage subscription** (`POST /radio-api/billing/portal`, `src/ui/billing.ts`): a "Zarządzaj subskrypcją" button
+  opens the Stripe Customer Portal (cancel, change card, invoices). The modal marks the current paid plan and does
+  not offer a second subscription. `/radio-api/billing/status` reports `paid`, `paid_plan`, `can_manage`.
+- **Terms and privacy policy** (`public/regulamin.html`, `public/prywatnosc.html`, `public/legal.css`), linked from
+  the footer, the sign-up dialog and the Plus modal.
+- **12-month retention purge** (`server/app/retention.py`): once a day deletes trial markers, presence, comments,
+  dedications and friend identities older than 365 days, as the privacy policy states. Test: `test_retention.py`.
+
 ### Fixed
+- **Paid Plus lapsed after the first month while Stripe kept charging**: only `checkout.session.completed` granted
+  Plus (30 days), renewals were ignored. Fixed by the lifecycle handling above.
 - Polish dedication greeting no longer says "pozdrowienia od Wojtek": the sender's name stays in the nominative.
 
 ### Changed
